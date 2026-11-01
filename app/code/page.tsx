@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import CortexWebdevEmbarque from "@/components/neural/cortex-webdev-embarque";
+import WebdevGenerateur from "@/components/neural/webdev-generateur";
 
 /**
  * /code — GEN3 DÉVELOPPEMENT WEB (it.79 — demande propriétaire : « entraîne
@@ -53,6 +54,9 @@ export default function PageCode() {
         {/* Moteur embarqué + les 3 capacités */}
         <CortexWebdevEmbarque />
 
+        {/* Générateur sur demande — créer un site / une app (it.80) */}
+        <WebdevGenerateur />
+
         {/* Honnêteté */}
         <section className="rounded-xl border border-[var(--g3-border, #2a2a35)] bg-[var(--g3-card, #14141b)] p-5 text-sm leading-relaxed">
           <h2 className="text-base font-semibold">Ce que gen3 sait faire ici — et ce qu&apos;il ne fait pas</h2>
@@ -71,8 +75,15 @@ export default function PageCode() {
               génération, vérifiées par la garde 47ᵉ (ré-exécution).
             </li>
             <li>
+              <strong>Créer un site / une app</strong> (it.80) : décrivez votre demande (vitrine, liste,
+              formulaire, panier, rendez-vous, blog + nom, contexte, options) — gen3 compose un module
+              TypeScript/TSX complet, déterministe, copiable — <strong>dans le cadre appri</strong> (6 familles
+              paramétrées, suite de la matière it.79) ; le SNN embarqué mesure la résonance de votre demande.
+            </li>
+            <li>
               <strong>Ce que gen3 ne fait pas ici</strong> : inventer du code hors matière (le cadre appris est
-              celui de la campagne it.79), ni évaluer du code dans votre navigateur (CSP sans unsafe-eval) ;
+              celui de la campagne it.79 et des familles paramétrées it.80), ni évaluer du code dans votre
+              navigateur (CSP sans unsafe-eval) ;
               la qualité de conversation générale reste le rôle du service complet (/chat).
             </li>
           </ul>

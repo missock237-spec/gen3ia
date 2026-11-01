@@ -60,6 +60,36 @@ disposition des utilisateurs sur le domaine en ligne.
 - Livraison : le snapshot `public/neural/cortex-developpement-web-it79.bin` n'est écrit que si les QUATRE portes passent (ratio code moyen > 1 · argmax bande ≥ 7/9 · accord u8 9/9 · plancher 19 domaines ≥ socle it.73 1,242484) — la règle est encodée dans le script, vérifiée par la garde 47ᵉ.
 - Résultat visible par les utilisateurs : **https://gen3ia.online/code** (page publique — écrire, comprendre, simuler du code, 100 % local après chargement du snapshot).
 
+### 3.2 Lanceur ONE-COMMAND (it.80) — tout enchaîner automatiquement
+
+Une seule commande, dans la console du fournisseur (root), lance TOUT :
+mise à jour du dépôt → calibration du débit réel (`--benchmark`) → campagne
+1 Md / 1 M avec reprise automatique (`--reprendre`, sessions enchaînées) →
+**publication automatique du snapshot** sur le dépôt quand la règle de
+livraison passe (le poller de production le met en ligne sous ~2 min).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts/vps-auto-deploy/lancer-entrainement-web-1md.sh | bash
+```
+
+| Action | Commande |
+|---|---|
+| Suivi live | `tmux attach -t gen3-webdev1md` (Ctrl-b puis d pour détacher) |
+| Journal | `tail -f /opt/gen3ia/var/journal-webdev-1md.log` |
+| Progression mesurée | `cat /opt/gen3ia/var/neural-webdev/progress.json` |
+| Arrêt propre | `tmux send-keys -t gen3-webdev1md C-c && tmux kill-session -t gen3-webdev1md` |
+| Relancer plus tard | la MÊME commande curl — `--reprendre` reprend au lot exact |
+
+- Anti-doublon : si la session tmux `gen3-webdev1md` est déjà active, le
+  lanceur ne fait rien et affiche les commandes de suivi.
+- Publication : le worker ne pousse QUE si la règle encodée (4 portes) a
+  livré un snapshot NOUVEAU ; si une porte refuse, rien n'est publié et la
+  production reste servie (zéro chiffre fantôme). La clé `julio237` (deploy
+  key, installée par le préparateur) signe le push — elle ne quitte jamais
+  le VPS.
+- Le site en ligne reste fluide : le worker tourne sous `nice -n 10` (le
+  traitement cède la priorité CPU aux requêtes des visiteurs).
+
 ## 4. Où sont les résultats
 
 | Emplacement | Contenu |
