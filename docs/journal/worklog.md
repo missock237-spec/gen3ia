@@ -4762,3 +4762,40 @@ dispatch (run vert 10/10) — 2ᵉ cycle complet du canal d'alarme. NAVIGATEUR (
 /vocation rend les sections it.65/64/63 + le verdict niveau requis honnête (C1-C2 « atteint »,
 C3-C5 « en cours ») ; /chat 200 (UI) mais POST /api/chat 401 anonyme (moteur conversationnel
 sous requireUser — test complet nécessitant le compte app du propriétaire) ; portes 401 intacts.
+
+## 2026-11-02 00:50-07:25 (+08:00) — it.81 : audit propriétaire 2 nov (#113/#109 + 5 axes utilisateur)
+
+- CONSTAT VÉRIFIÉ : #113 fermée le 01/11 (poller réarmé) ; #109 ouverte — le
+  step v8 « Contrôle de livraison PULL après CD » existait (2fb8d06) mais
+  AUCUN test ne l'empêchait de régresser (scénario exact des incidents
+  21/43 min) ; README « 91+ paires » périmé (prod 438) ; pas d'indicateur
+  moteur au chat ; pas de /capacites ; auditEvents jamais lu ; pas de
+  rapport avant/après Studio ; runbook déployé encore « Vercel ».
+- LIVRÉ (0ac7269) : garde CI 9 assertions sur le step v8 (titre canonique
+  d'escalade identique au guérisseur vérifié par assertion croisée) ;
+  punaise chat « Moteur Gen3 opérationnel » (sondes publiques, polling 30 s
+  gaté visibilité, 35 s max · repli garanti = budget serveur réel) ;
+  /capacites force-dynamic (438 paires relues en direct, thèmes réels,
+  limites franches, repli honnête) ; audit org (actorId dans OrgContext,
+  5 mutations tracées, GET /audit owner/admin, section UI rechargée après
+  mutation) ; vérification avant/après (moteur natif par thème du corpus +
+  gen3-local par dataset-source, metrics + événements + artefact, encadré
+  Studio) ; /status encart SLA (99,5 % · repli 35 s · 5xx < 0,5 % · cible
+  2 min/alerte 10 min) ; vhost status.gen3ia.online + script idempotent
+  (DNS/TLS = action opérateur affichée) ; FAQ +2 FR +2 EN (parité 11/11) ;
+  runbook §1/§3/§5.2 dé-sièclés. Gates : tsc 0, eslint 0, suite 5 587
+  verts/0 échec, build 182/182, CI verte.
+- LIVRAISON OBSERVÉE EN DIRECT (preuve du correctif) : 0ac7269 publié
+  22:47:25Z → bascule 22:49:35Z = **2 min 10 s** (dans le SLE).
+  e256e55 (garde #114 + rapport) : SSH muet (SCP 6 échecs) → verify_build
+  skipped → **le step v8 s'est ARMÉ et a mis le run ROUGE à 23:06Z** +
+  escalade #115 (première alerte de ce type depuis l'ajout du step) —
+  constat it.30 « 21 min sans signal » IMPOSSIBLE désormais. Bascule
+  23:16:30Z (~21 min, profil backoff 900 s documenté). Guérisseur dispatché
+  23:19:20 → #115 **auto-refermée 23:19:27** (re-mesure fraîche). #109
+  refermée avec les mesures (correctif + garde + preuve en direct ;
+  prochain levier : réduction du backoff poller 900 s).
+- PRODUCTION VÉRIFIÉE par curl après bascule : /capacites 200 (438 paires,
+  limites, thèmes), /status 200 (encart SLA), /chat 200 (punaise SSR
+  complète), /faq 200 (+2 questions), sitemap /capacites, version.json =
+  e256e55. Rapport : docs/rapports/rapport-job-478451-2026-11-02-0050.md.
