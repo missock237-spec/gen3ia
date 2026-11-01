@@ -112,6 +112,24 @@ describe("Sonde surveillance_prod.mjs", () => {
     expect(sonde).toContain("lagSha && ageBuildHeures > LIVRAISON_BLOQUEE_HEURES");
   });
 
+  it("issue #114 — garde CD_EN_COURS : jamais de verdict « livraison bloquée » pendant un CD vivant sur main", () => {
+    // Constat réel 2026-11-01 22:42Z : alarme tirée 3 min après un push,
+    // pendant que le build runner du CD tournait encore (l'âge du build
+    // SERVI est naturellement > 3 h à ce moment — course push→CD, pas un
+    // blocage). Même doctrine que le guérisseur v5/v6.
+    // 1) Le verdict exige l'ABSENCE PROUVÉE de CD (etatCD === false) :
+    expect(sonde).toContain("lagSha && ageBuildHeures > LIVRAISON_BLOQUEE_HEURES && etatCD === false");
+    // 2) Les états en cours/file couvrent les files de concurrency :
+    expect(sonde).toContain('"in_progress", "queued", "waiting", "pending"');
+    // 3) Fail-closed : API injoignable 3× = renonciation, jamais d'alarme
+    //    sur un état non mesuré :
+    expect(sonde).toContain("ÉTAT DU CD INDÉTERMINABLE");
+    expect(sonde).toContain("cdEnCours(shaM)");
+    // 4) Observabilité : la cause est visible en console ET dans l'issue.
+    expect(sonde).toContain("GARDE CD_EN_COURS");
+    expect(sonde).toContain("garde anti-faux-positif");
+  });
+
   it("TTFB borné et configurable (défaut 3000 ms)", () => {
     expect(sonde).toContain("MAX_TTFB_MS ?? 3000");
   });

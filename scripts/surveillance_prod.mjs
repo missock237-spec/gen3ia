@@ -44,6 +44,45 @@ const LIVRAISON_BLOQUEE_HEURES = 3;
 const TOKEN = process.env.GITHUB_TOKEN ?? "";
 const REPO = process.env.GITHUB_REPOSITORY ?? "missock237-spec/gen3ia";
 
+/**
+ * GARDE CD_EN_COURS (issue #114 du 1er nov. 2026 — faux positif constaté :
+ * alarme « livraison bloquée » tirée 3 min après un push, pendant que le
+ * build runner du CD tournait encore — l'âge du build SERVI est
+ * naturellement > 3 h à ce moment, c'est la course push→CD, pas un blocage).
+ * Même doctrine que le guérisseur v5/v6 : un run deploy-vps en cours ou en
+ * file sur le SHA de main est un canal de livraison LÉGITIME — pas de
+ * verdict « bloquée » tant qu'il vit. FAIL-CLOSED : si l'API reste
+ * injoignable après 3 essais, on renonce à conclure au blocage ce tick
+ * (null = indéterminable) — jamais d'alarme sur un état qu'on n'a pas pu
+ * mesurer.
+ */
+async function cdEnCours(shaMainCible) {
+  if (!shaMainCible) return null;
+  for (let essai = 1; essai <= 3; essai += 1) {
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/deploy-vps.yml/runs?per_page=10`,
+        {
+          headers: TOKEN
+            ? { Authorization: `Bearer ${TOKEN}`, "user-agent": "surveillance-prod/1.0" }
+            : { "user-agent": "surveillance-prod/1.0" },
+        },
+      );
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = (await r.json()) ?? {};
+      const runs = d.workflow_runs ?? [];
+      return runs.some(
+        (run) =>
+          run.head_sha === shaMainCible &&
+          ["in_progress", "queued", "waiting", "pending"].includes(run.status),
+      );
+    } catch {
+      if (essai < 3) await new Promise((resolve) => setTimeout(resolve, 5_000));
+    }
+  }
+  return null;
+}
+
 const ENDPOINTS = [
   ["health", "/api/health"],
   ["accueil", "/"],
@@ -124,7 +163,18 @@ const prodSha = version?.gitSha ?? null;
 const buildDate = version?.buildDate ?? null;
 const ageBuildHeures = buildDate ? (Date.now() - Date.parse(buildDate)) / 3_600_000 : Number.POSITIVE_INFINITY;
 const lagSha = Boolean(shaM && prodSha && !shaM.startsWith(prodSha));
-const livraisonBloquee = lagSha && ageBuildHeures > LIVRAISON_BLOQUEE_HEURES;
+// Garde CD_EN_COURS : un CD vivant sur main (ou une API indéterminable)
+// interdit le verdict « livraison bloquée » — c'est une course normale,
+// pas un blocage (issue #114).
+const etatCD = await cdEnCours(shaM);
+const livraisonBloquee =
+  lagSha && ageBuildHeures > LIVRAISON_BLOQUEE_HEURES && etatCD === false;
+if (lagSha && etatCD === true) {
+  console.log(`GARDE CD_EN_COURS : un run deploy-vps vit sur main (${shaM?.slice(0, 8)}) — pas de verdict « livraison bloquée » ce tick (livraison possible en cours).`);
+}
+if (lagSha && etatCD === null) {
+  console.log(`ÉTAT DU CD INDÉTERMINABLE (API injoignable 3×) — renonciation au verdict « livraison bloquée » ce tick (fail-closed, issue #114).`);
+}
 
 /* Endpoints NOUVEAUX du build en cours (it.74) : pendant la fenêtre PULL
  * (poller 2 min, jusqu'à ~21 min), le build servi ≠ main et un 404 est un
@@ -187,7 +237,7 @@ console.log(`=== SURVEILLANCE SYNTHÉTIQUE PROD — ${horodatage} — verdict ${
 if (retestEffectue) console.log(`re-test post-swap : ${retestAbsorbe ? "ABSORBÉ (transitoire)" : "défaillance persistante"} — délai ${RETEST_DELAY_MS / 1000} s`);
 for (const r of resultats) console.log(`${r.ok ? "✅" : "❌"} ${r.nom.padEnd(18)} ${String(r.statut).padEnd(4)} ${String(r.ttfb).padStart(6)} ms ${r.raison}`);
 console.log(`version.json : gitSha=${prodSha?.slice(0, 8) ?? "?"} buildDate=${buildDate ?? "?"} (âge ${Number.isFinite(ageBuildHeures) ? ageBuildHeures.toFixed(1) + " h" : "?"})`);
-console.log(`main : ${shaM?.slice(0, 8) ?? "inconnu"} | lag SHA : ${lagSha ? "OUI" : "non"} | livraison bloquée : ${livraisonBloquee ? "OUI" : "non"}`);
+console.log(`main : ${shaM?.slice(0, 8) ?? "inconnu"} | lag SHA : ${lagSha ? "OUI" : "non"} | CD sur main : ${etatCD === true ? "EN COURS (garde anti-faux-positif)" : etatCD === null ? "indéterminable (fail-closed)" : "aucun"} | livraison bloquée : ${livraisonBloquee ? "OUI" : "non"}`);
 
 /* results.md — corps d'issue (markdown). */
 const lignes = resultats.map((r) => `| ${r.ok ? "✅" : "❌"} | \`${r.chemin}\` | ${r.statut} | ${r.ttfb} ms | ${r.raison || "—"} |`).join("\n");
@@ -202,7 +252,7 @@ const md = [
   lignes,
   "",
   `- version.json : \`${prodSha ?? "?"}\` — buildDate \`${buildDate ?? "?"}\` (âge ${Number.isFinite(ageBuildHeures) ? ageBuildHeures.toFixed(1) + " h" : "?"})`,
-  `- main : \`${shaM?.slice(0, 8) ?? "?"}\` — lag SHA : **${lagSha ? "OUI" : "non"}** — livraison bloquée : **${livraisonBloquee ? "OUI" : "non"}**`,
+  `- main : \`${shaM?.slice(0, 8) ?? "?"}\` — lag SHA : **${lagSha ? "OUI" : "non"}** — CD sur main : **${etatCD === true ? "EN COURS (garde anti-faux-positif, issue #114)" : etatCD === null ? "indéterminable (fail-closed)" : "aucun"}** — livraison bloquée : **${livraisonBloquee ? "OUI" : "non"}**`,
   "",
   ...echecs.map((e) => `- ⚠️ ${e}`),
   "",
