@@ -43,6 +43,23 @@ tmux attach -t gen3     # se rattacher plus tard (session survit à la déconnex
 
 Environnement recommandé : `export NODE_OPTIONS="--max-old-space-size=1536"`.
 
+### 3.1 Campagne DÉVELOPPEMENT WEB (it.79 — écrire, comprendre, simuler du code)
+
+Demande propriétaire (session directe) : entraîner gen3 au développement web —
+1 milliard d'exemples sur 1 million de datasets uniques — puis le mettre à la
+disposition des utilisateurs sur le domaine en ligne.
+
+| Commande | Rôle | Reprise |
+|---|---|---|
+| `npx tsx scripts/campagne-developpement-web-it79.ts --benchmark` | Calibrer le débit (ech/s) de CE serveur pour cette campagne | — |
+| `npx tsx scripts/campagne-developpement-web-it79.ts` | **Campagne complète : 1 000 000 000 d'exemples sur 1 000 000 d'exemples uniques** (3 capacités : écrire / comprendre / simuler — sorties et traces exécutées réellement) | `--reprendre` |
+| `npx tsx scripts/campagne-developpement-web-it79.ts --reprendre` | Reprend au lot exact après interruption (checkpoint var/neural-webdev/ après CHAQUE lot) | — |
+| `npx tsx scripts/campagne-developpement-web-it79.ts --objectif 120000 --uniques 160000 --epoques 10 --ancrage 60` | La configuration de référence it.79 (livrée en production, sondes 9/9) | `--reprendre` |
+
+- Le script publie à chaque palier le débit mesuré et l'**extrapolation honnête** de la durée restante vers 1 Md — la durée wall-clock réelle seule fait foi (référence bac à sable : ~4 000-4 900 ech/s ; un 1 vCPU est plus lent).
+- Livraison : le snapshot `public/neural/cortex-developpement-web-it79.bin` n'est écrit que si les QUATRE portes passent (ratio code moyen > 1 · argmax bande ≥ 7/9 · accord u8 9/9 · plancher 19 domaines ≥ socle it.73 1,242484) — la règle est encodée dans le script, vérifiée par la garde 47ᵉ.
+- Résultat visible par les utilisateurs : **https://gen3ia.online/code** (page publique — écrire, comprendre, simuler du code, 100 % local après chargement du snapshot).
+
 ## 4. Où sont les résultats
 
 | Emplacement | Contenu |

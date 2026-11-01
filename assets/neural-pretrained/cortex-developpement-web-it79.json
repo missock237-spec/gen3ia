@@ -1,0 +1,441 @@
+{
+  "iteration": 79,
+  "titre": "GEN3 développement web — écrire, comprendre, simuler du code (snapshot embarqué spécialisé)",
+  "demande": "session propriétaire directe (trace 1a197bdfb7f467bd) : entraîner gen3 au développement web (écrire, comprendre, simuler du code) — 1 milliard d'exemples / 1 million de datasets — mise à disposition des utilisateurs sur le domaine en ligne",
+  "horodatage": "2026-11-01 15:56:17 (UTC)",
+  "graine": 42,
+  "optionsSession": {
+    "objectif": 120000,
+    "uniques": 160000,
+    "epoques": 10,
+    "ancrage": 60,
+    "reprise": false,
+    "benchmark": false
+  },
+  "echelleDeclaree": {
+    "cibleExemples": 1000000000,
+    "cibleUniques": 1000000,
+    "cetteSession": {
+      "exemplesCodeVus": 120000,
+      "lotsFaits": 80,
+      "lotsTotal": 80,
+      "corpusUniques": 160000
+    },
+    "reprise": "checkpoints var/neural-webdev/ (checkpoint.bin + progress.json, écriture atomique) — --reprendre poursuit au lot exact",
+    "extrapolation": {
+      "echS": 4080.647636,
+      "heuresRestantesVersMilliard": 68.063815,
+      "note": "débit mesuré sur CETTE session (bac à sable) — un VPS 1 vCPU est plus lent ; la durée wall-clock réelle seule fait foi"
+    }
+  },
+  "matiere": {
+    "reelDepot": "datasets/code/train.jsonl — 12 000 exemples (api_design, bug_to_fix, feature_to_tests… FR/EN, CC-BY-4.0-synthetic-gen3ia) + charte generation-code + questions canoniques",
+    "procedurelle": {
+      "ecrire": {
+        "espace": 1378620,
+        "gabarits": 12,
+        "parametres": "12 gabarits × 37 noms métier × 5 types × 9 seuils × 23 contextes × 3 cas limites — bijection index→exemple"
+      },
+      "comprendre": {
+        "espace": 1378620,
+        "questions": "4 types (but, cas limite, contexte, signature) — réponses exactes dérivées des métadonnées du gabarit"
+      },
+      "simuler": {
+        "fonctions": [
+          "sommeTableau",
+          "maxTableau",
+          "comptePairs",
+          "fibonacciIteratif",
+          "estPremier",
+          "factorielle",
+          "moyenneArrondie",
+          "rechercheDichotomique",
+          "inverserChaine",
+          "puissanceRapide"
+        ],
+        "verite": "SORTIE ET TRACE CALCULÉES PAR EXÉCUTION RÉELLE du code généré (new Function en Node) — échec d'exécution = campagne arrêtée, aucun chiffre fantôme"
+      }
+    },
+    "ancrage": "2 vagues × 2 000 gabarits charte/domaine (indices 0..3999, identique it.77) + interclassement 26/domaine par lot mixte avec rotation (leçon it.63 : une bande ne reste jamais seule en piste)"
+  },
+  "supervision": {
+    "mecanique": "EOD it.57/63 (entrainerDomainesParOndes, cap par lot, continuité d'horloge) + alignement inférence it.77 (projection hash, même plasticité que le trainer) — MÉCANIQUE INCHANGÉE, seule la MATIÈRE change (code web-dev)",
+    "vagues": [
+      {
+        "vague": 1,
+        "horlogeInitiale": 0,
+        "echantillons": 38000
+      },
+      {
+        "vague": 2,
+        "horlogeInitiale": 200000,
+        "echantillons": 38000
+      }
+    ],
+    "lots": {
+      "total": 80,
+      "faits": 80,
+      "tailleCode": 1500,
+      "ancrageParDomaine": 60,
+      "tailleTotaleLot": 2640
+    },
+    "alignement": {
+      "echantillons": 378520,
+      "parEpoque": [
+        37852,
+        37852,
+        37852,
+        37852,
+        37852,
+        37852,
+        37852,
+        37852,
+        37852,
+        37852
+      ],
+      "epoques": 10,
+      "matieres": 1221
+    },
+    "metabolismeEod": {
+      "evaluees": 9416392,
+      "reposes": 29874999608,
+      "transmissions": 7540416,
+      "ms": 825.667,
+      "normalisations": 820
+    },
+    "poidsCapParBande": [
+      4662,
+      4735,
+      4703,
+      6130,
+      4689,
+      4625,
+      4683,
+      4611
+    ],
+    "poidsCapParEpoque": [
+      [
+        4608,
+        4613,
+        4615,
+        4571,
+        4619,
+        4597,
+        4628,
+        4590
+      ],
+      [
+        4627,
+        4663,
+        4646,
+        5189,
+        4653,
+        4604,
+        4647,
+        4601
+      ],
+      [
+        4650,
+        4708,
+        4679,
+        5426,
+        4666,
+        4610,
+        4670,
+        4609
+      ],
+      [
+        4650,
+        4708,
+        4679,
+        5592,
+        4664,
+        4608,
+        4668,
+        4609
+      ],
+      [
+        4655,
+        4715,
+        4684,
+        5728,
+        4672,
+        4611,
+        4670,
+        4610
+      ],
+      [
+        4660,
+        4722,
+        4695,
+        5929,
+        4681,
+        4615,
+        4678,
+        4610
+      ],
+      [
+        4662,
+        4732,
+        4701,
+        6129,
+        4688,
+        4623,
+        4683,
+        4611
+      ],
+      [
+        4662,
+        4732,
+        4702,
+        6130,
+        4688,
+        4623,
+        4681,
+        4611
+      ],
+      [
+        4662,
+        4734,
+        4702,
+        6130,
+        4689,
+        4623,
+        4683,
+        4611
+      ],
+      [
+        4662,
+        4734,
+        4703,
+        6130,
+        4689,
+        4623,
+        4683,
+        4611
+      ],
+      [
+        4662,
+        4735,
+        4703,
+        6130,
+        4689,
+        4625,
+        4683,
+        4611
+      ]
+    ],
+    "dureeMs": 65223.451358,
+    "dureeTotaleMs": 65359.659534
+  },
+  "sonde": {
+    "convention": "projection hash (production chat), 4 pas, activation d'énergie cumulée par bande — ratio entraîné/neuf publié tel quel",
+    "horloge": 2213600,
+    "indicesSondesCode": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "plageCorpusSondes": "[160000, 160108)",
+    "noteJamaisSupervisees": "les sondes sont construes aux index de corpus [160000..160107] — HORS de la plage cyclée [0..159999] visitée par les lots quel que soit l'objectif, SANS modulo, et hors des plages de gabarits d'alignement — jamais vues par aucune supervision",
+    "parCapacite": [
+      {
+        "capacite": "ecrire",
+        "sondes": 3,
+        "activationEntraîne": 0.475428,
+        "activationNeuf": 0.099881,
+        "ratioAppris": 4.759944,
+        "argmaxAttendu": 3,
+        "accordU8": 3
+      },
+      {
+        "capacite": "comprendre",
+        "sondes": 3,
+        "activationEntraîne": 0.32763,
+        "activationNeuf": 0.092967,
+        "ratioAppris": 3.524154,
+        "argmaxAttendu": 2,
+        "accordU8": 3
+      },
+      {
+        "capacite": "simuler",
+        "sondes": 3,
+        "activationEntraîne": 0.230319,
+        "activationNeuf": 0.090394,
+        "ratioAppris": 2.547946,
+        "argmaxAttendu": 3,
+        "accordU8": 3
+      }
+    ],
+    "ratioCodeMoyen": 3.610681,
+    "argmaxAttenduCode": 8,
+    "accordsU8Code": 9,
+    "totalSondes19": 342,
+    "limites": "la sonde NEURALE mesure la résonance de la bande generation-code (8 bandes, 19 domaines par hash) — ce n'est PAS une preuve de génération de code ; la matière SIMULER est vérifiée par exécution réelle à la génération et par la garde"
+  },
+  "antiRetour19": {
+    "plancher": 1.242631,
+    "variance": 0.093594,
+    "plancherIt76": 1.259709,
+    "varianceIt76": 0.090871,
+    "socleIt73": 1.242484,
+    "plancherAuDessusSocle": true,
+    "parDomaine": [
+      {
+        "domaineId": "recherche-web",
+        "bandeAttendue": 1,
+        "porteur": 0.4375,
+        "sondes": 18,
+        "ratioAppris": 2.013107
+      },
+      {
+        "domaineId": "controle-donnees",
+        "bandeAttendue": 4,
+        "porteur": 1,
+        "sondes": 18,
+        "ratioAppris": 2.268549
+      },
+      {
+        "domaineId": "redaction-texte",
+        "bandeAttendue": 5,
+        "porteur": 1.1875,
+        "sondes": 18,
+        "ratioAppris": 1.242631
+      },
+      {
+        "domaineId": "analyse-documents",
+        "bandeAttendue": 1,
+        "porteur": 0.4375,
+        "sondes": 18,
+        "ratioAppris": 2.092591
+      },
+      {
+        "domaineId": "generation-code",
+        "bandeAttendue": 3,
+        "porteur": 0.8125,
+        "sondes": 18,
+        "ratioAppris": 2.505192
+      },
+      {
+        "domaineId": "analyse-donnees",
+        "bandeAttendue": 3,
+        "porteur": 0.8125,
+        "sondes": 18,
+        "ratioAppris": 2.535196
+      },
+      {
+        "domaineId": "cybersecurite",
+        "bandeAttendue": 0,
+        "porteur": 0.25,
+        "sondes": 18,
+        "ratioAppris": 1.58251
+      },
+      {
+        "domaineId": "medecine-sante",
+        "bandeAttendue": 1,
+        "porteur": 0.4375,
+        "sondes": 18,
+        "ratioAppris": 2.056972
+      },
+      {
+        "domaineId": "commerce-economie",
+        "bandeAttendue": 6,
+        "porteur": 1.375,
+        "sondes": 18,
+        "ratioAppris": 1.731465
+      },
+      {
+        "domaineId": "langue-communication",
+        "bandeAttendue": 6,
+        "porteur": 1.375,
+        "sondes": 18,
+        "ratioAppris": 1.713318
+      },
+      {
+        "domaineId": "ingenierie-industrie",
+        "bandeAttendue": 2,
+        "porteur": 0.625,
+        "sondes": 18,
+        "ratioAppris": 2.143848
+      },
+      {
+        "domaineId": "art-creation-multimedia",
+        "bandeAttendue": 0,
+        "porteur": 0.25,
+        "sondes": 18,
+        "ratioAppris": 2.07096
+      },
+      {
+        "domaineId": "agriculture-environnement",
+        "bandeAttendue": 7,
+        "porteur": 1.5625,
+        "sondes": 18,
+        "ratioAppris": 1.8145
+      },
+      {
+        "domaineId": "droit-administration",
+        "bandeAttendue": 2,
+        "porteur": 0.625,
+        "sondes": 18,
+        "ratioAppris": 2.050909
+      },
+      {
+        "domaineId": "education-recherche",
+        "bandeAttendue": 1,
+        "porteur": 0.4375,
+        "sondes": 18,
+        "ratioAppris": 2.184499
+      },
+      {
+        "domaineId": "transport-immobilier",
+        "bandeAttendue": 2,
+        "porteur": 0.625,
+        "sondes": 18,
+        "ratioAppris": 2.199762
+      },
+      {
+        "domaineId": "sciences-humaines-sociales",
+        "bandeAttendue": 1,
+        "porteur": 0.4375,
+        "sondes": 18,
+        "ratioAppris": 2.319197
+      },
+      {
+        "domaineId": "ia-specialisee-emergente",
+        "bandeAttendue": 4,
+        "porteur": 1,
+        "sondes": 18,
+        "ratioAppris": 2.200416
+      },
+      {
+        "domaineId": "apprentissage-entre-ia",
+        "bandeAttendue": 3,
+        "porteur": 0.8125,
+        "sondes": 18,
+        "ratioAppris": 2.07021
+      }
+    ]
+  },
+  "energie": {
+    "erreurMaxQuantisation": 0.00196078431372549,
+    "snapshotOctets": 1572912
+  },
+  "livraison": {
+    "snapshotWebdev": "committé : public/neural/cortex-developpement-web-it79.bin (ratio code > 1 · argmax ≥ 7/9 · accord u8 9/9 · plancher 19 ≥ socle it.73)",
+    "matiereJson": "public/neural/webdev-it79-matiere.json — extrait déterministe de la matière réelle (6 items × 3 capacités, traces exécutées)",
+    "regleDeclaree": "livreSnapshot = ratioCodeMoyen > 1 && argmaxAttenduCode >= 7 && accordsU8Code === 9 && plancher19 >= 1.242484 — encodée dans ce script, jamais contée à la main",
+    "livreSnapshot": true
+  },
+  "limitesHonnetes": [
+    "Le SNN apprend la RÉSONANCE de la bande generation-code sur la matière code — la composition des réponses utilisateur reste le pont lexical + la matière committée (page /code) : le snapshot ne « génère » pas de code tout seul.",
+    "La matière SIMULER est vérifiée par exécution réelle (à la génération et par la garde 47ᵉ) ; la page /code rejoue les traces MESURÉES — elle n'évalue pas de code dans le navigateur (CSP sans unsafe-eval).",
+    "1 milliard d'exemples s'atteint par sessions successives reliées par checkpoints — l'extrapolation de durée est un indicateur mesuré, pas une promesse.",
+    "Le corpus procédural est synthétique et étiqueté comme tel ; la matière réelle du dépôt (12 000 exemples code) est comptée séparément."
+  ]
+}

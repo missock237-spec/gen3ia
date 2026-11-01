@@ -1,0 +1,169 @@
+{
+  "iteration": 79,
+  "horodatage": "2026-11-01 15:56:17 (UTC)",
+  "items": [
+    {
+      "id": "ecrire-0",
+      "capacite": "ecrire",
+      "instruction": "Écris une fonction TypeScript `debounceBoutique` qui retarde l'exécution jusqu'à une accalmie de durées données — contexte Next.js 16, seuil par défaut 3, cas limite couvert : entrée vide. Code complet, typé et prêt à tester.",
+      "code": "// Next.js 16 — cas limite : entrée vide\nexport function debounceBoutique(fonction: () => void, durees = 3) {\n  if (entree.length === 0) return \"vide\";\n  let minuteur: ReturnType<typeof setTimeout> | null = null;\n  return () => {\n    if (minuteur !== null) clearTimeout(minuteur);\n    minuteur = setTimeout(fonction, durees);\n  };\n}"
+    },
+    {
+      "id": "ecrire-7",
+      "capacite": "ecrire",
+      "instruction": "Écris une fonction TypeScript `reessayerBoutique` qui exécute un appelant avec relance et repli sur erreur après un maximum d'essais — contexte Next.js 16, seuil par défaut 3, cas limite couvert : entrée vide. Code complet, typé et prêt à tester.",
+      "code": "// Next.js 16 — cas limite : entrée vide\nexport async function reessayerBoutique(appelant: () => Promise<void>, essaisMax = 3) {\n  if (entree.length === 0) return \"vide\";\n  let derniereErreur: unknown = null;\n  for (let essai = 1; essai <= essaisMax; essai++) {\n    try {\n      await appelant();\n      return;\n    } catch (e) {\n      derniereErreur = e;\n    }\n  }\n  throw derniereErreur;\n}"
+    },
+    {
+      "id": "ecrire-13",
+      "capacite": "ecrire",
+      "instruction": "Écris une fonction TypeScript `throttleClinique` qui limite la fréquence d'exécution à une fois par fenêtre de durées données — contexte Next.js 16, seuil par défaut 3, cas limite couvert : entrée vide. Code complet, typé et prêt à tester.",
+      "code": "// Next.js 16 — cas limite : entrée vide\nexport function throttleClinique(fonction: () => void, fenetre = 3) {\n  if (entree.length === 0) return \"vide\";\n  let dernierAppel = 0;\n  return () => {\n    const maintenant = Date.now();\n    if (maintenant - dernierAppel >= fenetre) {\n      dernierAppel = maintenant;\n      fonction();\n    }\n  };\n}"
+    },
+    {
+      "id": "ecrire-21",
+      "capacite": "ecrire",
+      "instruction": "Écris une fonction TypeScript `melangerClinique` qui mélange un tableau en place (Fisher-Yates) et vérifie une taille minimale — contexte Next.js 16, seuil par défaut 3, cas limite couvert : entrée vide. Code complet, typé et prêt à tester.",
+      "code": "// Next.js 16 — cas limite : entrée vide\nexport function melangerClinique(elements: number[], tailleMin = 3) {\n  if (entree.length === 0) return \"vide\";\n  for (let i = elements.length - 1; i > 0; i--) {\n    const j = Math.floor(Math.random() * (i + 1));\n    [elements[i], elements[j]] = [elements[j]!, elements[i]!];\n  }\n  return elements.length >= tailleMin;\n}"
+    },
+    {
+      "id": "ecrire-34",
+      "capacite": "ecrire",
+      "instruction": "Écris une fonction TypeScript `debiterSecuriseFerme` qui débite un montant en centimes avec contrôle de solde et arrondi bancaire — contexte Next.js 16, seuil par défaut 3, cas limite couvert : entrée vide. Code complet, typé et prêt à tester.",
+      "code": "// Next.js 16 — cas limite : entrée vide\nexport function debiterSecuriseFerme(solde: number, montant: number, plancher = 3) {\n  if (entree.length === 0) return \"vide\";\n  const centimes = Math.round(montant * 100);\n  if (solde - centimes < plancher) throw new RangeError(\"solde insuffisant\");\n  return { soldeRestant: solde - centimes, debite: centimes };\n}"
+    },
+    {
+      "id": "ecrire-55",
+      "capacite": "ecrire",
+      "instruction": "Écris une fonction TypeScript `reessayerLycee` qui exécute un appelant avec relance et repli sur erreur après un maximum d'essais — contexte Next.js 16, seuil par défaut 3, cas limite couvert : entrée vide. Code complet, typé et prêt à tester.",
+      "code": "// Next.js 16 — cas limite : entrée vide\nexport async function reessayerLycee(appelant: () => Promise<void>, essaisMax = 3) {\n  if (entree.length === 0) return \"vide\";\n  let derniereErreur: unknown = null;\n  for (let essai = 1; essai <= essaisMax; essai++) {\n    try {\n      await appelant();\n      return;\n    } catch (e) {\n      derniereErreur = e;\n    }\n  }\n  throw derniereErreur;\n}"
+    },
+    {
+      "id": "comprendre-1",
+      "capacite": "comprendre",
+      "question": "Que fait la fonction `throttleBoutique` ?",
+      "code": "// Next.js 16 — cas limite : entrée vide\nexport function throttleBoutique(fonction: () => void, fenetre = 3) {\n  if (entree.length === 0) return \"vide\";\n  let dernierAppel = 0;\n  return () => {\n    const maintenant = Date.now();\n    if (maintenant - dernierAppel >= fenetre) {\n      dernierAppel = maintenant;\n      fonction();\n    }\n  };\n}",
+      "reponse": "`throttleBoutique` — gabarit « throttle » : 1 → throttle appliqué à Boutique, contexte Next.js 16, seuil 3, type principal `string`. Le code complet ci-dessus est la réponse exacte."
+    },
+    {
+      "id": "comprendre-8",
+      "capacite": "comprendre",
+      "question": "Que fait la fonction `echapperHtmlBoutique` ?",
+      "code": "// Next.js 16 — cas limite : entrée vide\nexport function echapperHtmlBoutique(texte: string, plafond = 3) {\n  if (entree.length === 0) return \"vide\";\n  return texte.slice(0, plafond)\n    .replaceAll(\"&\", \"&amp;\").replaceAll(\"<\", \"&lt;\").replaceAll(\">\", \"&gt;\");\n}",
+      "reponse": "`echapperHtmlBoutique` — gabarit « echapperHtml » : 8 → echapperHtml appliqué à Boutique, contexte Next.js 16, seuil 3, type principal `string`. Le code complet ci-dessus est la réponse exacte."
+    },
+    {
+      "id": "comprendre-14",
+      "capacite": "comprendre",
+      "question": "Que fait `fetchAvecRetryBoutique` quand le cas limite « paramètre nul » se produit ?",
+      "code": "// Next.js 16 — cas limite : paramètre nul\nexport async function fetchAvecRetryBoutique(url: string, essaisMax = 3) {\n  if (entree === null || entree === undefined) throw new TypeError(\"paramètre requis\");\n  for (let essai = 1; essai <= essaisMax; essai++) {\n    const reponse = await fetch(url);\n    if (reponse.ok) return reponse;\n    if (essai < essaisMax) await new Promise((r) => setTimeout(r, 2 ** essai * 100));\n  }\n  throw new Error(\"ressource indisponible apres \" + essaisMax + \" essais\");\n}",
+      "reponse": "Cas limite « paramètre nul » : le code le couvre par une garde en tête de fonction — `fetchAvecRetryBoutique` renvoie un verdict typé ou lève une erreur contrôlée, jamais de crash silencieux."
+    },
+    {
+      "id": "comprendre-22",
+      "capacite": "comprendre",
+      "question": "Que fait `debiterSecuriseBoutique` quand le cas limite « paramètre nul » se produit ?",
+      "code": "// Next.js 16 — cas limite : paramètre nul\nexport function debiterSecuriseBoutique(solde: number, montant: number, plancher = 3) {\n  if (entree === null || entree === undefined) throw new TypeError(\"paramètre requis\");\n  const centimes = Math.round(montant * 100);\n  if (solde - centimes < plancher) throw new RangeError(\"solde insuffisant\");\n  return { soldeRestant: solde - centimes, debite: centimes };\n}",
+      "reponse": "Cas limite « paramètre nul » : le code le couvre par une garde en tête de fonction — `debiterSecuriseBoutique` renvoie un verdict typé ou lève une erreur contrôlée, jamais de crash silencieux."
+    },
+    {
+      "id": "comprendre-35",
+      "capacite": "comprendre",
+      "question": "Dans quel contexte technique `construireQueryBoutique` est-elle prévue et quels sont ses paramètres ?",
+      "code": "// Next.js 16 — cas limite : grande entrée\nexport function construireQueryBoutique(params: Record<string, string>, limite = 3) {\n  if (entree.length > 300) return \"hors-portee\";\n  const paires = Object.entries(params).slice(0, limite)\n    .map(([c, v]) => encodeURIComponent(c) + \"=\" + encodeURIComponent(String(v)));\n  return paires.join(\"&\");\n}",
+      "reponse": "Contexte déclaré en en-tête : Next.js 16 — seuil par défaut 3, paramètre principal typé `string`, cas limite documenté : grande entrée."
+    },
+    {
+      "id": "comprendre-56",
+      "capacite": "comprendre",
+      "question": "Que fait `echapperHtmlClinique` quand le cas limite « paramètre nul » se produit ?",
+      "code": "// Next.js 16 — cas limite : paramètre nul\nexport function echapperHtmlClinique(texte: string, plafond = 3) {\n  if (entree === null || entree === undefined) throw new TypeError(\"paramètre requis\");\n  return texte.slice(0, plafond)\n    .replaceAll(\"&\", \"&amp;\").replaceAll(\"<\", \"&lt;\").replaceAll(\">\", \"&gt;\");\n}",
+      "reponse": "Cas limite « paramètre nul » : le code le couvre par une garde en tête de fonction — `echapperHtmlClinique` renvoie un verdict typé ou lève une erreur contrôlée, jamais de crash silencieux."
+    },
+    {
+      "id": "simuler-2",
+      "capacite": "simuler",
+      "question": "Simule l'exécution de `comptePairs` (Next.js 16) avec tableau [1, 3, 5, 7, 9] — Combien de valeurs paires et quel compteur final ? Réponds avec le résultat exact et la trace par pas.",
+      "code": "function comptePairs(entree) {\n  const trace = [];\n  let compteur = 0;\n  for (const v of entree) {\n    if (v % 2 === 0) compteur++;\n    trace.push(\"v=\" + v + \" → compteur=\" + compteur);\n  }\n  return { resultat: compteur, trace };\n}",
+      "entreeDesc": "tableau [1, 3, 5, 7, 9]",
+      "sortie": "0",
+      "trace": [
+        "v=1 → compteur=0",
+        "v=3 → compteur=0",
+        "v=5 → compteur=0",
+        "v=7 → compteur=0",
+        "v=9 → compteur=0"
+      ]
+    },
+    {
+      "id": "simuler-9",
+      "capacite": "simuler",
+      "question": "Simule l'exécution de `puissanceRapide` (Next.js 16) avec base 3, exposant 1 — Que vaut base^exposant (exponentiation rapide) ? Réponds avec le résultat exact et la trace par pas.",
+      "code": "function puissanceRapide(entree) {\n  const trace = [];\n  let resultat = 1, b = entree.base, e = entree.exposant;\n  while (e > 0) {\n    if (e % 2 === 1) { resultat *= b; trace.push(\"e=\" + e + \" impair → résultat \" + resultat); }\n    b *= b; e = Math.floor(e / 2);\n    trace.push(\"e→\" + e + \", base→\" + b);\n  }\n  return { resultat, trace };\n}",
+      "entreeDesc": "base 3, exposant 1",
+      "sortie": "3",
+      "trace": [
+        "e=1 impair → résultat 3",
+        "e→0, base→9"
+      ]
+    },
+    {
+      "id": "simuler-15",
+      "capacite": "simuler",
+      "question": "Simule l'exécution de `factorielle` (Next.js 16) avec n = 5 — Que vaut la factorielle par produits successifs ? Réponds avec le résultat exact et la trace par pas.",
+      "code": "function factorielle(entree) {\n  const trace = [];\n  let f = 1;\n  for (let k = 2; k <= entree.n; k++) {\n    f *= k;\n    trace.push(\"k=\" + k + \" → \" + f);\n  }\n  return { resultat: f, trace };\n}",
+      "entreeDesc": "n = 5",
+      "sortie": "120",
+      "trace": [
+        "k=2 → 2",
+        "k=3 → 6",
+        "k=4 → 24",
+        "k=5 → 120"
+      ]
+    },
+    {
+      "id": "simuler-23",
+      "capacite": "simuler",
+      "question": "Simule l'exécution de `fibonacciIteratif` (Next.js 16) avec n = 1 — Que vaut le n-ième nombre de Fibonacci (itératif) ? Réponds avec le résultat exact et la trace par pas.",
+      "code": "function fibonacciIteratif(entree) {\n  const trace = [];\n  let a = 0, b = 1;\n  for (let k = 1; k <= entree.n; k++) {\n    const s = a + b; a = b; b = s;\n    trace.push(\"k=\" + k + \" → \" + a);\n  }\n  return { resultat: a, trace };\n}",
+      "entreeDesc": "n = 1",
+      "sortie": "1",
+      "trace": [
+        "k=1 → 1"
+      ]
+    },
+    {
+      "id": "simuler-36",
+      "capacite": "simuler",
+      "question": "Simule l'exécution de `moyenneArrondie` (Next.js 16) avec tableau [1, 3, 5, 7, 9, 11, 13, 15] — Que vaut la moyenne arrondie au plus proche ? Réponds avec le résultat exact et la trace par pas.",
+      "code": "function moyenneArrondie(entree) {\n  const trace = [];\n  let total = 0;\n  for (let k = 0; k < entree.length; k++) {\n    total += entree[k];\n    trace.push(\"pas \" + (k + 1) + \" : total=\" + total);\n  }\n  const m = Math.round(total / entree.length);\n  trace.push(\"moyenne arrondie = \" + m);\n  return { resultat: m, trace };\n}",
+      "entreeDesc": "tableau [1, 3, 5, 7, 9, 11, 13, 15]",
+      "sortie": "8",
+      "trace": [
+        "pas 1 : total=1",
+        "pas 2 : total=4",
+        "pas 3 : total=9",
+        "pas 4 : total=16",
+        "pas 5 : total=25",
+        "pas 6 : total=36",
+        "pas 7 : total=49",
+        "pas 8 : total=64",
+        "moyenne arrondie = 8"
+      ]
+    },
+    {
+      "id": "simuler-57",
+      "capacite": "simuler",
+      "question": "Simule l'exécution de `rechercheDichotomique` (Next.js 16) avec trié [1, 3, 5, 7, 9, 11, 13, 15, 17, 19], cible 7 — À quel index la cible est-elle trouvée (dichotomie) ? Réponds avec le résultat exact et la trace par pas.",
+      "code": "function rechercheDichotomique(entree) {\n  const trace = [];\n  let bas = 0, haut = entree.tab.length - 1;\n  while (bas <= haut) {\n    const mil = (bas + haut) >> 1;\n    trace.push(\"[bas=\" + bas + \" haut=\" + haut + \"] t[\" + mil + \"]=\" + entree.tab[mil]);\n    if (entree.tab[mil] === entree.cible) return { resultat: mil, trace };\n    if (entree.tab[mil] < entree.cible) bas = mil + 1; else haut = mil - 1;\n  }\n  return { resultat: -1, trace };\n}",
+      "entreeDesc": "trié [1, 3, 5, 7, 9, 11, 13, 15, 17, 19], cible 7",
+      "sortie": "3",
+      "trace": [
+        "[bas=0 haut=9] t[4]=9",
+        "[bas=0 haut=3] t[1]=3",
+        "[bas=2 haut=3] t[2]=5",
+        "[bas=3 haut=3] t[3]=7"
+      ]
+    }
+  ]
+}
