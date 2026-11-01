@@ -25,6 +25,10 @@ import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
 import { composerDepuisVocation } from "./vocation-pont";
+// it.73 — SOBRIÉTÉ ÉNERGÉTIQUE : profils plein (historique exact) / eco /
+// telephone — cf. lib/neural/core/v2/energie.ts (module pur partagé).
+import { PROFILS_ENERGIE, profilEnergieDepuisEnv } from "./core/v2/energie";
+import type { ProfilEnergie } from "./core/v2/energie";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 import type { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
@@ -208,6 +212,16 @@ export class NeuralEngine {
    */
   private readonly cacheReponses = creerCacheReponses();
 
+  /**
+   * it.73 — PROFIL D'ÉNERGIE (GEN3_PROFIL_ENERGIE=eco|telephone|plein).
+   * Défaut « plein » : comportement historique BIT À BIT (aucune
+   * économie, aucune différence). « eco » / « telephone » : quand la
+   * question tombe dans le cadre (pilotage, connaissances, pont vocation —
+   * composés SANS fenêtre neuronale), la réponse part DIRECTEMENT —
+   * zéro RPIA, zéro cycle du noyau, même texte. cf. PROFILS_ENERGIE.
+   */
+  private readonly profilEnergie: ProfilEnergie = profilEnergieDepuisEnv();
+
   constructor(
     private readonly noyau: NoyauCentralGen3,
     private readonly espace: EspaceFiltreResonant,
@@ -372,6 +386,21 @@ export class NeuralEngine {
     const motsCles = selectionnerMotsCles(encodage.tokens);
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
 
+    // it.73 — COURT-CIRCUIT ÉNERGÉTIQUE (profils eco/telephone) : la
+    // composition pilotage → connaissances → pont vocation est testée
+    // AVANT la fenêtre neuronale. Si elle répond : réponse directe, même
+    // texte (mêmes fonctions pures), zéro RPIA et zéro cycle. Sinon :
+    // chemin historique complet, inchangé.
+    if (this.profilEnergie !== "plein") {
+      const economique = await this.tenterCourtCircuitEnergie(
+        options,
+        messageUtilisateur,
+        debut,
+        prompt,
+      );
+      if (economique) return economique;
+    }
+
     // RÉSONANCE RPIA (branchée au flux du chat) : le MESSAGE (pas la charte
     // système) est mis en résonance, puis ses énergies fusionnent dans la
     // volée unique du cycle 1 — même format et même plafond que l'encodage.
@@ -458,12 +487,6 @@ export class NeuralEngine {
     const motsCles = selectionnerMotsCles(encodage.tokens);
     const messageUtilisateur = extraireDernierMessageUtilisateur(options);
 
-    // RÉSONANCE RPIA (cf. generate) — même contrat, même plafond.
-    const resonance = this.resonnerRPIA(messageUtilisateur || prompt);
-    const entreesCycle1 = resonance
-      ? this.fusionnerEnergies(encodage.inputs, resonance.energies)
-      : encodage.inputs;
-
     let providerSignale = false;
     const emettre = async (delta: string): Promise<void> => {
       if (!providerSignale) {
@@ -473,6 +496,33 @@ export class NeuralEngine {
       }
       await handlers.onDelta(delta);
     };
+
+    // it.73 — COURT-CIRCUIT ÉNERGÉTIQUE (cf. generate) : AVANT toute
+    // résonance RPIA (travail neuronal), le pont répond si la question y
+    // tombe — même texte émis par segments, zéro fenêtre neuronale.
+    if (this.profilEnergie !== "plein") {
+      const economique = await this.tenterCourtCircuitEnergie(
+        options,
+        messageUtilisateur,
+        debut,
+        prompt,
+      );
+      if (economique) {
+        for (const segment of segmenterTexte(economique.text)) {
+          await emettre(segment);
+          // Rend la main à l'event loop entre les segments (flux réel, sans
+          // délai artificiel).
+          await new Promise<void>((resoudre) => setImmediate(resoudre));
+        }
+        return economique;
+      }
+    }
+
+    // RÉSONANCE RPIA (cf. generate) — même contrat, même plafond.
+    const resonance = this.resonnerRPIA(messageUtilisateur || prompt);
+    const entreesCycle1 = resonance
+      ? this.fusionnerEnergies(encodage.inputs, resonance.energies)
+      : encodage.inputs;
 
     // Adaptation (d) : inférence propre — reset complet des énergies.
     this.reinitialiserEnergies();
@@ -899,6 +949,73 @@ export class NeuralEngine {
           : {}),
       },
     };
+  }
+
+  /**
+   * it.73 — COURT-CIRCUIT ÉNERGÉTIQUE (profils eco/telephone UNIQUEMENT —
+   * le profil « plein » n'appelle JAMAIS cette méthode).
+   *
+   * Tente la composition SANS fenêtre neuronale : pilotage plateforme →
+   * connaissances → pont vocation. Ces trois compositions sont identiques
+   * au chemin historique (MÊMES fonctions, MÊME ordre relatif — seuls le
+   * repli cortex/décodeur et les télémétries de cycles diffèrent) : la
+   * qualité de réponse est donc conservée PAR CONSTRUCTION. Les effets de
+   * bord conversationnels (mémoire de travail, évolution continue) sont
+   * exécutés comme dans le chemin complet. Retourne null si aucune ne
+   * répond → l'appelant exécute le chemin historique complet.
+   */
+  private async tenterCourtCircuitEnergie(
+    options: AIRequest,
+    messageUtilisateur: string,
+    debut: number,
+    prompt: string,
+  ): Promise<NeuralAIResponse | null> {
+    const knowledgeContext = options.knowledgeContext?.trim() ?? "";
+    const composition =
+      (await this.pilotage?.(messageUtilisateur, options)) ??
+      (knowledgeContext
+        ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext)
+        : null) ??
+      composerDepuisVocation(messageUtilisateur);
+    if (!composition) return null;
+
+    const memoire = this.memoirePour(options);
+    const domaine = detecterDomaine(messageUtilisateur);
+    // Décodage « vide » honnête : aucune fenêtre neuronale n'a tourné —
+    // zéro résonance inventée, zéro métabolisme inventé.
+    const decodeVide: NeuralDecodedResponse = {
+      texte: composition.texte,
+      intention: "INTENTION_GENERALE",
+      scoreResonance: 0,
+      resonances: {},
+      motsCles: [],
+    };
+    const reponse = this.construireReponse(
+      prompt,
+      composition,
+      decodeVide,
+      Date.now() - debut,
+      undefined,
+      domaine,
+      null,
+    );
+    // raw est typé `unknown` dans le contrat IA (lib/ai/models.ts) — la
+    // télémétrie d'économie est ajoutée de façon typée et honnête.
+    reponse.raw = {
+      ...(typeof reponse.raw === "object" && reponse.raw !== null
+        ? (reponse.raw as Record<string, unknown>)
+        : {}),
+      economieEnergie: {
+        profil: this.profilEnergie,
+        origine: "pont-lexical",
+        cyclesNoyauEvites: NEURAL_CYCLES_PAR_GENERATION,
+        epoquesRPIAEvitees: EPOQUES_RPIA_CHAT,
+        description: PROFILS_ENERGIE[this.profilEnergie].description,
+      },
+    } as Record<string, unknown>;
+    this.memoriser(messageUtilisateur, composition.texte, memoire);
+    this.evoluer(messageUtilisateur, composition);
+    return reponse;
   }
 }
 

@@ -272,6 +272,11 @@ const PUBLIC_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   // les 19 domaines pour lesquels le moteur a été créé (mission, tâches,
   // outils réels) — module statique zéro IO, aucune donnée utilisateur.
   "/vocation": "public",
+  // it.73 — SOBRIÉTÉ ÉNERGÉTIQUE : le cortex compact embarqué (2^17, poids
+  // u8, lecture seule) tourne DANS le navigateur du téléphone — page
+  // statique + snapshot binaire public, aucune donnée utilisateur, zéro
+  // requête serveur par question après chargement.
+  "/mobile": "public",
   // Fichiers servis depuis /public et routes système
   "/robots.txt": "public",
   "/sitemap.xml": "public",

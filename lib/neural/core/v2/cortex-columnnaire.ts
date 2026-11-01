@@ -37,6 +37,8 @@
  * Module PUR — aucune dépendance Node, entièrement déterministe (seed).
  */
 
+import { remplirStructureCSR } from "./structure-csr";
+
 /**
  * Métabolisme du DERNIER pas (it.56 — extension au cortex v2 du modèle
  * v1 : le coût est ∝ ACTIVITÉ, le repos est gratuit — « très faible
@@ -97,6 +99,20 @@ export interface CortexColumnnaireConfig {
    *  (moyenne 0.5/arête — au-dessus de l'initial 0.1-0.5, sous la
    *  saturation 1.0). */
   budgetPoidsSortants: number;
+  /** it.73 — HORLOGES COMPACTES : dernierSpike/dernierTouche stockés en
+   *  Uint32Array au lieu de Float64Array (−8 octets/colonne — 2^20 :
+   *  −8 Mo résidents). EXACT tant que l'horloge reste < 2^32 (pas() le
+   *  refuse honnêtement au-delà — les campagnes massives it.70-72 à
+   *  horloges 90e9 restent en f64 par défaut). DÉFAUT FALSE : sémantique
+   *  inchangée (fidélité verrouillée par la garde 42ᵉ). */
+  horlogesCompactes?: boolean;
+  /** it.73 — LECTURE SEULE : la plasticité n'écrit JAMAIS (inférence
+   *  pure — le téléphone répond, il ne s'entraîne pas). Les écritures
+   *  de renforcement (fenêtre de plasticité), la plasticité supervisée
+   *  et l'homéostasie sont neutralisées (compteur
+   *  `ecrituresSuperviseesRefusees`). DÉFAUT FALSE : sémantique v1/v2
+   *  exacte inchangée. */
+  lectureSeule?: boolean;
 }
 
 /** Valeurs par défaut — it.56 (demande propriétaire : « un million de
@@ -151,10 +167,13 @@ export class CortexColumnnaire {
 
   /** Énergie courante de chaque colonne (transitoire, décroissance paresseuse). */
   readonly energies: Float32Array;
-  /** Horloge virtuelle du dernier spike de chaque colonne (plasticité). */
-  readonly dernierSpike: Float64Array;
+  /** Horloge virtuelle du dernier spike de chaque colonne (plasticité).
+   *  it.73 : Uint32Array quand `horlogesCompactes` (exact < 2^32). */
+  readonly dernierSpike: Float64Array | Uint32Array;
   /** Cycle dont la décroissance a déjà été appliquée à chaque colonne. */
-  readonly dernierTouche: Float64Array;
+  readonly dernierTouche: Float64Array | Uint32Array;
+  /** it.73 — écritures supervisées refusées en lecture seule (mesure). */
+  readonly ecrituresSuperviseesRefusees = { total: 0 };
   /** Drapeau « a spiké ce cycle » (réutilisé, libéré en fin de pas). */
   private flagSpike: Uint8Array;
 
@@ -203,8 +222,9 @@ export class CortexColumnnaire {
     const n = this.config.colonnes;
 
     this.energies = new Float32Array(n);
-    this.dernierSpike = new Float64Array(n);
-    this.dernierTouche = new Float64Array(n);
+    const compactes = this.config.horlogesCompactes === true;
+    this.dernierSpike = compactes ? new Uint32Array(n) : new Float64Array(n);
+    this.dernierTouche = compactes ? new Uint32Array(n) : new Float64Array(n);
     this.flagSpike = new Uint8Array(n);
     this.enFile = new Uint8Array(n);
     this.dernierResonance = new Float32Array(this.config.bandes);
@@ -218,63 +238,25 @@ export class CortexColumnnaire {
     this.genererStructure();
   }
 
-  /**
-   * Hash 32 bits déterministe (xorshift-multiply) — la « signature »
-   * structurante du câblage (colonne, voie, graine).
-   */
-  private hash32(a: number, b: number): number {
-    let h =
-      Math.imul(a + 1, 0x9e3779b1) ^
-      Math.imul(b + 1, 0x85ebca6b) ^
-      this.config.seed;
-    h ^= h >>> 16;
-    h = Math.imul(h, 0x7feb352d);
-    h ^= h >>> 15;
-    h = Math.imul(h, 0x846ca68b);
-    h ^= h >>> 16;
-    return h >>> 0;
+  /** it.73 — refus honnête au-delà de la capacité u32 (horloges compactes). */
+  private verifierHorloge(t: number): void {
+    if (this.config.horlogesCompactes === true && t > 4294967295) {
+      throw new Error(
+        `Horloge ${t} hors capacité u32 (horlogesCompactes actif) — ` +
+        "relancez en horloges f64 (défaut) pour les horloges massives.",
+      );
+    }
   }
 
   /**
-   * Génère la structure CSR déterministe :
-   *  - arêtes [0, bandesLecture) : UNE cible garantie par bande de lecture
-   *    (hash déterministe dans l'intervalle de la bande) — convergence
-   *    many→one sur les zones de lecture, comme les pools v1 ;
-   *  - arêtes [bandesLecture, voisins) : cibles intra-cortex aléatoires
-   *    (dynamique de réservoir, cascades, activité de fond).
-   * Poids initiaux uniformes dans [0.1, 0.5] — même distribution que v1.
+   * Génère la structure CSR déterministe — it.73 : délègue à la fonction
+   * PURE partagée `remplirStructureCSR` (structure-csr.ts) : le moteur
+   * compact embarqué (téléphone) et la classe de production partagent
+   * EXACTEMENT le même câblage — identité bit à bit PAR CONSTRUCTION,
+   * re-verrouillée par la garde 42ᵉ. Écrit EN PLACE (zéro allocation).
    */
   private genererStructure(): void {
-    const { colonnes, voisins, seed, bandes } = this.config;
-    const parBande = Math.floor(colonnes / bandes);
-    const lecture = Math.min(this.config.bandesLecture, voisins, bandes);
-    let etat = seed >>> 0;
-    const alea = (): number => {
-      // mulberry32 inline (même générateur que core/rng.ts) — éviter
-      // les allocations de closure par arête sur 3M d'arêtes.
-      etat = (etat + 0x6d2b79f5) | 0;
-      let t = Math.imul(etat ^ (etat >>> 15), 1 | etat);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-
-    for (let c = 0; c < colonnes; c++) {
-      this.csrOffset[c] = c * voisins;
-      for (let k = 0; k < voisins; k++) {
-        let cible: number;
-        if (k < lecture) {
-          // Cible garantie dans la bande de lecture k.
-          cible = k * parBande + (this.hash32(c, k) % parBande);
-        } else {
-          // Cible intra-cortex aléatoire (réservoir).
-          cible = this.hash32(c, k + 1000) % colonnes;
-        }
-        if (cible === c) cible = (cible + 1) % colonnes; // pas d'auto-boucle
-        this.csrCible[c * voisins + k] = cible;
-        this.csrPoids[c * voisins + k] = 0.1 + alea() * 0.4;
-      }
-    }
-    this.csrOffset[colonnes] = colonnes * voisins;
+    remplirStructureCSR(this.config, this.csrOffset, this.csrCible, this.csrPoids);
   }
 
   /**
@@ -284,7 +266,7 @@ export class CortexColumnnaire {
    * rapide pour dt = 1 (le cas dominant).
    */
   private avancerDecroissance(c: number, t: number): void {
-    const dt = t - this.dernierTouche[c];
+    const dt = t - this.dernierTouche[c]!;
     if (dt <= 0) return;
     const facteur =
       dt === 1 ? 1 - this.config.decroissance : Math.pow(1 - this.config.decroissance, dt);
@@ -324,11 +306,13 @@ export class CortexColumnnaire {
    */
   pas(injections: Array<[number, number]> | null, t: number): number[] {
     const debut = performance.now();
+    this.verifierHorloge(t);
     const spikes: number[] = [];
     const { voisins, plasticiteFenetre, lrBoost, bandes, colonnes } =
       this.config;
     const normaliser = this.config.normalisationHomeostatique;
     const budget = this.config.budgetPoidsSortants;
+    const lectureSeule = this.config.lectureSeule === true;
     let normalisations = 0;
 
     // ---- (1)+(2) Évaluation : transmissions en attente + injections ------
@@ -360,19 +344,24 @@ export class CortexColumnnaire {
       const base = s * voisins;
       for (let k = 0; k < voisins; k++) {
         const p = base + k;
-        const cible = this.csrCible[p];
+        const cible = this.csrCible[p]!;
         this.avancerDecroissance(cible, t);
-        this.energies[cible] += this.csrPoids[p];
+        const poids = this.csrPoids[p]!;
+        this.energies[cible] += poids;
         this.energieBandes[Math.min(bandes - 1, Math.floor(cible / parBande))] +=
-          this.csrPoids[p];
+          poids;
         if (this.enFile[cible] === 0) {
           this.enFile[cible] = 1;
           this.enAttente.push(cible);
         }
         // Plasticité (renforcement si la cible a spiké récemment).
-        const dt = t - this.dernierSpike[cible];
-        if (dt > 0 && dt < plasticiteFenetre) {
-          this.csrPoids[p] = Math.min(1.0, this.csrPoids[p] + lrBoost);
+        // it.73 — lecture seule : l'inférence n'écrit JAMAIS (le téléphone
+        // répond sans s'entraîner — exact par défaut FALSE).
+        if (!lectureSeule) {
+          const dt = t - this.dernierSpike[cible]!;
+          if (dt > 0 && dt < plasticiteFenetre) {
+            this.csrPoids[p] = Math.min(1.0, poids + lrBoost);
+          }
         }
       }
       // it.67 — HOMEOSTASIE SYNAPTIQUE (si activée) : la somme des poids
@@ -381,7 +370,8 @@ export class CortexColumnnaire {
       // plus `budget` d'énergie au total — la cascade CSR (anomalie it.65
       // §3.4 : poids tous saturés à 1.0 → avalanche) est physiquement
       // bornée. Hors config : sémantique v1 exacte, zéro changement.
-      if (normaliser) {
+      // it.73 — lecture seule : aucune écriture d'homéostasie.
+      if (normaliser && !lectureSeule) {
         let somme = 0;
         for (let k = 0; k < voisins; k++) somme += this.csrPoids[base + k];
         if (somme > budget) {
@@ -459,6 +449,11 @@ export class CortexColumnnaire {
     boost: number,
     bandesConcurrentesSurResonantes: readonly number[],
   ): void {
+    // it.73 — lecture seule : refus mesuré (le compteur est l'honnêteté).
+    if (this.config.lectureSeule === true) {
+      this.ecrituresSuperviseesRefusees.total += 1;
+      return;
+    }
     const parBande = Math.floor(this.config.colonnes / this.config.bandes);
     const debutBande = bande * parBande;
     const finBande = Math.min(this.config.colonnes, debutBande + parBande);
@@ -469,7 +464,7 @@ export class CortexColumnnaire {
       const base = c * this.config.voisins;
       for (let k = 0; k < this.config.voisins; k++) {
         const p = base + k;
-        const cible = this.csrCible[p];
+        const cible = this.csrCible[p]!;
         if (cible >= debutBande && cible < finBande) {
           this.csrPoids[p] = Math.min(1.0, this.csrPoids[p] + boost);
         } else if (concurrentes.has(Math.floor(cible / parBande))) {
@@ -488,6 +483,22 @@ export class CortexColumnnaire {
   /** Résonance par bande du dernier pas (copie défensive). */
   resonanceBandes(): number[] {
     return Array.from(this.dernierResonance);
+  }
+
+  /** it.73 — mémoire RÉSIDENTE exacte en octets (typed arrays réels,
+   *  `.byteLength` mesurés — aucune estimation). La garde 42ᵉ verrouille
+   *  la cohérence avec stats().memoireMo. */
+  octetsResidentiels(): number {
+    return (
+      this.energies.byteLength +
+      this.dernierSpike.byteLength +
+      this.dernierTouche.byteLength +
+      this.flagSpike.byteLength +
+      this.enFile.byteLength +
+      this.csrOffset.byteLength +
+      this.csrCible.byteLength +
+      this.csrPoids.byteLength
+    );
   }
 
   /**
@@ -525,10 +536,12 @@ export class CortexColumnnaire {
   /** Stats descriptives + télémétrie de vitesse réelle. */
   stats(): CortexColumnnaireStats {
     const aretes = this.config.colonnes * this.config.voisins;
-    // énergies f32 + dernierSpike f64 + dernierTouche f64 + flags u8
-    // + offsets u32 + cibles u32 + poids f32
+    const compactes = this.config.horlogesCompactes === true;
+    // énergies f32 + dernierSpike (f64|u32) + dernierTouche (f64|u32)
+    // + flags u8 + offsets u32 + cibles u32 + poids f32
     const octets =
-      this.config.colonnes * (4 + 8 + 8 + 1 + 4) + aretes * (4 + 4);
+      this.config.colonnes * (4 + (compactes ? 4 : 8) + (compactes ? 4 : 8) + 1 + 4) +
+      aretes * (4 + 4);
     return {
       colonnes: this.config.colonnes,
       aretes,
