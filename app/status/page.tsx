@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { sonderServices } from "@/lib/observability/statut-services";
 import { getSystemHealth } from "@/lib/observability/metrics";
+import VueSobrieteEnergie from "@/components/neural/vue-sobriete-energie";
 
 /**
  * /status — PAGE PUBLIQUE D'ÉTAT DU SERVICE (durcissement production —
@@ -15,8 +16,13 @@ import { getSystemHealth } from "@/lib/observability/metrics";
  * utilisateur). Aucun secret, aucun identifiant : utilisable anonymement.
  *
  * Rafraîchissement auto 60 s via <meta httpEquiv="refresh"> (hoisté en head
- * par React 19) — zéro JavaScript client, la page reste un document statique
- * servi même en dégradation partielle.
+ * par React 19) — la page reste un document servi même en dégradation
+ * partielle. it.78 (candidat №2 reporté it.74 §7 / it.76 §8 / it.77 §9) :
+ * la vue de sobriété énergétique (widget client it.75) est rendue ici en
+ * second emplacement public — l'état du service montre AUSSI la mesure de
+ * la demande propriétaire (énergie) ; son polling 30 s est gaté par la
+ * visibilité (zéro requête en arrière-plan), le meta-refresh du document
+ * reste inchangé.
  */
 
 export const dynamic = "force-dynamic";
@@ -133,6 +139,12 @@ export default async function PageStatut() {
           </p>
         </div>
       </section>
+
+      {/* it.78 — second emplacement public de la mesure de sobriété
+          (candidat №2 reporté trois fois) : profil actif, compteurs
+          persistés, règle d'honnêteté — le tout consommé depuis
+          /api/energie par le widget client sobre (it.75). */}
+      <VueSobrieteEnergie />
 
       <footer className="mt-auto border-t border-neutral-200 pt-4 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
         <p>

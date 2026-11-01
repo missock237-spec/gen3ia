@@ -18,10 +18,22 @@
  *
  * Chaque champ est une SOMME D'ENTIERS MESURÉS — jamais une estimation ni
  * un contre-factuel inventé : on compte ce qui est arrivé, pas ce qui
- * « aurait pu » arriver. Persistance : en MÉMOIRE du processus (globalThis,
- * même convention que le compteur it.74) — réinitialisé à chaque
- * redéploiement, limite déclarée dans la réponse de /api/energie.
+ * « aurait pu » arriver.
+ *
+ * Persistance (it.78) : en MÉMOIRE du processus (globalThis, même
+ * convention que le compteur it.74) ET sur disque (var/neural/
+ * compteurs-energie.json, écriture atomique via persistance-compteurs.ts)
+ * — les sommes CONTINUENT à travers les redéploiements et l'ORIGINE de la
+ * mesure (origineIso) survit. Si l'écriture disque est impossible, le
+ * compteur continue en mémoire seule et ce repli est DÉCLARÉ par
+ * /api/energie (mode « memoire ») — jamais silencieux.
  */
+
+import {
+  lireEtatCompteurs,
+  persisterBlocCompteur,
+  effacerEtatCompteurs,
+} from "@/lib/neural/persistance-compteurs";
 
 /** Clé du compteur sur globalThis (survit aux recharges de module). */
 export const CLE_COMPTEUR_PONT = "__gen3CompteurPontVocationIt75";
@@ -46,13 +58,29 @@ function conteneur(): CompteurMutable {
   const global = globalThis as unknown as Record<string, unknown>;
   const existant = global[CLE_COMPTEUR_PONT] as CompteurMutable | undefined;
   if (existant) return existant;
+  // it.78 — AMORÇAGE depuis le disque : la somme cumulée continue après un
+  // redéploiement (fichier absent/corrompu → zéro honnête, jamais d'estimation).
+  const persiste = lireEtatCompteurs();
+  const origineIso = persiste?.origineIso ?? new Date().toISOString();
   const neuf: CompteurMutable = {
-    reponsesServies: 0,
-    refusHonnêtes: 0,
-    demarrageIso: new Date().toISOString(),
+    reponsesServies: persiste?.pont?.reponsesServies ?? 0,
+    refusHonnêtes: persiste?.pont?.refusHonnêtes ?? 0,
+    demarrageIso: origineIso,
   };
   global[CLE_COMPTEUR_PONT] = neuf;
+  persisterBlocCompteur("pont", {
+    reponsesServies: neuf.reponsesServies,
+    refusHonnêtes: neuf.refusHonnêtes,
+  }, origineIso);
   return neuf;
+}
+
+function persister(): void {
+  const c = conteneur();
+  persisterBlocCompteur("pont", {
+    reponsesServies: c.reponsesServies,
+    refusHonnêtes: c.refusHonnêtes,
+  }, c.demarrageIso);
 }
 
 /**
@@ -61,11 +89,13 @@ function conteneur(): CompteurMutable {
  */
 export function enregistrerReponsePont(): void {
   conteneur().reponsesServies += 1;
+  persister();
 }
 
 /** Enregistre un REFUS honnête hors cadre (aucune réponse fabriquée). */
 export function enregistrerRefusPont(): void {
   conteneur().refusHonnêtes += 1;
+  persister();
 }
 
 /** Lecture (copie défensive) du compteur cumulé du pont. */
@@ -78,8 +108,13 @@ export function lireCompteurPontVocation(): CompteurPontVocation {
   };
 }
 
-/** Réinitialisation (usage : garde/tests — jamais en production). */
+/**
+ * Réinitialisation (usage : garde/tests — jamais en production) : remet le
+ * conteneur en mémoire ET le fichier de persistance à zéro — un test
+ * redémarre toujours d'un état honnêtement vide.
+ */
 export function reinitialiserCompteurPontVocation(): void {
   const global = globalThis as unknown as Record<string, unknown>;
   delete global[CLE_COMPTEUR_PONT];
+  effacerEtatCompteurs();
 }

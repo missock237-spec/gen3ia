@@ -22,8 +22,8 @@ import {
  *     horodatage du démarrage, règle d'honnêteté. Aucun chiffre fabriqué
  *     côté client : les nombres affichés viennent du JSON du serveur.
  *  2. L'HONNÊTETÉ EST AFFICHÉE : erreur réseau/HTTP déclarée comme telle,
- *     état de lecture déclaré, compteur à zéro expliqué (redéploiement) —
- *     jamais de succès inventé ni de jauge fictive.
+ *     état de lecture déclaré, persistance déclarée (mode fichier/mémoire,
+ *     it.78) — jamais de succès inventé ni de jauge fictive.
  *  3. LE WIDGET EST LUI-MÊME SOBRE : rafraîchissement périodique 30 s GATÉ
  *     PAR LA VISIBILITÉ (useVisiblePolling) — zéro requête en arrière-plan ;
  *     un indicateur de sobriété qui pollerait en fond serait une
@@ -62,12 +62,16 @@ describe("GARDE 44ᵉ — le widget consomme la mesure réelle du serveur", () =
     expect(source).toContain("energie?.honnetete?.qualite");
   });
 
-  it("2. l'honnêteté est affichée : erreur déclarée, lecture déclarée, zéro expliqué", () => {
+  it("2. l'honnêteté est affichée : erreur déclarée, lecture déclarée, persistance déclarée", () => {
     expect(source).toContain("Endpoint énergie indisponible");
     expect(source).toContain("Réseau indisponible — réessayez.");
     expect(source).toContain("Lecture du compteur d&apos;énergie…");
-    // Les compteurs à zéro sont EXPLIQUÉS (redéploiement) au lieu d'être maquillés.
-    expect(source).toContain("Les compteurs démarrent à zéro à chaque redéploiement");
+    // it.78 — la persistance est AFFICHÉE : mode constaté (fichier/mémoire)
+    // et continuité à travers les redéploiements expliquée — au lieu de la
+    // vieille limite « remise à zéro » aujourd'hui levée.
+    expect(source).toContain("Compteurs persistés sur disque (it.78)");
+    expect(source).toContain("Persistance : ");
+    expect(source).toContain("persistance?.mode ??");
     // La part évitée est mesurée depuis les deux compteurs — jamais une
     // estimation fixe.
     expect(source).toContain("Math.round((evitees / total) * 100)");
@@ -186,5 +190,32 @@ describe("GARDE 44ᵉ — compteur du pont vocation (second périmètre réel, i
     expect(source).toContain("jamais une estimation ni");
     expect(source).toContain("on compte ce qui est arrivé");
     expect(source).toContain("__gen3CompteurPontVocationIt75");
+  });
+});
+
+describe("GARDE 44ᵉ — it.78 : la mesure devient durable et visible partout", () => {
+  it("14. /status intègre le widget (candidat №2 reporté it.74 §7 / it.76 §8 / it.77 §9)", () => {
+    const page = read("app/status/page.tsx");
+    expect(page).toContain('import VueSobrieteEnergie from "@/components/neural/vue-sobriete-energie"');
+    expect(page).toContain("<VueSobrieteEnergie />");
+    expect(page).toContain("candidat №2 reporté trois fois");
+  });
+
+  it("15. /api/energie déclare la persistance (mode constaté, repli jamais silencieux)", () => {
+    const source = read(ROUTE);
+    expect(source).toContain("persistanceCompteurs");
+    expect(source).toContain("lireModePersistanceCompteurs()");
+    expect(source).toContain("repli mémoire DÉCLARÉ");
+  });
+
+  it("16. les deux compteurs s'amorcent depuis le disque et persistent à chaque incrément", () => {
+    const pont = read(COMPTEUR_PONT);
+    const moteur = read("lib/neural/core/v2/compteur-energie-process.ts");
+    for (const source of [pont, moteur]) {
+      expect(source).toContain("lireEtatCompteurs()");
+      expect(source).toContain("persisterBlocCompteur(");
+      expect(source).toContain("effacerEtatCompteurs()");
+      expect(source).toContain("AMORÇAGE depuis le disque");
+    }
   });
 });

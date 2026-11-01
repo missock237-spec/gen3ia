@@ -50,6 +50,12 @@ interface ReponseEnergie {
     mesure?: string;
     priorite?: string;
   };
+  persistanceCompteurs?: {
+    mode?: string;
+    fichier?: string;
+    varEnv?: string;
+    regle?: string;
+  };
 }
 
 const NB_FENETRES_AVERTI = 5;
@@ -96,6 +102,7 @@ export default function VueSobrieteEnergie() {
   const profil = energie?.profil;
   const compteur = energie?.compteur;
   const pont = energie?.pontVocation;
+  const persistance = energie?.persistanceCompteurs;
   const evitees = compteur?.fenetresEvitees ?? 0;
   const executees = compteur?.fenetresExecutees ?? 0;
   const total = evitees + executees;
@@ -137,6 +144,9 @@ export default function VueSobrieteEnergie() {
             </span>
             <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
               Démarrage du compteur : {heureLocale(compteur.demarrageIso)}
+            </span>
+            <span className="rounded-full border border-[var(--g3-border)] px-3 py-1">
+              Persistance : <strong className="text-[var(--g3v6-spike-text)]">{persistance?.mode ?? "—"}</strong>
             </span>
           </div>
 
@@ -191,9 +201,10 @@ export default function VueSobrieteEnergie() {
 
           {evitees >= NB_FENETRES_AVERTI || (pont?.reponsesServies ?? 0) >= NB_FENETRES_AVERTI ? null : (
             <p className="mt-2 text-[11px] leading-relaxed text-[var(--g3-faint)]">
-              Les compteurs démarrent à zéro à chaque redéploiement (limite déclarée dans /api/energie) — posez
-              une question du cadre ci-dessus, rafraîchissez, la mesure bouge : c&apos;est le serveur qui compte,
-              pas cette page.
+              Compteurs persistés sur disque (it.78) : ils continuent à travers les redéploiements, l&apos;origine
+              de la mesure est conservée. Si l&apos;écriture est impossible, ils restent en mémoire et repartent
+              de zéro au redéploiement — mode déclaré dans /api/energie, jamais silencieux. Posez une question du
+              cadre ci-dessus, rafraîchissez, la mesure bouge : c&apos;est le serveur qui compte, pas cette page.
             </p>
           )}
 

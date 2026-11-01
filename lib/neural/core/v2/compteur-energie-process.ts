@@ -14,11 +14,22 @@
  *                         RPIA + 4 cycles par fenêtre évitée, constantes
  *                         du moteur déclarées par la garde 42ᵉ).
  *
- * Persistance : en MÉMOIRE du processus (globalThis) — honnêteté : le
- * compteur couvre « depuis le démarrage du processus », il est réinitialisé
- * à chaque redéploiement (swap atomique + rechargement PM2). Il est exposé
- * publiquement par /api/energie avec cette limite déclarée.
+ * Persistance (it.78) : en MÉMOIRE du processus (globalThis) ET sur disque
+ * (var/neural/compteurs-energie.json, écriture atomique via
+ * persistance-compteurs.ts) — la somme cumulée et son ORIGINE (origineIso)
+ * CONTINUENT à travers les redéploiements (swap atomique + rechargement
+ * PM2) ; la limite historique « remise à zéro à chaque redéploiement » est
+ * levée. Si l'écriture disque est impossible, le compteur continue en
+ * mémoire seule et ce repli est DÉCLARÉ publiquement par /api/energie
+ * (mode « memoire ») — jamais silencieux. Il est exposé publiquement par
+ * /api/energie.
  */
+
+import {
+  lireEtatCompteurs,
+  persisterBlocCompteur,
+  effacerEtatCompteurs,
+} from "@/lib/neural/persistance-compteurs";
 
 /** Clé du compteur sur globalThis (survit aux recharges de module). */
 export const CLE_COMPTEUR_ENERGIE = "__gen3CompteurEnergieIt74";
@@ -49,15 +60,35 @@ function conteneur(): CompteurMutable {
   const global = globalThis as unknown as Record<string, unknown>;
   const existant = global[CLE_COMPTEUR_ENERGIE] as CompteurMutable | undefined;
   if (existant) return existant;
+  // it.78 — AMORÇAGE depuis le disque : la somme cumulée continue après un
+  // redéploiement (fichier absent/corrompu → zéro honnête, jamais d'estimation).
+  const persiste = lireEtatCompteurs();
+  const origineIso = persiste?.origineIso ?? new Date().toISOString();
   const neuf: CompteurMutable = {
-    fenetresExecutees: 0,
-    fenetresEvitees: 0,
-    epoquesRPIAEvitees: 0,
-    cyclesNoyauEvites: 0,
-    demarrageIso: new Date().toISOString(),
+    fenetresExecutees: persiste?.moteur?.fenetresExecutees ?? 0,
+    fenetresEvitees: persiste?.moteur?.fenetresEvitees ?? 0,
+    epoquesRPIAEvitees: persiste?.moteur?.epoquesRPIAEvitees ?? 0,
+    cyclesNoyauEvites: persiste?.moteur?.cyclesNoyauEvites ?? 0,
+    demarrageIso: origineIso,
   };
   global[CLE_COMPTEUR_ENERGIE] = neuf;
+  persisterBlocCompteur("moteur", {
+    fenetresExecutees: neuf.fenetresExecutees,
+    fenetresEvitees: neuf.fenetresEvitees,
+    epoquesRPIAEvitees: neuf.epoquesRPIAEvitees,
+    cyclesNoyauEvites: neuf.cyclesNoyauEvites,
+  }, origineIso);
   return neuf;
+}
+
+function persister(): void {
+  const c = conteneur();
+  persisterBlocCompteur("moteur", {
+    fenetresExecutees: c.fenetresExecutees,
+    fenetresEvitees: c.fenetresEvitees,
+    epoquesRPIAEvitees: c.epoquesRPIAEvitees,
+    cyclesNoyauEvites: c.cyclesNoyauEvites,
+  }, c.demarrageIso);
 }
 
 /**
@@ -73,11 +104,13 @@ export function enregistrerFenetreEvitee(
   c.fenetresEvitees += 1;
   c.epoquesRPIAEvitees += epoquesRPIA;
   c.cyclesNoyauEvites += cyclesNoyau;
+  persister();
 }
 
 /** Enregistre une fenêtre neuronale complète exécutée (chemin historique). */
 export function enregistrerFenetreExecutee(): void {
   conteneur().fenetresExecutees += 1;
+  persister();
 }
 
 /** Lecture (copie défensive) du compteur cumulé du processus. */
@@ -92,8 +125,13 @@ export function lireCompteurEnergieProcess(): CompteurEnergieProcess {
   };
 }
 
-/** Réinitialisation (usage : garde/tests — jamais en production). */
+/**
+ * Réinitialisation (usage : garde/tests — jamais en production) : remet le
+ * conteneur en mémoire ET le fichier de persistance à zéro — un test
+ * redémarre toujours d'un état honnêtement vide.
+ */
 export function reinitialiserCompteurEnergieProcess(): void {
   const global = globalThis as unknown as Record<string, unknown>;
   delete global[CLE_COMPTEUR_ENERGIE];
+  effacerEtatCompteurs();
 }

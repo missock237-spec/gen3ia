@@ -4,6 +4,11 @@ import { PROFILS_ENERGIE, VAR_ENV_PROFIL_ENERGIE } from "@/lib/neural/core/v2/en
 import { profilEnergieActif } from "@/lib/neural/core/v2/profil-production";
 import { lireCompteurEnergieProcess } from "@/lib/neural/core/v2/compteur-energie-process";
 import { lireCompteurPontVocation } from "@/lib/neural/compteur-pont-vocation";
+import {
+  fichierCompteurs,
+  lireModePersistanceCompteurs,
+  VAR_ENV_FICHIER_COMPTEURS,
+} from "@/lib/neural/persistance-compteurs";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +36,11 @@ export const dynamic = "force-dynamic";
  *  - honnetete : la règle structurante (aucune économie silencieuse — le
  *               profil « plein » est le comportement historique bit à bit ;
  *               « eco »/« telephone » répondent par le MÊME pont lexical,
- *               même texte, testé A/B it.73 ; hors cadre = chemin complet).
+ *               même texte, testé A/B it.73 ; hors cadre = chemin complet) ;
+ *  - persistanceCompteurs : it.78 — les sommes persistent sur disque et
+ *               CONTINUENT à travers les redéploiements ; le mode constaté
+ *               (« fichier » = écritures réussies, « memoire » = écriture
+ *               impossible, repli déclaré) est publié ici, jamais avalé.
  *
  * Public et sans donnée sensible (même convention que /api/health) — c'est
  * la mesure publique de la demande propriétaire : « diminuer la
@@ -43,6 +52,7 @@ export async function GET() {
   const actif = profilEnergieActif();
   const compteur = lireCompteurEnergieProcess();
   const pontVocation = lireCompteurPontVocation();
+  const modePersistance = lireModePersistanceCompteurs();
 
   return NextResponse.json(
     {
@@ -64,9 +74,16 @@ export async function GET() {
         qualite:
           "les questions du cadre d'apprentissage sont répondues par le MÊME pont lexical que la production (même texte, testé A/B it.73) ; hors cadre = chemin historique complet inchangé",
         mesure:
-          "compteurs cumulés en mémoire du processus (réinitialisés à chaque redéploiement) — fenêtres exécutées vs évitées (moteur) et réponses/refus du pont public, sommes d'entiers mesurés",
+          "compteurs cumulés persistés sur disque (it.78 — continuent à travers les redéploiements) — fenêtres exécutées vs évitées (moteur) et réponses/refus du pont public, sommes d'entiers mesurés",
         priorite:
           "variable d'environnement (opérateur local) > fichier versionné (dépôt) > « plein »",
+      },
+      persistanceCompteurs: {
+        mode: modePersistance ?? "initial",
+        fichier: fichierCompteurs(),
+        varEnv: VAR_ENV_FICHIER_COMPTEURS,
+        regle:
+          "sommes persistées en écriture atomique (tmp + rename) ; mode « fichier » = les compteurs continuent à travers les redéploiements ; mode « memoire » = écriture impossible, repli mémoire DÉCLARÉ (les compteurs repartent alors de zéro au redéploiement) ; « initial » = aucune écriture constatée depuis ce démarrage",
       },
     },
     {
