@@ -10,6 +10,7 @@ import { lireResumeMasse } from "@/lib/gen3/pretrain-masse";
 import { lireResumeMillion } from "@/lib/gen3/pretrain-million";
 import { lireResumeContinue } from "@/lib/gen3/amelioration-continue";
 import TesteurQuestionsVocation from "@/components/neural/testeur-questions";
+import VueSobrieteEnergie from "@/components/neural/vue-sobriete-energie";
 
 /**
  * /vocation — LA CHARTE LISIBLE DE LA VOCATION DE GEN3 (it.62).
@@ -32,6 +33,11 @@ import TesteurQuestionsVocation from "@/components/neural/testeur-questions";
  * vocation est une promesse publique). Le pré-entraînement par ondes
  * correspondant (méthode EOD it.57) est pilotable depuis la console
  * /neural (onglet Entraînement — it.62).
+ *
+ * it.75 — la SOBRIÉTÉ ÉNERGÉTIQUE devient lisible par les utilisateurs :
+ * le composant client VueSobrieteEnergie consomme GET /api/energie (public
+ * it.74) et affiche le profil actif, sa source et le compteur réel de
+ * fenêtres exécutées vs évitées — la mesure du serveur, sans curl.
  */
 
 export const metadata: Metadata = {
@@ -78,6 +84,13 @@ export default function PageVocation() {
             d'apprentissage (POST /api/neural/questions — réponse réelle du
             pont vocation, ancrée charte, honnête hors cadre) */}
         <TesteurQuestionsVocation />
+
+        {/* it.75 — SOBRIÉTÉ ÉNERGÉTIQUE lisible par les utilisateurs :
+            profil actif, source et compteur réel de fenêtres exécutées vs
+            évitées, consommés depuis /api/energie (public it.74) — la mesure
+            du propriétaire (« diminuer la consommation d'énergie tout en
+            gardant la qualité ») devient visible sans curl */}
+        <VueSobrieteEnergie />
 
         {/* Les 19 domaines */}
         <section aria-label="Les 19 domaines de la vocation" className="grid gap-3 sm:grid-cols-2">
