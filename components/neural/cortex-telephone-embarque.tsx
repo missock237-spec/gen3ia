@@ -6,7 +6,7 @@
  * compétences »).
  *
  * Ce composant charge UNE FOIS le snapshot binaire du cortex compact
- * (public/neural/cortex-telephone-it73.bin — 2^17 colonnes, poids u8,
+ * (public/neural/cortex-telephone-it76.bin — 2^17 colonnes, poids u8,
  * lecture seule, ~1,5 Mo cacheable) puis exécute TOUT localement :
  *  - la RÉPONSE vient du pont vocation (composerDepuisVocation) — LA MÊME
  *    fonction pure que la production exécute côté serveur : la qualité de
@@ -72,7 +72,7 @@ export default function CortexTelephoneEmbarque() {
     let annule = false;
     (async () => {
       try {
-        const reponse = await fetch("/neural/cortex-telephone-it73.bin", { cache: "force-cache" });
+        const reponse = await fetch("/neural/cortex-telephone-it76.bin", { cache: "force-cache" });
         if (!reponse.ok) throw new Error(`Snapshot HTTP ${reponse.status}`);
         const tampon = new Uint8Array(await reponse.arrayBuffer());
         if (annule) return;

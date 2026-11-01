@@ -266,6 +266,6 @@ describe("GARDE 43ᵉ — surface publique /api/energie", () => {
     const source = readFileSync(CHEMIN_SONDE, "utf8");
     expect(source).toContain("'/mobile'");
     expect(source).toContain("'/api/energie'");
-    expect(source).toContain("'/neural/cortex-telephone-it73.bin'");
+    expect(source).toContain("'/neural/cortex-telephone-it76.bin'");
   });
 });

@@ -53,16 +53,31 @@ import { DOMAINES_VOCATION } from "@/lib/gen3/vocation";
 
 const CHEMIN_ARTEFACT = join(
   process.cwd(),
-  "assets/neural-pretrained/cortex-telephone-it73.json",
+  "assets/neural-pretrained/cortex-telephone-it76.json",
 );
-const CHEMIN_SNAPSHOT = join(process.cwd(), "public/neural/cortex-telephone-it73.bin");
+const CHEMIN_SNAPSHOT = join(process.cwd(), "public/neural/cortex-telephone-it76.bin");
 
-interface ArtefactIt73 {
+interface ArtefactIt76 {
   iteration: number;
   configTelephone: { colonnes: number; voisins: number; bandes: number; aretes: number; seed: number };
+  prolongement: {
+    changementDeclare: string;
+    comparaison: {
+      artefactPrecedent: string;
+      plancherIt73: number;
+      plancherIt76: number;
+      plancherAmeliore: boolean;
+      plafondIt76: number;
+      varianceIt73: number;
+      varianceIt76: number;
+      varianceReduite: boolean;
+      domainesRatioEnHausse: number;
+      domainesRatioEnBaisse: number;
+    };
+  };
   supervision: { totalEchantillonsEod: number; alignement: { echantillons: number } };
-  sonde: { totalSondes: number; accordArgmaxF32U8: number; tauxAccordF32U8: number; argmaxAttenduEntraîne: number; domaineAvecGain: number };
-  parDomaine: Array<{ domaineId: string; bandeAttendue: number; ratioAppris: number | null; activationCumuleeEntraîne: number; activationCumuleeNeuf: number }>;
+  sonde: { totalSondes: number; accordArgmaxF32U8: number; tauxAccordF32U8: number; argmaxAttenduEntraîne: number; domaineAvecGain: number; plancherRatio: number };
+  parDomaine: Array<{ domaineId: string; bandeAttendue: number; ratioAppris: number | null; ratioApprisIt73: number | null; deltaRatioVsIt73: number | null; activationCumuleeEntraîne: number; activationCumuleeNeuf: number }>;
   energie: {
     memoireOctets: { plein_2p20_f64_f32: number; eco_2p20_u32_f32: number; telephone_2p17_u32_u8: number };
     reductionTelephoneVsPlein: number;
@@ -73,8 +88,8 @@ interface ArtefactIt73 {
   limitesHonnetes: string[];
 }
 
-function lireArtefact(): ArtefactIt73 {
-  return JSON.parse(readFileSync(CHEMIN_ARTEFACT, "utf8")) as ArtefactIt73;
+function lireArtefact(): ArtefactIt76 {
+  return JSON.parse(readFileSync(CHEMIN_ARTEFACT, "utf8")) as ArtefactIt76;
 }
 
 afterEach(() => {
@@ -335,7 +350,7 @@ describe("GARDE 42ᵉ — artefact committé (re-dérivable, anti-maquillage)", 
   const artefact = lireArtefact();
 
   it("l'artefact it.73 existe et porte la structure attendue", () => {
-    expect(artefact.iteration).toBe(73);
+    expect(artefact.iteration).toBe(76);
     expect(artefact.configTelephone.colonnes).toBe(131072);
     expect(artefact.configTelephone.aretes).toBe(artefact.configTelephone.colonnes * artefact.configTelephone.voisins);
     expect(artefact.limitesHonnetes.length).toBeGreaterThanOrEqual(5);
@@ -350,6 +365,34 @@ describe("GARDE 42ᵉ — artefact committé (re-dérivable, anti-maquillage)", 
       expect(d.bandeAttendue).toBeGreaterThanOrEqual(0);
       expect(d.bandeAttendue).toBeLessThanOrEqual(7);
     }
+  });
+
+  it("le PROLONGEMENT it.76 est réel : plancher au-dessus de it.73, variance réduite, deltas publiés par domaine", () => {
+    const c = artefact.prolongement.comparaison;
+    // Le candidat №1 (élever les ratios, réduire la variance) est TENU et
+    // verrouillé : plancher it.76 > plancher it.73, variance it.76 < it.73.
+    expect(c.artefactPrecedent).toContain("cortex-telephone-it73.json");
+    expect(c.plancherIt73).toBe(1.242484);
+    expect(c.plancherIt76).toBeGreaterThan(c.plancherIt73);
+    expect(c.plancherAmeliore).toBe(true);
+    expect(c.varianceIt76).toBeLessThan(c.varianceIt73);
+    expect(c.varianceReduite).toBe(true);
+    // Le plancher de l'artefact correspond bien au min des ratios.
+    const minRatio = Math.min(...artefact.parDomaine.map((d) => d.ratioAppris ?? 0));
+    expect(artefact.sonde.plancherRatio).toBe(Math.round(minRatio * 1e6) / 1e6);
+    // Les deltas sont publiés HONNÊTEMENT : chaque domaine porte son delta
+    // mesuré (hausse ET baisse — jamais un tableau entièrement positif
+    // maquillé), et les hausses dominent.
+    for (const d of artefact.parDomaine) {
+      expect(d.ratioApprisIt73).not.toBeNull();
+      expect(d.deltaRatioVsIt73).toBeCloseTo((d.ratioAppris ?? 0) - (d.ratioApprisIt73 ?? 0), 5);
+    }
+    expect(c.domainesRatioEnHausse).toBeGreaterThan(c.domainesRatioEnBaisse);
+    // La réduction de variance est RE-DÉRIVABLE des ratios publiés.
+    const ratios = artefact.parDomaine.map((d) => d.ratioAppris ?? 0);
+    const moyenne = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+    const variance = ratios.reduce((a, b) => a + (b - moyenne) ** 2, 0) / ratios.length;
+    expect(Math.round(variance * 1e6) / 1e6).toBe(c.varianceIt76);
   });
 
   it("l'accord f32↔u8 et les compteurs sont ceux de la campagne (jamais arrondis au maquillage)", () => {

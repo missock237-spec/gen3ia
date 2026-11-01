@@ -104,13 +104,13 @@ try {
 // (validation spécialisée — poussée dans les résultats, hors liste commune).
 try {
   const s = Date.now();
-  const r = await fetch(`${BASE}/neural/cortex-telephone-it73.bin?rm=${Date.now()}`);
+  const r = await fetch(`${BASE}/neural/cortex-telephone-it76.bin?rm=${Date.now()}`);
   const buf = Buffer.from(await r.arrayBuffer());
   const magieOK = buf.slice(0, 7).toString('ascii') === 'G3TEL73' && buf[7] === 0;
   const tailleOK = buf.length >= 1_500_000;
   results.push({
     name: 'snapshot-telephone',
-    path: '/neural/cortex-telephone-it73.bin',
+    path: '/neural/cortex-telephone-it76.bin',
     status: r.status,
     ms: Date.now() - s,
     ok: r.status === 200 && magieOK && tailleOK,
@@ -118,7 +118,7 @@ try {
     err: r.status !== 200 ? `HTTP ${r.status}` : !(magieOK && tailleOK) ? 'snapshot invalide' : '',
   });
 } catch (e) {
-  results.push({ name: 'snapshot-telephone', path: '/neural/cortex-telephone-it73.bin', status: 'ERR', ms: 0, ok: false, err: String(e).slice(0, 80) });
+  results.push({ name: 'snapshot-telephone', path: '/neural/cortex-telephone-it76.bin', status: 'ERR', ms: 0, ok: false, err: String(e).slice(0, 80) });
 }
 
 // version.json déjà relevé ci-dessus (fenêtre PULL)

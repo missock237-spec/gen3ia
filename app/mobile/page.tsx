@@ -18,7 +18,7 @@ import CortexTelephoneEmbarque from "@/components/neural/cortex-telephone-embarq
  * QUALITÉ CONSERVÉE PAR CONSTRUCTION : les réponses viennent du même pont
  * vocation que la production (fonction pure, même charte des 19 domaines) ;
  * la quantification u8 ne change AUCUNE sonde (accord 342/342 mesuré par la
- * campagne committée `cortex-telephone-it73.json` — garde 42ᵉ).
+ * campagne committée `cortex-telephone-it76.json` — garde 42ᵉ).
  *
  * Composant serveur : coquille statique ; toute l'exécution est client.
  */
@@ -66,9 +66,9 @@ export default function PageMobile() {
             </li>
             <li>
               La quantification u8 est <strong>mesurée, pas supposée</strong> : la campagne committée
-              (<code>assets/neural-pretrained/cortex-telephone-it73.json</code>) montre un accord d&apos;argmax de{" "}
+              (<code>assets/neural-pretrained/cortex-telephone-it76.json</code>) montre un accord d&apos;argmax de{" "}
               <strong>342/342 sondes</strong> entre les poids f32 et les poids u8, et un signal appris présent dans{" "}
-              <strong>19/19 domaines</strong> (ratio d&apos;activation bande-porteuse entraîné/neuf 1,24–2,50).
+              <strong>19/19 domaines</strong> (ratio d&apos;activation bande-porteuse entraîné/neuf 1,26–2,51).
             </li>
             <li>
               Le moteur embarqué est en <strong>lecture seule</strong> : le téléphone répond, il ne s&apos;entraîne
