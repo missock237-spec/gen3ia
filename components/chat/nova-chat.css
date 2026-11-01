@@ -374,6 +374,46 @@
   box-shadow: 0 0 8px var(--g3-success);
 }
 
+/* Punaise « Moteur Gen3 opérationnel » (axe 1, audit 2 nov. 2026) :
+   état mesuré sur les sondes publiques + temps de réponse annoncé.
+   Style discret aligné sur .nova-statut, non cliquable-confus : c'est
+   un lien vers la page État du service. */
+.nova-moteur-punaise {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--g3-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--g3-border);
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.nova-moteur-punaise:hover {
+  border-color: var(--g3-primary);
+  color: var(--g3-text);
+}
+
+.nova-moteur-point {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: nova-moteur-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes nova-moteur-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.nova-moteur-temps {
+  color: var(--g3-faint);
+}
+
 .nova-topbar-actions {
   margin-left: auto;
   display: flex;
@@ -1522,6 +1562,10 @@ html[data-theme="light"] .nova-telemetrie .ligne code { color: #1e2430; }
   .nova-msg.utilisateur .nova-colonne { max-width: 90%; }
   .nova-modele-chip { padding: 6px 11px; font-size: 12.5px; }
   .nova-topbar .nova-statut { display: none; }
+  /* Punaise moteur : le détail « temps annoncé » disparaît sur écran
+     étroit (place), le point + libellé restent — l'état mesuré est
+     justement le plus précieux sur mobile. */
+  .nova-moteur-punaise .nova-moteur-temps { display: none; }
 }
 
 /* ---- AGENT LIVE SOUS LE CHAT (commande 6) ----

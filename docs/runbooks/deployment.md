@@ -17,7 +17,18 @@ push/PR GitHub (main)
         ├─ job « e2e » : E2E auth contre émulateur Firebase (jamais la production)
         ├─ job « a11y » : scan axe-core WCAG 2.1 AA
         └─ job « secrets-scan » : gitleaks (scan de l'historique complet)
-   └─ Vercel : build + déploiement automatique de main
+   └─ CD (deploy-vps.yml) : build runner → publication release `cd-latest`
+        (tar + sha256 + meta.json — meta.json téléversé EN DERNIER :
+        sa présence = build complet) → canaux de livraison :
+          · SSH (accélérateur best-effort, swap atomique cd-finisher) ;
+          · POLLER PULL (faisant autorité) : le VPS relit la release
+            toutes les 120 s et bascule (pull-deploy.sh, backoff 900 s
+            sur échec transient).
+   └─ MESURE POST-PUBLICATION (issue #109) : si verify_build est sauté
+        (SSH muet), le step « Contrôle de livraison PULL » sonde
+        gen3ia.online/version.json toutes les 30 s pendant le SLE
+        (600 s) ; SLE violé = run ROUGE + issue d'escalade (refermée
+        automatiquement à l'alignement par le guérisseur).
    └─ Smoke test post-deploy (§4) → vert = terminé / rouge = §5 rollback
 ```
 
@@ -55,12 +66,19 @@ Avant de pousser sur `main`, l'équivalent local existe :
 
 ---
 
-## 3. Étape Vercel
+## 3. Étape CD — publication et livraison (production = VPS)
 
-- Le projet Vercel déploie **automatiquement `main`** à l'issue de la CI.
-- Chaque déploiement est identifiable par son `deploymentId` — retrouvable
-  dans la réponse de `GET /api/status` (champ `version`) : c'est l'empreinte de
-  version du déploiement qui sert.
+- La production est le **VPS** (PM2, nginx, gen3ia.online) — pas Vercel.
+- Le CD publie la release `cd-latest` ; le **poller PULL** du VPS
+  (`/opt/gen3ia-updater`, cycle 120 s) télécharge et bascule. Le SLA de
+  livraison : **cible ≤ 2 min** après publication (1 cycle du poller +
+  téléchargement/swap) ; **SLE d'alerte 600 s** — au-delà, le CD (step v8)
+  ou le guérisseur déclenche une escalade publique (issue + run rouge),
+  refermée automatiquement dès l'alignement. Historique des mesures :
+  `$GITHUB_STEP_SUMMARY` de chaque run CD (« LIVRAISON PULL MESURÉE »).
+- Si l'escalade s'ouvre : `curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash`
+  (console VPS, réarme le poller) — l'issue se referme seule au
+  re-spondage du guérisseur.
 - Ne jamais modifier des variables d'environnement en même temps qu'un
   déploiement : changer du code ET de la config dans la même fenêtre rend
   l'attribution de cause impossible si le smoke test échoue.
@@ -126,19 +144,18 @@ d'une conversation d'agent ; Sentry sans nouvelle issue post-déploiement.
 Principe : **on rollback d'abord, on diagnostique ensuite** — un déploiement
 précédent connu-sain vaut mieux qu'un correctif écrit sous pression.
 
-### 5.2 Comment (redeploy Vercel d'un commit précédent)
+### 5.2 Comment (rollback d'un déploiement fautif)
 
-1. Identifier le **dernier déploiement sain** : liste des déploiements dans le
-   dashboard Vercel (le SHA GitHub est affiché pour chacun) — généralement
-   le déploiement N-1.
-2. Dans le dashboard Vercel → **Deployments** → ouvrir le déploiement sain →
-   menu **⋯** → **Redeploy** (décocher « use existing build cache » si le
-   cache est suspect).
-3. Attendre la fin du build, puis relancer le **smoke test complet** (§4) —
-   notamment `GET /api/status` et vérifier que `version` repasse bien sur
-   l'empreinte du déploiement restauré (fenêtre cache 30 s).
-4. Créer un commit « revert » côté GitHub pour que `main` reflète ce qui tourne
-   en production (l'écart main/production doit rester nul).
+1. Identifier le **dernier commit sain** (le SHA servi est lisible sur
+   `https://gen3ia.online/version.json` et dans `/api/status`).
+2. Le rollback passe par `main` : `git revert` du/des commits fautifs (ou
+   restauration du commit sain) puis push — le CD republie la release et
+   le poller bascule (≤ 2 min visés, alerte à 10 min si non livré).
+3. Urgence console VPS (sans attendre le CD) : redéployer le précédent tar
+   `cd-finisher` / relancer `install-pull-mode.sh`, puis vérifier §4.
+4. Après bascule : relancer le **smoke test complet** (§4) — notamment
+   `GET /api/status` et `version.json` (fenêtre cache 30 s) — et vérifier
+   que `main` reflète ce qui tourne en production (écart nul).
 
 ### 5.3 Après un rollback
 

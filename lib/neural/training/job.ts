@@ -89,12 +89,58 @@ export interface NeuralTrainingJob {
    * paires de domaine) — stats réelles du dernier passage.
    */
   langage?: StatsApprentissageLangage;
+  /**
+   * AXE 4 (audit 2 nov. 2026 — « entraînement vérifiable ») : score
+   * d'appariement MOYEN par thème, MESURÉ sur les questions du corpus
+   * AVANT et APRÈS la passe langagière du job. Preuve chiffrée que le
+   * Studio n'est pas décoratif : « thème X : passé de Y à Z ». Mesure
+   * en 0..1 (0 = pas de réponse sous le seuil d'appariement) ; les
+   * thèmes déjà à saturation peuvent rester stables — c'est le réel.
+   */
+  verification?: VerificationAvantApres;
 }
 
 /** Slots mémoire (résistent au HMR comme le runtime). */
 const globalAvecJobs = globalThis as typeof globalThis & {
   __gen3NeuralTrainingJob?: NeuralTrainingJob;
 };
+
+/** Rapport avant/après par thème (mesures réelles du cortex langagier). */
+export interface VerificationAvantApres {
+  mesureLe: string;
+  regle: string;
+  themes: Array<{ theme: string; avant: number; apres: number; questions: number }>;
+}
+
+/**
+ * MESURE DU SCORE D'APPAIREMENT PAR THÈME — même mécanique que le chat :
+ * cortex.repondre (score cosinus pondéré IDF, null sous le seuil → 0).
+ * Échantillon borné (≤ 4 questions par thème, ≤ 12 thèmes) pour ne pas
+ * ralentir le job ; les questions sont les MOTIFS DU CORPUS groupés par
+ * thème — ce que l'utilisateur peut réellement demander au moteur.
+ */
+function mesurerScoresParTheme(
+  cortex: ReturnType<typeof getNeuralRuntime>["cortex"],
+): Array<{ theme: string; score: number; questions: number }> {
+  const parTheme = new Map<string, string[]>();
+  for (const paire of CORPUS_GEN3) {
+    const liste = parTheme.get(paire.theme) ?? [];
+    if (liste.length < 4) liste.push(paire.motif);
+    parTheme.set(paire.theme, liste);
+  }
+  const themes = [...parTheme.entries()].slice(0, 12);
+  return themes.map(([theme, questions]) => {
+    let somme = 0;
+    for (const q of questions) {
+      somme += cortex.repondre(q)?.score ?? 0;
+    }
+    return {
+      theme,
+      score: Number((somme / questions.length).toFixed(4)),
+      questions: questions.length,
+    };
+  });
+}
 
 /** Job en cours, le cas échéant (null sinon). */
 export function getJobEnCours(): NeuralTrainingJob | null {
@@ -294,6 +340,11 @@ export function lancerEntrainement(
       // ── 3. CORTEX LANGAGIER ─────────────────────────────────────────────
       //    Corpus d'amorçage canonique (idempotent) + paires de domaine
       //    réelles extraites des datasets (plafonnées).
+      // AXE 4 — « entraînement vérifiable » : la mesure AVANT est prise
+      // juste avant la passe langagière (aucun bloc précédent ne touche
+      // le cortex langagier), la mesure APRÈS juste après — l'écart
+      // publié est l'écart réellement causé par CE job.
+      const verificationAvant = mesurerScoresParTheme(runtime.cortex);
       let statsLangage = runtime.cortex.apprendre(CORPUS_GEN3);
       try {
         const pairesDomaines = await construirePairesDomaines();
@@ -312,6 +363,21 @@ export function lancerEntrainement(
         // Paires de domaine indisponibles : le corpus canonique suffit.
       }
       job.langage = statsLangage;
+
+      // AXE 4 — assemblage du rapport avant/après (mesures réelles, même
+      // échantillon de questions des deux côtés).
+      const verificationApres = mesurerScoresParTheme(runtime.cortex);
+      job.verification = {
+        mesureLe: new Date().toISOString(),
+        regle:
+          "Score d'appariement moyen (0..1, même mécanique que le chat) mesuré avant et après la passe langagière du job, sur les motifs du corpus — 0 = pas de réponse sous le seuil.",
+        themes: verificationApres.map((apres, i) => ({
+          theme: apres.theme,
+          avant: verificationAvant[i]?.score ?? 0,
+          apres: apres.score,
+          questions: apres.questions,
+        })),
+      };
 
       // ── 4. PERSISTANCE + historique ─────────────────────────────────────
       const sauvegarde = await sauvegarderCerveauRuntime();

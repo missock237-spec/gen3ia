@@ -141,6 +141,14 @@ function construireArtefact(session: SessionGen3, modele: CortexLangagierGen3, m
         paires: session.paires,
         vocabulaire: session.vocabulaire,
         history: session.history,
+        verification: session.metriquesSupplementaires.appariementApres !== undefined
+          ? {
+              regle: "Score d'appariement moyen (0..1, même mécanique que le chat) avant vs après entraînement, sur un échantillon de questions de chaque dataset — détail par dataset dans les événements du job.",
+              appariementAvant: session.metriquesSupplementaires.appariementAvant,
+              appariementApres: session.metriquesSupplementaires.appariementApres,
+              questions: session.metriquesSupplementaires.appariementQuestions,
+            }
+          : undefined,
       },
       modele: etat,
       meta,
@@ -163,10 +171,22 @@ async function executer(session: SessionGen3): Promise<void> {
     }
     const toutesPaires: Array<{ question: string; reponse: string }> = [];
     const avertissements: string[] = [];
+    // AXE 4 (audit 2 nov. 2026 — « entraînement vérifiable ») : échantillon
+    // de questions PAR dataset-source (≤ 4/dataset, ≤ 6 datasets) — le
+    // rapport avant/après sera émis PAR THÈME (le nom du dataset est le
+    // thème du propriétaire) : « score d'appariement sur X passé de Y à Z ».
+    const questionsParDataset = new Map<string, string[]>();
     for (const dataset of datasetsTrain) {
       const contenu = await chargeurs.chargerDataset(dataset.storageKey);
       const resultat = parserDatasetGen3(dataset.format, contenu);
       toutesPaires.push(...resultat.paires);
+      const nomDataset = dataset.storageKey.split("/").pop() ?? dataset.storageKey;
+      if (questionsParDataset.size < 6) {
+        questionsParDataset.set(
+          nomDataset,
+          resultat.paires.slice(0, 4).map((p) => p.question),
+        );
+      }
       avertissements.push(...resultat.avertissements);
       log(
         session,
@@ -193,6 +213,18 @@ async function executer(session: SessionGen3): Promise<void> {
     session.progression = 15;
     await new Promise((resolve) => setImmediate(resolve));
     const modele = new CortexLangagierGen3();
+    // AXE 4 — mesure AVANT (modèle vierge : l'appariement attendu est ~0 —
+    // c'est justement la preuve que le gain vient de l'entraînement).
+    const scoreAppariement = (questions: string[]): number => {
+      if (questions.length === 0) return 0;
+      let somme = 0;
+      for (const q of questions) somme += modele.repondre(q)?.score ?? 0;
+      return Number((somme / questions.length).toFixed(4));
+    };
+    const verificationAvant = new Map<string, number>();
+    for (const [nom, questions] of questionsParDataset) {
+      verificationAvant.set(nom, scoreAppariement(questions));
+    }
     const pairesLangage: PaireLangage[] = train.map((p) => ({ motif: p.question, reponse: p.reponse, theme: "utilisateur" }));
     const stats = modele.apprendre(pairesLangage, { personnalisees: true });
     session.paires = stats.pairesAjoutees;
@@ -262,6 +294,41 @@ async function executer(session: SessionGen3): Promise<void> {
       session.terminee = true;
       log(session, "warn", "Entraînement annulé : aucun artefact n'a été produit.");
       return;
+    }
+
+    // ── 4-bis. VÉRIFICATION AVANT/APRÈS (axe 4 — « entraînement vérifiable ») :
+    //    mêmes questions, même mécanique de score que le chat ; l'écart
+    //    publié est celui causé par CET entraînement. Écrit dans les
+    //    métriques du job (visibles du Studio) ET dans les événements.
+    let sommeAvant = 0;
+    let sommeApres = 0;
+    let nbQuestionsTotal = 0;
+    for (const [nom, questions] of questionsParDataset) {
+      const apres = scoreAppariement(questions);
+      const avant = verificationAvant.get(nom) ?? 0;
+      sommeAvant += avant * questions.length;
+      sommeApres += apres * questions.length;
+      nbQuestionsTotal += questions.length;
+      log(
+        session,
+        "info",
+        `Vérification avant/après — « ${nom} » : score d'appariement ${avant.toFixed(4)} → ${apres.toFixed(4)} (${questions.length} question(s)).`,
+      );
+    }
+    if (nbQuestionsTotal > 0) {
+      const appariementAvant = Number((sommeAvant / nbQuestionsTotal).toFixed(4));
+      const appariementApres = Number((sommeApres / nbQuestionsTotal).toFixed(4));
+      session.metriquesSupplementaires = {
+        ...session.metriquesSupplementaires,
+        appariementAvant,
+        appariementApres,
+        appariementQuestions: nbQuestionsTotal,
+      };
+      log(
+        session,
+        "info",
+        `Score d'appariement moyen (vérification) : ${appariementAvant} → ${appariementApres} sur ${nbQuestionsTotal} question(s).`,
+      );
     }
 
     // ── 5. Précision sur le jeu de test (jamais vu) ────────────────────

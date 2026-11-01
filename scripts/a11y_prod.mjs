@@ -32,6 +32,7 @@ const BASE_URL = (process.env.BASE_URL || "https://gen3ia.online").replace(/\/$/
 const PAGES = [
   "/",
   "/en",
+  "/capacites",
   "/faq",
   "/neural",
   "/vocation",

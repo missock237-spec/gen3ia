@@ -66,6 +66,16 @@ export const FAQ_FR: FaqItem[] = [
     answer:
       "Oui. Gen3ia propose un espace d'équipe partagé avec mémoire collective : chaque membre dialogue avec l'IA, partage ses bases de connaissances, et coordonne des automatisations spécialisées. Idéal pour les agences, les PME et les collectifs de créateurs.",
   },
+  {
+    question: "Où consulter l'état du service et les engagements (SLA) de Gen3ia ?",
+    answer:
+      "Sur la page publique « État du service » (gen3ia.online/status) : elle reflète l'état réel des services (authentification, stockage, file d'exécution), se rafraîchit automatiquement toutes les 60 secondes et affiche les engagements mesurés — disponibilité ≥ 99,5 % par mois, réponse du chat en quelques secondes avec repli honnête garanti au-delà de 35 s, erreurs serveur < 0,5 %, déploiement visé ≤ 2 minutes après publication avec alerte automatique au-delà de 10 minutes. Une sonde machine est disponible sur /api/status pour vos moniteurs.",
+  },
+  {
+    question: "Que sait faire Gen3ia aujourd'hui — et que ne sait-elle pas ?",
+    answer:
+      "La page « Capacités et limites » (gen3ia.online/capacites) affiche l'état réel du moteur, mesuré en direct : nombre de paires conversationnelles apprises, vocabulaire, thèmes couverts, neurones et synapses. Ses limites y sont dites franchement : le moteur répond depuis un corpus local en français, et hors des thèmes appris il assume ne pas savoir au lieu d'inventer. Aucun chiffre commercial figé : la page est régénérée à chaque visite.",
+  },
 ];
 
 /**
@@ -118,6 +128,16 @@ export const FAQ_EN: FaqItem[] = [
     question: "Is Gen3ia suitable for teams?",
     answer:
       "Yes. Gen3ia offers a shared team space with collective memory: every member describes their goals, the orchestrator distributes work across agents, and the client space is shareable. Ideal for agencies, small businesses and creator collectives.",
+  },
+  {
+    question: "Where can I check Gen3ia's service status and commitments (SLA)?",
+    answer:
+      "On the public “Service status” page (gen3ia.online/status): it reflects the real state of the services (authentication, storage, execution queue), refreshes automatically every 60 seconds and displays the measured commitments — availability ≥ 99.5% per month, chat replies within seconds with an honest fallback guaranteed beyond 35 s, server errors < 0.5%, deployment targeted within 2 minutes of publication with an automatic alert beyond 10 minutes. A machine-readable probe is available at /api/status for your monitors.",
+  },
+  {
+    question: "What can Gen3ia do today — and what can't it do?",
+    answer:
+      "The “Capabilities and limits” page (gen3ia.online/capacites) shows the engine's real state, measured live: number of conversational pairs learned, vocabulary, covered themes, neurons and synapses. Its limits are stated plainly: the engine answers from a local French corpus, and outside the learned themes it admits it doesn't know instead of inventing. No frozen marketing numbers: the page is regenerated on every visit.",
   },
 ];
 

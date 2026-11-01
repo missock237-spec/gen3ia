@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue, Timestamp } from "@/lib/r2fs";
 
 import { adminDb } from "@/lib/firebase/admin";
+import { recordAuditEventSafe } from "@/lib/security/audit-events";
 
 /**
  * Multi-tenancy Gen3ia : organisations (tenants), membres et invitations.
@@ -192,6 +193,8 @@ export interface OrgContext {
   role: OrgRole;
   plan: OrgPlan;
   name: string;
+  /** Identité de l'acteur — remplie par requireOrgContext (journal d'audit). */
+  actorId?: string;
 }
 
 /** Garde d'accès : l'appelant doit être membre de l'organisation. */
@@ -207,6 +210,11 @@ export async function requireOrgContext(userId: string, orgId: string): Promise<
     role: normalizeRole(memberSnap.data()?.role),
     plan: normalizePlan(data.plan),
     name: String(data.name ?? "Organisation"),
+    // Journal d'audit (axe 3, audit 2 nov. 2026) : l'usine officielle du
+    // contexte porte l'identité de l'acteur — chaque mutation peut
+    // répondre à QUI a fait QUOI. Les constructions manuelles (tests)
+    // peuvent l'omettre : l'audit reste best-effort.
+    actorId: userId,
   };
 }
 
@@ -214,6 +222,30 @@ function assertCanManage(context: OrgContext) {
   if (context.role !== "owner" && context.role !== "admin") {
     throw new Error("Seuls les owners et admins de l'organisation peuvent gérer les membres.");
   }
+}
+
+/**
+ * JOURNAL D'AUDIT ORGANISATION (axe 3, audit 2 nov. 2026) — chaque mutation
+ * de membres est tracée dans la collection `auditEvents` (QUI via actorId,
+ * QUOI via action, SUR QUOI via targetId/metadata, RÉSULTAT via outcome).
+ * Best-effort (recordAuditEventSafe) : une panne du journal ne fait jamais
+ * échouer l'opération déjà effectuée — doctrine du module d'audit.
+ */
+function journaliserMutationOrg(
+  context: OrgContext,
+  action: string,
+  outcome: "completed" | "failed",
+  metadata: Record<string, unknown>,
+): void {
+  if (!context.actorId) return;
+  recordAuditEventSafe({
+    actorId: context.actorId,
+    action,
+    outcome,
+    targetType: "organization",
+    targetId: context.orgId,
+    metadata: { organisation: context.name, roleActeur: context.role, ...metadata },
+  });
 }
 
 const EMAIL_RE = /^[^\s@]{1,100}@[^\s@]{1,200}\.[^\s@]{1,20}$/;
@@ -248,6 +280,9 @@ export async function inviteMember(context: OrgContext, rawEmail: string, role: 
     createdAt: now,
     expiresAt,
   });
+
+  // Journal d'audit APRÈS la création réussie (on ne trace que du réel).
+  journaliserMutationOrg(context, "org.invite_member", "completed", { email, role, invitationId: ref.id });
 
   return {
     id: ref.id, email, role: normalizeRole(role), status: "pending",
@@ -287,6 +322,16 @@ export async function acceptInvitation(userId: string, email: string, orgId: str
   });
   batch.update(invitationRef, { status: "accepted", acceptedBy: userId, acceptedAt: now });
   await batch.commit();
+
+  // Journal d'audit : qui a rejoint l'organisation, quand, avec quel rôle.
+  recordAuditEventSafe({
+    actorId: userId,
+    action: "org.accept_invitation",
+    outcome: "completed",
+    targetType: "organization",
+    targetId: orgId,
+    metadata: { email: invitedEmail, role },
+  });
 
   const orgSnap = await orgRef.get();
   return {
@@ -366,6 +411,7 @@ export async function updateMemberRole(context: OrgContext, memberId: string, ro
   if ((member.data()?.role) === "owner") throw new Error("Le rôle de l'owner ne peut pas être modifié.");
   await orgRefMembers(context.orgId).doc(memberId).update({ role, updatedAt: FieldValue.serverTimestamp() });
   await adminDb.collection(MEMBERSHIP_INDEX).doc(`${memberId}_${context.orgId}`).update({ role });
+  journaliserMutationOrg(context, "org.update_member_role", "completed", { memberId, nouveauRole: role });
 }
 
 /** Retire un membre (pas l'owner). Révocation propre de l'index. */
@@ -378,6 +424,7 @@ export async function removeMember(context: OrgContext, memberId: string): Promi
   batch.delete(orgRefMembers(context.orgId).doc(memberId));
   batch.delete(adminDb.collection(MEMBERSHIP_INDEX).doc(`${memberId}_${context.orgId}`));
   await batch.commit();
+  journaliserMutationOrg(context, "org.remove_member", "completed", { memberId });
 }
 
 /** Révocation d'une invitation en attente. */
@@ -387,4 +434,8 @@ export async function revokeInvitation(context: OrgContext, invitationId: string
   if (!invitation.exists) throw new Error("Invitation introuvable.");
   if ((invitation.data()?.status) !== "pending") throw new Error("Seules les invitations en attente peuvent être révoquées.");
   await invitation.ref.update({ status: "revoked", revokedAt: FieldValue.serverTimestamp() });
+  journaliserMutationOrg(context, "org.revoke_invitation", "completed", {
+    invitationId,
+    email: String(invitation.data()?.email ?? ""),
+  });
 }

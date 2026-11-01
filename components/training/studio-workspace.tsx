@@ -595,6 +595,29 @@ export function TrainingStudio() {
                           </p>
                         ) : null}
 
+                        {/* AXE 4 (audit 2 nov. 2026) — ENTRAÎNEMENT VÉRIFIABLE :
+                            preuve chiffrée que la session a réellement appris
+                            (« score d'appariement passé de Y à Z »). Mesurée par
+                            le fournisseur gen3-local sur un échantillon des
+                            questions de CHAQUE dataset, même mécanique de score
+                            que le chat ; le détail par dataset est dans les
+                            événements du job. */}
+                        {job.metrics.appariementApres !== undefined ? (
+                          <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2.5">
+                            <p className="font-semibold text-emerald-400">
+                              Vérification avant/après — score d&apos;appariement moyen{" "}
+                              {(job.metrics.appariementAvant ?? 0).toFixed(4)} →{" "}
+                              {job.metrics.appariementApres.toFixed(4)}
+                              {job.metrics.appariementQuestions ? ` (${job.metrics.appariementQuestions} question(s) testées)` : ""}
+                            </p>
+                            <p className="mt-1 opacity-70">
+                              Même mécanique de score que le chat, mesurée avant puis après
+                              l&apos;entraînement sur les questions de vos datasets : voici la preuve
+                              que la session a réellement appris. Détail par dataset : événements du job.
+                            </p>
+                          </div>
+                        ) : null}
+
                         {/* Data lineage */}
                         {job.dataLineage && job.dataLineage.length > 0 ? (
                           <details className="mt-2">

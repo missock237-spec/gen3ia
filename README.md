@@ -16,7 +16,7 @@ L'intelligence de Gen3ia n'est ni un LLM externe ni un simulacre : c'est un **sy
 - **Plasticité hebbienne supervisée** : chaque entraînement renforce les synapses entrée → pool cible, avec punition compétitive des mauvais pools.
 
 ### Le cortex langagier (`lib/neural/generation/language.ts`)
-- **Corpus appris** : 91+ paires conversationnelles françaises intégrées (`corpus.ts`), enrichies par des **paires personnalisées** enseignées via le Studio d'entraînement.
+- **Corpus appris** : des centaines de paires conversationnelles françaises intégrées (`corpus.ts`), enrichies par des **paires personnalisées** enseignées via le Studio d'entraînement. Le corpus vivant, aucun chiffre figé ici : le compte exact est relu dans le moteur en direct sur la page publique [Capacités et limites](https://gen3ia.online/capacites).
 - **Appariement pondéré IDF** : score cosinus avec filtre de stopwords FR/EN, bonus de sous-ensemble (question exacte), bonus de personnalisation — **déterministe et traçable**.
 - **Contexte anaphorique** : l'hippocampe (mémoire de travail) fournit le tour précédent — « et toi ? » est résolu.
 - **Plasticité d'usage** : chaque rappel réussi renforce le poids de la paire (plafonné) — la connaissance utile remonte plus vite.

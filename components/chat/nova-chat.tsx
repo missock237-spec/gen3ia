@@ -44,6 +44,7 @@ import dynamic from "next/dynamic";
 
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import CarteAutoApprentissage from "@/components/chat/auto-apprentissage-carte";
+import IndicateurMoteur from "@/components/chat/indicateur-moteur";
 import { authFetch } from "@/lib/firebase/auth-client";
 import { safeClientTimezone } from "@/lib/domain/conversations/stream-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
@@ -2048,6 +2049,10 @@ export default function NovaChat() {
           </div>
 
           <div className="nova-statut" role="status">{statut}</div>
+
+          {/* Indicateur permanent : état du moteur mesuré (sondes publiques)
+              + temps de réponse annoncé avec repli garanti (axe 1, audit 2 nov.). */}
+          <IndicateurMoteur />
 
           <div className="nova-topbar-actions">
             <button type="button" className="nova-bouton-ico" onClick={exporterConversation} aria-label="Exporter la conversation en Markdown" title="Exporter (.md)">

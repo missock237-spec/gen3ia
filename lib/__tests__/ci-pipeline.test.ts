@@ -343,3 +343,82 @@ describe("Couplage guérisseur → surveillance (it. 28 — crons GitHub défail
     expect(surveillance).toContain("workflow_dispatch");
   });
 });
+
+describe("Contrôle de livraison PULL après CD (.github/workflows/deploy-vps.yml — issue #109)", () => {
+  const cd = read(".github/workflows/deploy-vps.yml");
+
+  it("le contrôle post-publication existe et s'arme quand verify_build est sauté", () => {
+    // Incidents it.30/it.33 (21 et 43 min sans alerte) : quand le canal
+    // SSH est muet, le swap est sauté ⇒ verify_build SKIPPED ⇒ run vert
+    // sans aucune mesure de l'écart prod↔release. Le step v8 doit donc
+    // exister, s'armer avec always() (un step « skipped » n'empêche pas
+    // le contrôle) et exiger une publication réussie.
+    expect(cd).toContain('name: "Contrôle de livraison PULL après CD (SLE 10 min — issue #109)"');
+    expect(cd).toContain("id: controle_pull");
+    expect(cd).toContain(
+      "if: always() && steps.verify_build.outcome != 'success' && steps.publication.outcome == 'success' && !cancelled()",
+    );
+  });
+
+  it("SLE encodé 600 s, sondage 30 s, sur la vérité utilisateur gen3ia.online", () => {
+    // La promesse documentée est « ≤ 2 min » (cycle du poller) ; le SLE
+    // d'escalade encode 600 s (marge backoff 900 s). Le sondage lit
+    // gen3ia.online/version.json (vérité visiteur), jamais l'état interne
+    // du VPS.
+    expect(cd).toContain("SLE_SECONDES=600");
+    expect(cd).toContain("PAS_SECONDES=30");
+    expect(cd).toContain("https://gen3ia.online/version.json?cb=");
+  });
+
+  it("la référence du SLE est la publication de la release (meta.json), pas l'horloge du runner", () => {
+    // Le build peut être publié bien après le démarrage du run (build
+    // runner ~10-15 min) — mesurer depuis le début du run fausserait le
+    // SLE. publishedAt est relu depuis l'asset meta.json de cd-latest ;
+    // repli explicite si l'horodatage est illisible.
+    expect(cd).toContain('select(.name=="meta.json")');
+    expect(cd).toContain('grep -o \'"publishedAt":"[^"]*"\'');
+    expect(cd).toContain("horloge du runner utilisée");
+  });
+
+  it("garde anti-faux-positif : au moins un sondage AVANT toute conclusion de SLE", () => {
+    // Test de logique local it.37 : si la publication est déjà ancienne au
+    // démarrage du contrôle (retries SSH en amont), on mesure l'état réel
+    // avant de conclure — jamais d'escalade sur une prod déjà à jour.
+    expect(cd).toContain("jamais d'escalade sur une prod déjà à jour");
+    // Ordre encodé : le sondage précède le test d'échéance dans la boucle.
+    const boucle = cd.split("while :; do")[1]?.split("done")[0] ?? "";
+    expect(boucle.indexOf("version.json?cb=")).toBeGreaterThanOrEqual(0);
+    expect(boucle.indexOf("ge \"$SLE_SECONDES\"")).toBeGreaterThan(
+      boucle.indexOf("version.json?cb="),
+    );
+  });
+
+  it("livraison prouvée = mesure de latence réelle dans le résumé du run", () => {
+    // La latence réelle (publication → service visiteur) est la métrique
+    // demandée par l'issue #109 : elle doit être publiée, pas seulement
+    // le verdict binaire.
+    expect(cd).toContain("### LIVRAISON PULL MESURÉE (issue #109)");
+    expect(cd).toContain("Livraison observée (version.json)");
+    expect(cd).toContain("GITHUB_STEP_SUMMARY");
+  });
+
+  it("SLE violé = run ROUGE + escalade avec preuves (log poller récolté avant d'alerter)", () => {
+    expect(cd).toContain("::error::SLE de livraison PULL violé");
+    expect(cd).toContain("exit 1");
+    expect(cd).toContain("tail -n 40 /opt/gen3ia-updater/state/deploy.log");
+    expect(cd).toContain("### ⚠️ SLE DE LIVRAISON PULL VIOLÉ (issue #109)");
+  });
+
+  it("escalade anti-doublon + refermeture automatique : TITRE CANONIQUE identique au guérisseur", () => {
+    // L'escalade CD et l'escalade guérisseur partagent le même titre :
+    // l'anti-doublon (gh issue list --search "… in:title") et la
+    // refermeture automatique à l'alignement (guérisseur) en dépendent.
+    // Diverger les deux titres = issues dupliquées jamais refermées.
+    const TITRE = "🚨 Production en retard sur main — intervention console VPS requise";
+    expect(cd).toContain(TITRE);
+    expect(read(".github/workflows/guerisseur-production.yml")).toContain(TITRE);
+    expect(cd).toContain('--search "$TITRE in:title"');
+    expect(cd).toContain("gh issue comment \"$NUM\"");
+    expect(cd).toContain("gh issue create");
+  });
+});

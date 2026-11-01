@@ -26,8 +26,26 @@ type Member = { userId: string; email: string; displayName: string; role: OrgRol
 type Invitation = { id: string; email: string; role: OrgRole; status: string; expiresAt: string | null };
 type PendingInvitation = Invitation & { orgId: string; orgName: string; valid: boolean };
 type Quotas = { maxMembers: number; maxAgents: number; maxProjects: number; monthlyCredits: number; storageGb: number };
+type AuditEntry = {
+  id: string;
+  action: string;
+  outcome: string;
+  actorId: string | null;
+  actorEmail: string | null;
+  metadata: string | null;
+  createdAt: string | null;
+};
 
 const ROLE_LABEL: Record<OrgRole, string> = { owner: "Owner", admin: "Admin", member: "Membre" };
+
+/** Libellés lisibles du journal d'audit (actions org.* écrites par le domaine). */
+const AUDIT_LABEL: Record<string, string> = {
+  "org.invite_member": "Invitation envoyée",
+  "org.accept_invitation": "A rejoint l'organisation",
+  "org.update_member_role": "Rôle d'un membre modifié",
+  "org.remove_member": "Membre retiré",
+  "org.revoke_invitation": "Invitation révoquée",
+};
 
 export function OrganizationsPanel() {
   const [organizations, setOrganizations] = useState<Organization[] | null>(null);
@@ -38,6 +56,7 @@ export function OrganizationsPanel() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ members: Member[]; invitations: Invitation[]; quotas: Quotas } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[] | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [busy, setBusy] = useState(false);
@@ -70,6 +89,18 @@ export function OrganizationsPanel() {
       setDetail(null);
     } finally {
       setDetailLoading(false);
+    }
+  }
+
+  /** Journal d'audit (owner/admin) : qui a fait quoi, quand — best-effort. */
+  async function loadAudit(orgId: string) {
+    setAuditEntries(null);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/audit`, { cache: "no-store" });
+      const data = await response.json();
+      setAuditEntries(response.ok ? ((data.entries ?? []) as AuditEntry[]) : []);
+    } catch {
+      setAuditEntries([]);
     }
   }
 
@@ -125,6 +156,11 @@ export function OrganizationsPanel() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Opération impossible.");
       await loadDetail(orgId);
+      // Le journal d'audit est rechargé IMMÉDIATEMENT après une mutation
+      // réussie (qui a fait quoi, quand — reflété en temps réel), et à la
+      // prochaine ouverture sinon. Pas de cache côté client : l'audit
+      // doit refléter le réel.
+      if (canManageById(orgId)) void loadAudit(orgId);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Opération impossible.");
@@ -134,13 +170,17 @@ export function OrganizationsPanel() {
   }
 
   function toggleExpand(org: Organization) {
-    if (expanded === org.id) { setExpanded(null); setDetail(null); return; }
+    if (expanded === org.id) { setExpanded(null); setDetail(null); setAuditEntries(null); return; }
     setExpanded(org.id);
     setDetail(null);
     void loadDetail(org.id);
+    if (canManage(org)) void loadAudit(org.id);
   }
 
   const canManage = (org: Organization) => org.myRole === "owner" || org.myRole === "admin";
+
+  const canManageById = (orgId: string) =>
+    (organizations ?? []).some((org) => org.id === orgId && canManage(org));
 
   return (
     <section className="anim-fade-up rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[0_2px_10px_rgba(15,23,42,0.05)] md:p-8" aria-label="Organisations">
@@ -312,6 +352,32 @@ export function OrganizationsPanel() {
                         </div>
                       )}
                     </>
+                  )}
+                </div>
+              )}
+
+              {/* Journal d'audit (owner/admin) — qui a fait quoi, quand
+                  (axe 3, audit 2 nov. 2026). Source : auditEvents écrites
+                  par journaliserMutationOrg, lues via /audit. */}
+              {canManage(org) && (
+                <div className="mt-4 border-t border-[var(--g3-border)] pt-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[var(--g3-faint)]">Journal d&apos;audit</p>
+                  {auditEntries === null ? (
+                    <p className="mt-2 text-xs text-[var(--g3-faint)]">Chargement du journal…</p>
+                  ) : auditEntries.length === 0 ? (
+                    <p className="mt-2 text-xs text-[var(--g3-faint)]">Aucune action enregistrée pour le moment.</p>
+                  ) : (
+                    <ul className="mt-2 space-y-1.5">
+                      {auditEntries.map((entry) => (
+                        <li key={entry.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+                          <span className="text-[10px] text-[var(--g3-faint)]">
+                            {entry.createdAt ? new Date(entry.createdAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                          </span>
+                          <span className="font-semibold text-[var(--g3-text)]">{AUDIT_LABEL[entry.action] ?? entry.action}</span>
+                          <span className="text-[var(--g3-muted)]">— {entry.actorEmail ?? entry.actorId ?? "acteur inconnu"}</span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               )}

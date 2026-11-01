@@ -36,6 +36,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
+      url: `${BASE}/capacites`,
+      lastModified: now,
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
       url: `${BASE}/neural`,
       lastModified: now,
       changeFrequency: "weekly",

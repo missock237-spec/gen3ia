@@ -146,6 +146,47 @@ export default async function PageStatut() {
           /api/energie par le widget client sobre (it.75). */}
       <VueSobrieteEnergie />
 
+      {/* Axe 5 (audit 2 nov. 2026) — engagements publics (SLA) : les cibles
+          reprises ici sont celles de docs/sre/sli-slo.md §3 (calibrées VPS
+          solo 2 Go) + le SLE de livraison encodé dans le CD (issue #109).
+          Aucune promesse non mesurée : chaque ligne renvoie à sa mesure. */}
+      <section
+        aria-label="Nos engagements de service"
+        className="mb-8 rounded-xl border border-neutral-200 p-4 sm:p-6 dark:border-neutral-800"
+      >
+        <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-50">
+          Nos engagements (SLA)
+        </h2>
+        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+          Cibles publiques, calibrées pour un VPS solo — mesurées en continu
+          (sondes ci-dessus, CD et guérisseur automatiques).
+        </p>
+        <dl className="mt-4 space-y-3 text-sm">
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-6">
+            <dt className="font-medium text-neutral-900 dark:text-neutral-100">Disponibilité</dt>
+            <dd className="text-neutral-600 dark:text-neutral-400">≥ 99,5 % par mois (≤ 3,65 h d&apos;indisponibilité)</dd>
+          </div>
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-6">
+            <dt className="font-medium text-neutral-900 dark:text-neutral-100">Réponse du chat</dt>
+            <dd className="text-neutral-600 dark:text-neutral-400">
+              réponse en quelques secondes ; au-delà de 35 s, une réponse de repli honnête est
+              envoyée dans le fil et votre message reste renvoyable
+            </dd>
+          </div>
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-6">
+            <dt className="font-medium text-neutral-900 dark:text-neutral-100">Erreurs serveur (5xx)</dt>
+            <dd className="text-neutral-600 dark:text-neutral-400">&lt; 0,5 % des requêtes par mois</dd>
+          </div>
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-6">
+            <dt className="font-medium text-neutral-900 dark:text-neutral-100">Livraison des mises à jour</dt>
+            <dd className="text-neutral-600 dark:text-neutral-400">
+              cycle de déploiement visé ≤ 2 min après publication ; au-delà de 10 min sans bascule,
+              une alerte automatique est déclenchée et visible publiquement (issue + run rouge)
+            </dd>
+          </div>
+        </dl>
+      </section>
+
       <footer className="mt-auto border-t border-neutral-200 pt-4 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
         <p>
           Machine-readable :{" "}
