@@ -50,7 +50,7 @@ jobs:
   deploy:
     name: Build runner → swap atomique VPS
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -101,6 +101,7 @@ jobs:
       # plus jamais la mise en production.
       # meta.json est téléversé en DERNIER : sa présence = build complet.
       - name: Publier le build sur la release cd-latest (repli mode pull)
+        id: publication
         run: |
           SOMME=$(sha256sum /tmp/next-build.tar.gz | cut -d' ' -f1)
           printf '%s  next-build.tar.gz\n' "$SOMME" > /tmp/next-build.tar.gz.sha256
@@ -388,6 +389,145 @@ jobs:
           echo "Surveillance réarmée : un run dispatché sondra les 10 endpoints sur le build $BUILD_ID (sha $GITHUB_SHA) d'ici ~1 min."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # v8 (2026-11-01, itération 37 Job 478451) — CONTRÔLE DE LIVRAISON
+      # PULL APRÈS LA FIN DU CD (correctif issue #109) : quand le canal SSH
+      # est muet, le swap est sauté, verify_build est sauté, et le run
+      # finissait VERT sans JAMAIS mesurer si la release publiée arrivait
+      # réellement en production (incident it.30 : 21 min de latence,
+      # backoff 900 s du poller invisible depuis la CI — « main ≠ prod
+      # sans signal »). CE run, qui vient de PUBLIER le build, surveille
+      # maintenant SA PROPRE LIVRAISON : sondage
+      # https://gen3ia.online/version.json toutes les 30 s pendant un SLE
+      # de 10 min après la publication (meta.json → publishedAt, relu de la
+      # release pour être la vérité du canal et pas l'horloge du runner).
+      #   · livraison observée ≤ SLE → latence RÉELLE mesurée et publiée
+      #     dans le résumé du run (l'écart prod↔release devient une
+      #     métrique, plus une promesse non vérifiée) ;
+      #   · SLE violé → run ROUGE + escalade créée avec LE MÊME TITRE que
+      #     le guérisseur (il la refermera automatiquement à l'alignement,
+      #     cf. ses étapes de refermeture), corps : publishedAt, latence
+      #     mesurée, sha attendu/servi, log du poller VPS si SSH répond
+      #     (/opt/gen3ia-updater/state/deploy.log), hypothèse backoff.
+      # Garde anti-course : la livraison peut venir du poller OU d'un
+      # guérisseur — le sondage est neutre au canal (il lit la vérité
+      # utilisateur, gen3ia.online). Garde anti-doublon : si une escalade
+      # du même titre est déjà ouverte, on la commente au lieu d'en créer
+      # une seconde.
+      - name: "Contrôle de livraison PULL après CD (SLE 10 min — issue #109)"
+        id: controle_pull
+        if: always() && steps.verify_build.outcome != 'success' && steps.publication.outcome == 'success' && !cancelled()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SLE_SECONDES=600   # promesse documentée « ≤ 2 min » + marge backoff : escalade à 10 min
+          PAS_SECONDES=30
+          TITRE="🚨 Production en retard sur main — intervention console VPS requise"
+          echo "verify_build non prouvé (${{ steps.verify_build.outcome }}) — contrôle de livraison PULL activé (SLE ${SLE_SECONDES} s après publication)."
+          # publishedAt relu depuis la release : vérité du canal pull.
+          META_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/cd-latest" \
+            --jq '.assets[] | select(.name=="meta.json") | .browser_download_url' 2>/dev/null | head -1 || true)
+          PUBLIE_A=""
+          if [ -n "$META_URL" ]; then
+            PUBLIE_A=$(curl -fsSL -m 20 "$META_URL?cb=$(date +%s)" 2>/dev/null | grep -o '"publishedAt":"[^"]*"' | sed -E 's/.*:"//; s/"$//' || true)
+          fi
+          REFERENCE=$(date -u +%s)
+          if [ -n "$PUBLIE_A" ]; then
+            LUE=$(date -u -d "$PUBLIE_A" +%s 2>/dev/null || true)
+            if [ -n "$LUE" ]; then REFERENCE="$LUE"; fi
+          fi
+          echo "Publication (meta.json publishedAt) : ${PUBLIE_A:-inconnue — horloge du runner utilisée}"
+          livre=0
+          sha_prod="absent"
+          # Garde anti-faux-positif (test de logique local it.37) : le
+          # sondage précède TOUJOURS le test de SLE — si la publication est
+          # déjà ancienne au démarrage du contrôle (retries SSH en amont),
+          # on mesure quand même l'état réel avant de conclure (≥ 1 sondage,
+          # jamais d'escalade sur une prod déjà à jour).
+          while :; do
+            REPONSE=$(curl -fsS -m 15 "https://gen3ia.online/version.json?cb=$(date +%s)" 2>/dev/null || true)
+            sha_prod=$(echo "$REPONSE" | tr -d ' \n\r' | grep -o '"gitSha":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+            maintenant=$(date -u +%s)
+            ecoule=$((maintenant - REFERENCE))
+            if [ "$sha_prod" = "$GITHUB_SHA" ]; then
+              livre=1
+              echo "LIVRÉ : gen3ia.online sert le commit $GITHUB_SHA — ${ecoule} s après la publication (canal : poller pull ou guérisseur)."
+              break
+            fi
+            if [ "$ecoule" -ge "$SLE_SECONDES" ]; then break; fi
+            echo "Attente livraison : prod='${sha_prod:-injoignable}' ≠ $GITHUB_SHA — ${ecoule} s / SLE ${SLE_SECONDES} s — re-sondage dans ${PAS_SECONDES} s…"
+            sleep "$PAS_SECONDES"
+          done
+          if [ "$livre" = "1" ]; then
+            {
+              echo "### LIVRAISON PULL MESURÉE (issue #109)"
+              echo ""
+              echo "| Mesure | Valeur |"
+              echo "|---|---|"
+              echo "| Publication (meta.json) | ${PUBLIE_A:-inconnue} |"
+              echo "| Livraison observée (version.json) | ${ecoule} s après publication |"
+              echo "| SLE de contrôle | ${SLE_SECONDES} s |"
+              echo "| Verdict | ✅ dans le SLE |"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # SLE violé — récolter les preuves AVANT d'alerter.
+          LOG_VPS="(SSH muet ou indisponible — log /opt/gen3ia-updater/state/deploy.log non récupéré)"
+          if [ -f ~/.ssh/vps_deploy ]; then
+            CAPTURE=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/vps_deploy \
+              "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "tail -n 40 /opt/gen3ia-updater/state/deploy.log 2>/dev/null" 2>/dev/null || true)
+            if [ -n "$CAPTURE" ]; then
+              LOG_VPS="$CAPTURE"
+            fi
+          fi
+          REPONSE_FINALE=$(curl -fsS -m 15 "https://gen3ia.online/version.json?cb=$(date +%s)" 2>/dev/null | tr -d ' \n\r' || true)
+          sha_prod=$(echo "$REPONSE_FINALE" | grep -o '"gitSha":"[^"]*"' | tail -1 | sed -E 's/.*:"//; s/"$//' || true)
+          {
+            echo "### ⚠️ SLE DE LIVRAISON PULL VIOLÉ (issue #109)"
+            echo ""
+            echo "| Mesure | Valeur |"
+            echo "|---|---|"
+            echo "| Publication (meta.json) | ${PUBLIE_A:-inconnue} |"
+            echo "| SLE | ${SLE_SECONDES} s — VIOLÉ |"
+            echo "| SHA attendu | \`$GITHUB_SHA\` |"
+            echo "| SHA servi par gen3ia.online | ${sha_prod:-injoignable} |"
+            echo "| Hypothèse | backoff du poller (BACKOFF_S=900) ou poller absent/mort |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Escalade : même titre que le guérisseur (refermeture auto à
+          # l'alignement) — un seul doublon jamais (anti-doublon).
+          NUM=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "$TITRE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          CORPS=$(cat <<EOF
+          ## SLE de livraison PULL violé — détecté PAR LE CD (issue #109)
+
+          Le build \`$BUILD_ID\` (sha \`$GITHUB_SHA\`) a été publié sur la release \`cd-latest\` à **${PUBLIE_A:-heure inconnue}** ; après **${SLE_SECONDES} s** de sondage (30 s de pas), gen3ia.online ne sert **pas** ce commit (servi : ${sha_prod:-injoignable}).
+
+          - verify_build était « ${{ steps.verify_build.outcome }} » (canal SSH muet ou fenêtre dépassée) — l'écart prod↔release n'était donc mesuré NULLE PART avant ce contrôle (constat it.30 : 21 min sans signal).
+          - Hypothèse principale : échec transient du pull → backoff 900 s (BACKOFF_S) → succès au retry ; ou poller absent/mort.
+
+          ### Log du poller VPS (tail -n 40 /opt/gen3ia-updater/state/deploy.log)
+
+          \`\`\`
+          $LOG_VPS
+          \`\`\`
+
+          ### Action opérateur (si le poller est mort)
+
+          \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash\`
+
+          Cette escalade se referme AUTOMATIQUEMENT dès que gen3ia.online sert le commit (guérisseur ou CD suivant — même titre, refermeture à la source).
+          EOF
+          )
+          if [ -n "$NUM" ]; then
+            gh issue comment "$NUM" -R "$GITHUB_REPOSITORY" --body "$CORPS" \
+              && echo "Escalade #$NUM déjà ouverte — commentée avec les mesures (anti-doublon)." \
+              || echo "Commentaire d'escalade impossible (quota API ?) — le run ROUGE porte l'alerte."
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$TITRE" --body "$CORPS" \
+              && echo "Escalade créée (SLE violé, mesures et log en corps)." \
+              || echo "Création d'escalade impossible (quota API ?) — le run ROUGE porte l'alerte."
+          fi
+          echo "::error::SLE de livraison PULL violé (${SLE_SECONDES} s après publication) — gen3ia.online ne sert pas le commit $GITHUB_SHA. Escalade créée/commentée."
+          exit 1
 
       # RAPPORT DE FIN DE RUN (double canal) : état de chaque voie, action
       # de contrôle pour l'exploitant. Vert = build publié sur la release
