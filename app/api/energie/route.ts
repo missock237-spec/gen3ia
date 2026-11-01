@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { PROFILS_ENERGIE, VAR_ENV_PROFIL_ENERGIE } from "@/lib/neural/core/v2/energie";
 import { profilEnergieActif } from "@/lib/neural/core/v2/profil-production";
 import { lireCompteurEnergieProcess } from "@/lib/neural/core/v2/compteur-energie-process";
+import { lireCompteurPontVocation } from "@/lib/neural/compteur-pont-vocation";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
  * déclaré it.73 §7.1) : statut public du profil d'énergie actif et MESURE
  * réelle de la réduction de charge serveur.
  *
- * Réponse : { profil, varEnv, compteur, honnetete }
+ * Réponse : { profil, varEnv, compteur, pontVocation, honnetete }
  *  - profil   : profil actif (« plein » historique / « eco » / « telephone »),
  *               SA SOURCE (variable d'environnement locale, fichier versionné
  *               assets/config/profil-energie-production.json, ou repli
@@ -19,6 +20,14 @@ export const dynamic = "force-dynamic";
  *  - compteur : fenêtres neuronales EXÉCUTÉES vs ÉVITÉES depuis le
  *               démarrage du processus — sommes d'entiers mesurés (jamais
  *               estimées), réinitialisées à chaque redéploiement ;
+ *  - pontVocation : it.75 — questions du cadre RÉPONDUES par l'endpoint
+ *               public /api/neural/questions (testeur /vocation) et refus
+ *               honnêtes hors cadre. Ces réponses n'allument JAMAIS de
+ *               fenêtre moteur — PAR CONSTRUCTION de l'endpoint, quel que
+ *               soit le profil (zéro fenêtre, zéro RPIA, zéro cycle) ; le
+ *               périmètre est disjoint du compteur du moteur (chat /
+ *               génération) et les deux sommes s'additionnent sans double
+ *               comptage ;
  *  - honnetete : la règle structurante (aucune économie silencieuse — le
  *               profil « plein » est le comportement historique bit à bit ;
  *               « eco »/« telephone » répondent par le MÊME pont lexical,
@@ -33,6 +42,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const actif = profilEnergieActif();
   const compteur = lireCompteurEnergieProcess();
+  const pontVocation = lireCompteurPontVocation();
 
   return NextResponse.json(
     {
@@ -43,13 +53,18 @@ export async function GET() {
       },
       varEnv: VAR_ENV_PROFIL_ENERGIE,
       compteur,
+      pontVocation: {
+        ...pontVocation,
+        perimetre:
+          "endpoint public /api/neural/questions (testeur /vocation) — réponses servies SANS fenêtre moteur, par construction, quel que soit le profil ; disjoint du compteur du moteur (chat/génération)",
+      },
       honnetete: {
         regle:
           "aucune économie silencieuse — « plein » = comportement historique bit à bit (défaut) ; « eco »/« telephone » = économies déclarées et mesurées",
         qualite:
           "les questions du cadre d'apprentissage sont répondues par le MÊME pont lexical que la production (même texte, testé A/B it.73) ; hors cadre = chemin historique complet inchangé",
         mesure:
-          "compteur cumulé en mémoire du processus (réinitialisé à chaque redéploiement) — fenêtres exécutées vs évitées, sommes d'entiers mesurés",
+          "compteurs cumulés en mémoire du processus (réinitialisés à chaque redéploiement) — fenêtres exécutées vs évitées (moteur) et réponses/refus du pont public, sommes d'entiers mesurés",
         priorite:
           "variable d'environnement (opérateur local) > fichier versionné (dépôt) > « plein »",
       },

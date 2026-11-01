@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  enregistrerReponsePont,
+  enregistrerRefusPont,
+  lireCompteurPontVocation,
+  reinitialiserCompteurPontVocation,
+} from "@/lib/neural/compteur-pont-vocation";
 
 /**
  * GARDE 44ᵉ — VUE UTILISATEUR DE LA SOBRIÉTÉ ÉNERGÉTIQUE (it.75, candidat
@@ -30,6 +37,8 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf
 const COMPOSANT = "components/neural/vue-sobriete-energie.tsx";
 const PAGE = "app/vocation/page.tsx";
 const ROUTE = "app/api/energie/route.ts";
+const ROUTE_QUESTIONS = "app/api/neural/questions/route.ts";
+const COMPTEUR_PONT = "lib/neural/compteur-pont-vocation.ts";
 
 describe("GARDE 44ᵉ — le widget consomme la mesure réelle du serveur", () => {
   const source = read(COMPOSANT);
@@ -46,6 +55,9 @@ describe("GARDE 44ᵉ — le widget consomme la mesure réelle du serveur", () =
     expect(source).toContain("compteur.epoquesRPIAEvitees");
     expect(source).toContain("compteur.cyclesNoyauEvites");
     expect(source).toContain("compteur.demarrageIso");
+    // it.75 — le second périmètre (pont public) est consommé tel quel.
+    expect(source).toContain("pont?.reponsesServies");
+    expect(source).toContain("pont?.refusHonnêtes");
     expect(source).toContain("energie?.honnetete?.regle");
     expect(source).toContain("energie?.honnetete?.qualite");
   });
@@ -54,8 +66,8 @@ describe("GARDE 44ᵉ — le widget consomme la mesure réelle du serveur", () =
     expect(source).toContain("Endpoint énergie indisponible");
     expect(source).toContain("Réseau indisponible — réessayez.");
     expect(source).toContain("Lecture du compteur d&apos;énergie…");
-    // Le compteur à zéro est EXPLIQUÉ (redéploiement) au lieu d'être maquillé.
-    expect(source).toContain("Le compteur démarre à zéro à chaque redéploiement");
+    // Les compteurs à zéro sont EXPLIQUÉS (redéploiement) au lieu d'être maquillés.
+    expect(source).toContain("Les compteurs démarrent à zéro à chaque redéploiement");
     // La part évitée est mesurée depuis les deux compteurs — jamais une
     // estimation fixe.
     expect(source).toContain("Math.round((evitees / total) * 100)");
@@ -113,5 +125,66 @@ describe("GARDE 44ᵉ — continuité du contrat /api/energie (it.74)", () => {
     expect(source).not.toMatch(/\b12\s*[×x*]\s*(époques|RPIA)/);
     expect(source).not.toMatch(/=\s*12\s*\*\s*fenetres/);
     expect(source).not.toMatch(/=\s*4\s*\*\s*fenetres/);
+  });
+});
+
+describe("GARDE 44ᵉ — compteur du pont vocation (second périmètre réel, it.75)", () => {
+  afterEach(() => {
+    reinitialiserCompteurPontVocation();
+  });
+
+  it("9. les champs sont des sommes d'entiers exactes (réponses et refus comptés séparément)", () => {
+    reinitialiserCompteurPontVocation();
+    enregistrerReponsePont();
+    enregistrerReponsePont();
+    enregistrerReponsePont();
+    enregistrerRefusPont();
+    const c = lireCompteurPontVocation();
+    expect(c.reponsesServies).toBe(3);
+    expect(c.refusHonnêtes).toBe(1);
+    expect(Number.isInteger(c.reponsesServies)).toBe(true);
+    expect(Number.isInteger(c.refusHonnêtes)).toBe(true);
+    expect(new Date(c.demarrageIso).toString()).not.toBe("Invalid Date");
+  });
+
+  it("10. le compteur survit aux recharges de module (globalThis) et se réinitialise", () => {
+    reinitialiserCompteurPontVocation();
+    enregistrerReponsePont();
+    enregistrerReponsePont();
+    // Re-lecture sans re-import : même conteneur globalThis.
+    expect(lireCompteurPontVocation().reponsesServies).toBe(2);
+    reinitialiserCompteurPontVocation();
+    const neuf = lireCompteurPontVocation();
+    expect(neuf.reponsesServies).toBe(0);
+    expect(neuf.refusHonnêtes).toBe(0);
+  });
+
+  it("11. la route questions compte les réponses ET les refus honnêtes", () => {
+    const source = read(ROUTE_QUESTIONS);
+    expect(source).toContain('from "@/lib/neural/compteur-pont-vocation"');
+    expect(source).toContain("enregistrerReponsePont()");
+    expect(source).toContain("enregistrerRefusPont()");
+    // Le comptage est placé sur les DEUX branches honnêtes (connu true / false).
+    const brancheConnue = source.indexOf("enregistrerReponsePont()");
+    const brancheRefus = source.indexOf("enregistrerRefusPont()");
+    expect(brancheConnue).toBeGreaterThan(-1);
+    expect(brancheRefus).toBeGreaterThan(-1);
+    expect(brancheRefus).toBeLessThan(brancheConnue);
+  });
+
+  it("12. /api/energie expose le compteur du pont avec son périmètre déclaré", () => {
+    const source = read(ROUTE);
+    expect(source).toContain("lireCompteurPontVocation()");
+    expect(source).toContain("pontVocation");
+    expect(source).toContain("SANS fenêtre moteur");
+    expect(source).toContain("disjoint du compteur du moteur");
+  });
+
+  it("13. le module compteur du pont est un module pur honnête (sommes mesurées, jamais estimées)", () => {
+    const source = read(COMPTEUR_PONT);
+    expect(source).toContain("SOMME D'ENTIERS MESURÉS");
+    expect(source).toContain("jamais une estimation ni");
+    expect(source).toContain("on compte ce qui est arrivé");
+    expect(source).toContain("__gen3CompteurPontVocationIt75");
   });
 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { composerDepuisVocation, statsPontVocation } from "@/lib/neural/vocation-pont";
+import { enregistrerReponsePont, enregistrerRefusPont } from "@/lib/neural/compteur-pont-vocation";
 
 /**
  * QUESTIONS DANS LE CADRE D'APPRENTISSAGE DE GEN3 (it.66 — demande
@@ -43,6 +44,9 @@ export async function POST(request: Request) {
   if (!composition) {
     // HONNÊTÉ : la question ne tombe pas (encore) dans le cadre reconnu —
     // aucune réponse fabriquée. Le champ motif dit quoi faire ensuite.
+    // it.75 — le refus honnête est compté (somme d'entiers mesurée) et
+    // exposé par /api/energie → pontVocation.
+    enregistrerRefusPont();
     return NextResponse.json({
       connu: false,
       reponse: null,
@@ -52,6 +56,10 @@ export async function POST(request: Request) {
     });
   }
 
+  // it.75 — la réponse du pont est comptée (somme d'entiers mesurée) :
+  // servie SANS fenêtre moteur, par construction de cet endpoint (tout
+  // profil) — exposée par /api/energie → pontVocation.
+  enregistrerReponsePont();
   return NextResponse.json({
     connu: true,
     reponse: composition.texte,

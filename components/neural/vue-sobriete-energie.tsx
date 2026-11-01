@@ -38,6 +38,12 @@ interface ReponseEnergie {
     cyclesNoyauEvites?: number;
     demarrageIso?: string;
   };
+  pontVocation?: {
+    reponsesServies?: number;
+    refusHonnêtes?: number;
+    demarrageIso?: string;
+    perimetre?: string;
+  };
   honnetete?: {
     regle?: string;
     qualite?: string;
@@ -89,6 +95,7 @@ export default function VueSobrieteEnergie() {
 
   const profil = energie?.profil;
   const compteur = energie?.compteur;
+  const pont = energie?.pontVocation;
   const evitees = compteur?.fenetresEvitees ?? 0;
   const executees = compteur?.fenetresExecutees ?? 0;
   const total = evitees + executees;
@@ -108,10 +115,11 @@ export default function VueSobrieteEnergie() {
       </div>
       <p className="mt-1 text-[12px] leading-relaxed text-[var(--g3-muted)]">
         La demande propriétaire — « diminuer la consommation d&apos;énergie de gen3 tout en gardant sa qualité de
-        réponse » — est tenue et mesurée : les questions du cadre d&apos;apprentissage sont répondues par le pont
-        vocation (même texte, testé A/B it.73) SANS allumer la fenêtre neuronale serveur. Ce compteur est celui du
-        processus de production — sommes d&apos;entiers réelles, jamais estimées (rafraîchissement 30 s, gaté par la
-        visibilité de l&apos;onglet : zéro requête en arrière-plan).
+        réponse » — est tenue et mesurée sur DEUX périmètres disjoints, tous deux réels : les questions du cadre
+        posées au testeur ci-dessus sont servies par le pont vocation SANS AUCUNE fenêtre moteur (compteur du
+        pont) ; les conversations complètes du moteur évitent la fenêtre neuronale grâce au profil éco (compteur
+        du moteur, même texte testé A/B it.73). Sommes d&apos;entiers mesurées, jamais estimées (rafraîchissement
+        30 s, gaté par la visibilité de l&apos;onglet : zéro requête en arrière-plan).
       </p>
 
       {erreur ? (
@@ -132,22 +140,38 @@ export default function VueSobrieteEnergie() {
             </span>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <div className="rounded-xl border border-[var(--g3-border)] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">
-                Fenêtres évitées
+                Réponses du pont — sans fenêtre
               </p>
-              <p className="mt-1 text-xl font-bold text-[var(--g3v6-spike-text)]">{fmtFr(evitees)}</p>
+              <p className="mt-1 text-xl font-bold text-[var(--g3v6-spike-text)]">{fmtFr(pont?.reponsesServies)}</p>
               <p className="text-[10px] text-[var(--g3-faint)]">
-                {partEvitees !== null ? `${partEvitees} % des fenêtres` : "aucune fenêtre encore mesurée"}
+                questions du cadre servies ci-dessus, zéro fenêtre moteur (tout profil)
               </p>
             </div>
             <div className="rounded-xl border border-[var(--g3-border)] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">
-                Fenêtres exécutées
+                Refus honnêtes (hors cadre)
+              </p>
+              <p className="mt-1 text-xl font-bold">{fmtFr(pont?.refusHonnêtes)}</p>
+              <p className="text-[10px] text-[var(--g3-faint)]">aucune réponse fabriquée, comptés comme tels</p>
+            </div>
+            <div className="rounded-xl border border-[var(--g3-border)] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">
+                Fenêtres moteur évitées
+              </p>
+              <p className="mt-1 text-xl font-bold">{fmtFr(evitees)}</p>
+              <p className="text-[10px] text-[var(--g3-faint)]">
+                chat/génération — {partEvitees !== null ? `${partEvitees} % des ${fmtFr(total)}` : "profil éco"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[var(--g3-border)] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">
+                Fenêtres moteur exécutées
               </p>
               <p className="mt-1 text-xl font-bold">{fmtFr(executees)}</p>
-              <p className="text-[10px] text-[var(--g3-faint)]">questions hors cadre (chemin historique complet)</p>
+              <p className="text-[10px] text-[var(--g3-faint)]">hors cadre (chemin historique complet)</p>
             </div>
             <div className="rounded-xl border border-[var(--g3-border)] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[var(--g3v6-track)] text-[var(--g3-faint)]">
@@ -165,11 +189,11 @@ export default function VueSobrieteEnergie() {
             </div>
           </div>
 
-          {evitees >= NB_FENETRES_AVERTI ? null : (
+          {evitees >= NB_FENETRES_AVERTI || (pont?.reponsesServies ?? 0) >= NB_FENETRES_AVERTI ? null : (
             <p className="mt-2 text-[11px] leading-relaxed text-[var(--g3-faint)]">
-              Le compteur démarre à zéro à chaque redéploiement (limite déclarée dans /api/energie) — posez une
-              question du cadre ci-dessus, rafraîchissez, la mesure bouge : c&apos;est le serveur qui compte, pas
-              cette page.
+              Les compteurs démarrent à zéro à chaque redéploiement (limite déclarée dans /api/energie) — posez
+              une question du cadre ci-dessus, rafraîchissez, la mesure bouge : c&apos;est le serveur qui compte,
+              pas cette page.
             </p>
           )}
 
