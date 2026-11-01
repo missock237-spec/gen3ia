@@ -1,0 +1,1289 @@
+{
+  "session": "campagne-plafond-leve-it71",
+  "date": "2026-11-01T01:13:27.040Z",
+  "environnement": "serveur-local",
+  "demandeProprietaire": "un système qui apprend du générateur pour s'améliorer en continu (it.65) — depuis tes propres serveurs locaux, 1 million de données par domaine, questions dans le cadre (instruction raffinée)",
+  "parametres": {
+    "colonnes": 8388608,
+    "budgetPoidsSortants": 8,
+    "budgetAncreIt70": 6,
+    "seuleVariable": "budgetPoidsSortants : 6.0 (it.69/70) → 8.0 (ce tick) — expérience contrôlée, tout le reste identique",
+    "vagues": [
+      {
+        "vague": 1,
+        "offsetBijection": 30000000,
+        "fraisParDomaine": 100000,
+        "horloges": "0 → 5 700 000",
+        "note": "même bijection que it.69/70 vague 1 (30M) — comparaison croisée budget 8.0 vs 6.0"
+      },
+      {
+        "vague": 2,
+        "offsetBijection": 50000000,
+        "fraisParDomaine": 100000,
+        "horloges": "90 010 000 000 → 90 015 700 000",
+        "note": "matière jamais vue, même cortex — la boucle continue sous budget élargi ; départ APRÈS les sondes de phase 1 (horloge MONOTONE, leçon it.70)"
+      }
+    ],
+    "cyclesParEchantillon": 3,
+    "tailleLot": 2000,
+    "lrBoost": 0.15,
+    "graine": 20261101,
+    "horloges": {
+      "sondesPhase1": 90000000000,
+      "vague2Depart": 90010000000,
+      "sondesPhase2": 90030000000
+    },
+    "seuilAreteSaturee": 0.999,
+    "homoeostasie": true,
+    "formatTexte": "Q: <question> R: <réponse charte> — bijections texte offsets 30M et 50M (identiques it.69/70), génération paresseuse lot par lot"
+  },
+  "memoire": {
+    "avantAllocation": {
+      "rss": 95.9,
+      "external": 4.8,
+      "arrayBuffers": 2.3
+    },
+    "apresAllocation": {
+      "rss": 898.1,
+      "external": 980.7,
+      "arrayBuffers": 978.2
+    },
+    "plafondRssMo": 2600,
+    "picRssMo": 1528.4
+  },
+  "sources": {
+    "generateur": "lib/gen3/generateur-datasets.ts — paireGenere (bijection texte, espace ≥ 141,9 M/domaine, offsets anti-rejoue)",
+    "mecanique": "lib/neural/training/entrainement-ondes.ts — entrainerDomainesParOndes (EOD it.57/63 inchangée)",
+    "substrat": "lib/neural/core/v2/cortex-columnnaire.ts — CortexColumnnaire (homéostasie it.67/68 activée, budget 8.0)"
+  },
+  "entrainement": {
+    "vague1": {
+      "echantillons": 1900000,
+      "dureeMs": 281413,
+      "horlogeFinale": 5700000
+    },
+    "vague2": {
+      "echantillons": 1900000,
+      "dureeMs": 326862,
+      "horlogeFinale": 90015700000
+    },
+    "metabolisme": {
+      "evaluees": 659451261,
+      "reposes": 95629471748739,
+      "transmissions": 508269648,
+      "ms": 156779.642,
+      "normalisations": 0
+    },
+    "mesuresStabilite": [
+      {
+        "vague": 1,
+        "bloc": 1,
+        "echantillons": 190000,
+        "transmissions": 25815132,
+        "transmissionsCumul": 25815132,
+        "aretesSaturees": 686944,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1214.4
+      },
+      {
+        "vague": 1,
+        "bloc": 2,
+        "echantillons": 380000,
+        "transmissions": 24891372,
+        "transmissionsCumul": 50706504,
+        "aretesSaturees": 1530963,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1239
+      },
+      {
+        "vague": 1,
+        "bloc": 3,
+        "echantillons": 570000,
+        "transmissions": 24813732,
+        "transmissionsCumul": 75520236,
+        "aretesSaturees": 1934682,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1240.3
+      },
+      {
+        "vague": 1,
+        "bloc": 4,
+        "echantillons": 760000,
+        "transmissions": 24914256,
+        "transmissionsCumul": 100434492,
+        "aretesSaturees": 2123624,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1240.5
+      },
+      {
+        "vague": 1,
+        "bloc": 5,
+        "echantillons": 950000,
+        "transmissions": 25941300,
+        "transmissionsCumul": 126375792,
+        "aretesSaturees": 2230103,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1241.1
+      },
+      {
+        "vague": 1,
+        "bloc": 6,
+        "echantillons": 1140000,
+        "transmissions": 25690116,
+        "transmissionsCumul": 152065908,
+        "aretesSaturees": 2291069,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1241.9
+      },
+      {
+        "vague": 1,
+        "bloc": 7,
+        "echantillons": 1330000,
+        "transmissions": 27114984,
+        "transmissionsCumul": 179180892,
+        "aretesSaturees": 2325501,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1242.5
+      },
+      {
+        "vague": 1,
+        "bloc": 8,
+        "echantillons": 1520000,
+        "transmissions": 25679292,
+        "transmissionsCumul": 204860184,
+        "aretesSaturees": 2342930,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1242.8
+      },
+      {
+        "vague": 1,
+        "bloc": 9,
+        "echantillons": 1710000,
+        "transmissions": 26058168,
+        "transmissionsCumul": 230918352,
+        "aretesSaturees": 2351531,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1242.6
+      },
+      {
+        "vague": 1,
+        "bloc": 10,
+        "echantillons": 1900000,
+        "transmissions": 24913428,
+        "transmissionsCumul": 255831780,
+        "aretesSaturees": 2355593,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1242.9
+      },
+      {
+        "vague": 2,
+        "bloc": 11,
+        "echantillons": 190000,
+        "transmissions": 25409808,
+        "transmissionsCumul": 281241588,
+        "aretesSaturees": 2357434,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1262.5
+      },
+      {
+        "vague": 2,
+        "bloc": 12,
+        "echantillons": 380000,
+        "transmissions": 24268680,
+        "transmissionsCumul": 305510268,
+        "aretesSaturees": 2358205,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1271.9
+      },
+      {
+        "vague": 2,
+        "bloc": 13,
+        "echantillons": 570000,
+        "transmissions": 24616368,
+        "transmissionsCumul": 330126636,
+        "aretesSaturees": 2358590,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1272.1
+      },
+      {
+        "vague": 2,
+        "bloc": 14,
+        "echantillons": 760000,
+        "transmissions": 24283332,
+        "transmissionsCumul": 354409968,
+        "aretesSaturees": 2358738,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1272
+      },
+      {
+        "vague": 2,
+        "bloc": 15,
+        "echantillons": 950000,
+        "transmissions": 25997220,
+        "transmissionsCumul": 380407188,
+        "aretesSaturees": 2358795,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1271.9
+      },
+      {
+        "vague": 2,
+        "bloc": 16,
+        "echantillons": 1140000,
+        "transmissions": 25025520,
+        "transmissionsCumul": 405432708,
+        "aretesSaturees": 2358824,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1272.3
+      },
+      {
+        "vague": 2,
+        "bloc": 17,
+        "echantillons": 1330000,
+        "transmissions": 26889720,
+        "transmissionsCumul": 432322428,
+        "aretesSaturees": 2358840,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1272.2
+      },
+      {
+        "vague": 2,
+        "bloc": 18,
+        "echantillons": 1520000,
+        "transmissions": 25143048,
+        "transmissionsCumul": 457465476,
+        "aretesSaturees": 2358850,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1272.1
+      },
+      {
+        "vague": 2,
+        "bloc": 19,
+        "echantillons": 1710000,
+        "transmissions": 26040408,
+        "transmissionsCumul": 483505884,
+        "aretesSaturees": 2358854,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1272.1
+      },
+      {
+        "vague": 2,
+        "bloc": 20,
+        "echantillons": 1900000,
+        "transmissions": 24763764,
+        "transmissionsCumul": 508269648,
+        "aretesSaturees": 2358856,
+        "poidsMax": 1,
+        "attenteEchantillon": 0,
+        "normalisations": 0,
+        "normalisationsCumul": 0,
+        "rssMo": 1272
+      }
+    ]
+  },
+  "bilan": {
+    "criteres": {
+      "c1_donnees_fraises": {
+        "vague1": {
+          "valeur": 19,
+          "sur": 19,
+          "seuil": 100000,
+          "atteint": true
+        },
+        "vague2": {
+          "valeur": 19,
+          "sur": 19,
+          "seuil": 100000,
+          "atteint": true
+        },
+        "atteint": true
+      },
+      "c2_renforts_positifs": {
+        "vague1": {
+          "valeur": 19,
+          "sur": 19,
+          "atteint": true
+        },
+        "vague2": {
+          "valeur": 19,
+          "sur": 19,
+          "atteint": true
+        },
+        "atteint": true
+      },
+      "c3_budget_elargi": {
+        "valeur": 14,
+        "sur": 19,
+        "baseline": "substrat neuf (sémantique it.66/69), budget 8.0 — comparaison croisée avec l'artefact commis it.70 (14/19 sous budget 6.0, même matière offset 30M)",
+        "atteint": false
+      },
+      "c3b_boucle_continue": {
+        "valeur": 12,
+        "sur": 19,
+        "baseline": "état après vague 1 (sémantique documentée — gain marginal d'une vague neuve sur substrat entraîné), budget 8.0 — ancrage it.70 : 6/19 sous budget 6.0",
+        "atteint": false
+      },
+      "survie_memoire": {
+        "valeur": 13,
+        "sur": 19,
+        "baseline": "trace vague 1 après vague 1 vs après vague 2 — ancrage it.70 : 13/19 sous budget 6.0",
+        "atteint": false
+      },
+      "c4_stabilite": {
+        "ratioTransmissionsVague1": 0.965,
+        "ratioTransmissionsVague2": 0.975,
+        "seuil": 3,
+        "aretesSatureesFin": 2358856,
+        "poidsMaxFin": 1,
+        "normalisationsTotales": 0,
+        "atteint": true
+      }
+    },
+    "limitesHonnetes": [
+      "ceci n'est PAS un rejeu bit-exact : le budget homéostatique 8.0 change l'état du cortex — la comparabilité vient de l'expérience contrôlée (même matière offsets 30M/50M, même graine, même protocole EOD, SEULE variable = budget) et de l'ancrage COMMIS it.70 (boucle-continue-it70.json : C3a 14/19, C3b 6/19, survie 13/19 sous budget 6.0)",
+      "le C3b mesure le gain d'une vague NEUVE sur un substrat DÉJÀ ENTRAÎNÉ (baseline = état après vague 1) — ce n'est PAS la sémantique it.66/69 (substrat neuf) : les deux nombres ne sont pas interchangeables, l'ancrage de comparabilité intra-artefact est le C3 (scratch → après vague 1)",
+      "la carte des interférences est STRUCTURELLE (indépendante du budget : analyserOndeTexte/colonnesDepuisOndes ne lisent pas les poids) — elle n'est pas re-mesurée ici, l'artefact commis it.70 fait foi (autoPorteur ≈ 0, interférences croisées 0,40–0,55)",
+      "le CHAMP cortical (bus inter-régions) est par vague — pas de rétroaction champ→cortex : le substrat est l'objet continu ; la campagne est REPRENABLE par checkpoints binaires du cortex (structure reconstruite depuis la graine, poids restaurés bit à bit), chaque échantillon entraîné UNE fois",
+      "la trace reste une mesure interne du substrat sparse-colonne — elle ne prétend pas mesurer une qualité linguistique externe ; les réponses de gen3 en production viennent du PONT VOCATION (rôles distincts, it.66) ; le runtime de production reste 2^20 (VPS 2 Go) — la portée est la PREUVE de discrimination et de continuité",
+      "le facteur de branchement effectif augmente avec le budget (≤ 6 → ≤ 8 par spike) : une avalanche serait détectée par C4 (deltas qui explosent), la durée par lot et le RSS (garde-fou abort honnête) — le risque est ACCEPTÉ et MESURÉ, pas supposé absent"
+    ]
+  },
+  "parDomaine": [
+    {
+      "id": "recherche-web",
+      "label": "Recherche web",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52988054,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50012017,
+      "traceScratchV1": 3.365633,
+      "traceApresVague1": 3.047183,
+      "c3": 0.905382,
+      "c3Atteint": false,
+      "traceAvantVague2": 3.305046,
+      "traceApresVague2": 3.410584,
+      "c3b": 1.031932,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.107477,
+      "survie": 1.019787,
+      "survieAtteint": true
+    },
+    {
+      "id": "controle-donnees",
+      "label": "Contrôle de données",
+      "bandeVocab": 4,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52948010,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999982,
+      "traceScratchV1": 2.806561,
+      "traceApresVague1": 3.553418,
+      "c3": 1.266111,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.303158,
+      "traceApresVague2": 3.402373,
+      "c3b": 1.030036,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.366118,
+      "survie": 0.94729,
+      "survieAtteint": false
+    },
+    {
+      "id": "redaction-texte",
+      "label": "Rédaction de texte",
+      "bandeVocab": 5,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53004035,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50003996,
+      "traceScratchV1": 3.277267,
+      "traceApresVague1": 3.32759,
+      "c3": 1.015355,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.300334,
+      "traceApresVague2": 3.345811,
+      "c3b": 1.01378,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.110878,
+      "survie": 0.934874,
+      "survieAtteint": false
+    },
+    {
+      "id": "analyse-documents",
+      "label": "Analyse de documents",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52848019,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999989,
+      "traceScratchV1": 2.877786,
+      "traceApresVague1": 3.292693,
+      "c3": 1.144176,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.302403,
+      "traceApresVague2": 3.313056,
+      "c3b": 1.003226,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 4.254932,
+      "survie": 1.292235,
+      "survieAtteint": true
+    },
+    {
+      "id": "generation-code",
+      "label": "Génération de code",
+      "bandeVocab": 3,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53264095,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50003962,
+      "traceScratchV1": 2.797799,
+      "traceApresVague1": 3.461259,
+      "c3": 1.237137,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.304569,
+      "traceApresVague2": 3.306212,
+      "c3b": 1.000497,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.503449,
+      "survie": 1.012189,
+      "survieAtteint": true
+    },
+    {
+      "id": "analyse-donnees",
+      "label": "Analyse de données",
+      "bandeVocab": 3,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52804013,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999885,
+      "traceScratchV1": 3.193474,
+      "traceApresVague1": 3.464312,
+      "c3": 1.08481,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.30445,
+      "traceApresVague2": 3.304532,
+      "c3b": 1.000025,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.580477,
+      "survie": 1.033532,
+      "survieAtteint": true
+    },
+    {
+      "id": "cybersecurite",
+      "label": "Cybersécurité",
+      "bandeVocab": 0,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53728018,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50004016,
+      "traceScratchV1": 3.008816,
+      "traceApresVague1": 3.378726,
+      "c3": 1.122942,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.302521,
+      "traceApresVague2": 3.302195,
+      "c3b": 0.999901,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.565665,
+      "survie": 1.055328,
+      "survieAtteint": true
+    },
+    {
+      "id": "medecine-sante",
+      "label": "Médecine et santé",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52867857,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50024007,
+      "traceScratchV1": 3.03321,
+      "traceApresVague1": 3.344513,
+      "c3": 1.102632,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.302363,
+      "traceApresVague2": 3.302386,
+      "c3b": 1.000007,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.557307,
+      "survie": 1.063625,
+      "survieAtteint": true
+    },
+    {
+      "id": "commerce-economie",
+      "label": "Commerce et économie",
+      "bandeVocab": 6,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 52959995,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999959,
+      "traceScratchV1": 3.252499,
+      "traceApresVague1": 3.374005,
+      "c3": 1.037358,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.302207,
+      "traceApresVague2": 3.30216,
+      "c3b": 0.999986,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.524377,
+      "survie": 1.044568,
+      "survieAtteint": true
+    },
+    {
+      "id": "langue-communication",
+      "label": "Langue et communication",
+      "bandeVocab": 6,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53771990,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50004039,
+      "traceScratchV1": 3.020818,
+      "traceApresVague1": 3.395417,
+      "c3": 1.124006,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.302477,
+      "traceApresVague2": 3.302207,
+      "c3b": 0.999918,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.537097,
+      "survie": 1.041727,
+      "survieAtteint": true
+    },
+    {
+      "id": "ingenierie-industrie",
+      "label": "Ingénierie et industrie",
+      "bandeVocab": 2,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54796273,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50008252,
+      "traceScratchV1": 3.715291,
+      "traceApresVague1": 3.474073,
+      "c3": 0.935074,
+      "c3Atteint": false,
+      "traceAvantVague2": 3.303152,
+      "traceApresVague2": 3.30284,
+      "c3b": 0.999906,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.380469,
+      "survie": 0.973057,
+      "survieAtteint": false
+    },
+    {
+      "id": "art-creation-multimedia",
+      "label": "Art et création multimédia",
+      "bandeVocab": 0,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53907911,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50008011,
+      "traceScratchV1": 3.343388,
+      "traceApresVague1": 3.412732,
+      "c3": 1.02074,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.302628,
+      "traceApresVague2": 3.302088,
+      "c3b": 0.999836,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.473544,
+      "survie": 1.017819,
+      "survieAtteint": true
+    },
+    {
+      "id": "agriculture-environnement",
+      "label": "Agriculture et environnement",
+      "bandeVocab": 7,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53992088,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50008005,
+      "traceScratchV1": 3.548375,
+      "traceApresVague1": 3.427471,
+      "c3": 0.965927,
+      "c3Atteint": false,
+      "traceAvantVague2": 3.302189,
+      "traceApresVague2": 3.302402,
+      "c3b": 1.000064,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.471635,
+      "survie": 1.012885,
+      "survieAtteint": true
+    },
+    {
+      "id": "droit-administration",
+      "label": "Droit et administration",
+      "bandeVocab": 2,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53628215,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50012117,
+      "traceScratchV1": 3.143239,
+      "traceApresVague1": 3.412216,
+      "c3": 1.085573,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.303226,
+      "traceApresVague2": 3.303328,
+      "c3b": 1.000031,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.391229,
+      "survie": 0.993849,
+      "survieAtteint": false
+    },
+    {
+      "id": "education-recherche",
+      "label": "Éducation et recherche",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 53876012,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50011985,
+      "traceScratchV1": 3.309506,
+      "traceApresVague1": 3.398436,
+      "c3": 1.026871,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.302585,
+      "traceApresVague2": 3.302594,
+      "c3b": 1.000003,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.378948,
+      "survie": 0.994266,
+      "survieAtteint": false
+    },
+    {
+      "id": "transport-immobilier",
+      "label": "Transport et immobilier",
+      "bandeVocab": 2,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54120052,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 49999934,
+      "traceScratchV1": 3.429783,
+      "traceApresVague1": 3.416695,
+      "c3": 0.996184,
+      "c3Atteint": false,
+      "traceAvantVague2": 3.303244,
+      "traceApresVague2": 3.303438,
+      "c3b": 1.000059,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.484199,
+      "survie": 1.019757,
+      "survieAtteint": true
+    },
+    {
+      "id": "sciences-humaines-sociales",
+      "label": "Sciences humaines et sociales",
+      "bandeVocab": 1,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54943895,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50011997,
+      "traceScratchV1": 3.113411,
+      "traceApresVague1": 3.40725,
+      "c3": 1.094379,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.302919,
+      "traceApresVague2": 3.302752,
+      "c3b": 0.99995,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.365811,
+      "survie": 0.987838,
+      "survieAtteint": false
+    },
+    {
+      "id": "ia-specialisee-emergente",
+      "label": "Domaines spécialisés et émergents en IA",
+      "bandeVocab": 4,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54431953,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50015978,
+      "traceScratchV1": 3.73191,
+      "traceApresVague1": 3.355071,
+      "c3": 0.899022,
+      "c3Atteint": false,
+      "traceAvantVague2": 3.303368,
+      "traceApresVague2": 3.30328,
+      "c3b": 0.999974,
+      "c3bAtteint": false,
+      "traceApresVague2SurVague1": 3.420792,
+      "survie": 1.019589,
+      "survieAtteint": true
+    },
+    {
+      "id": "apprentissage-entre-ia",
+      "label": "Apprentissage autonome avec d'autres IA",
+      "bandeVocab": 3,
+      "echantillonsVague1": 100000,
+      "renfortsVague1": 54367820,
+      "echantillonsVague2": 100000,
+      "renfortsVague2": 50028119,
+      "traceScratchV1": 3.196465,
+      "traceApresVague1": 3.316548,
+      "c3": 1.037567,
+      "c3Atteint": true,
+      "traceAvantVague2": 3.304399,
+      "traceApresVague2": 3.304536,
+      "c3b": 1.000041,
+      "c3bAtteint": true,
+      "traceApresVague2SurVague1": 3.42801,
+      "survie": 1.033608,
+      "survieAtteint": true
+    }
+  ],
+  "pointsDeSonde": {
+    "vague1": [
+      {
+        "domaine": "recherche-web",
+        "indice": "debut",
+        "ratioScratch": 2.710358,
+        "ratioApresVague1": 2.963103,
+        "ratioApresVague2": 3.221725
+      },
+      {
+        "domaine": "recherche-web",
+        "indice": "fin",
+        "ratioScratch": 4.046889,
+        "ratioApresVague1": 3.13168,
+        "ratioApresVague2": 2.993988
+      },
+      {
+        "domaine": "controle-donnees",
+        "indice": "debut",
+        "ratioScratch": 3.156339,
+        "ratioApresVague1": 3.612697,
+        "ratioApresVague2": 3.217848
+      },
+      {
+        "domaine": "controle-donnees",
+        "indice": "fin",
+        "ratioScratch": 2.463874,
+        "ratioApresVague1": 3.494342,
+        "ratioApresVague2": 3.515678
+      },
+      {
+        "domaine": "redaction-texte",
+        "indice": "debut",
+        "ratioScratch": 3.009873,
+        "ratioApresVague1": 3.253737,
+        "ratioApresVague2": 3.17957
+      },
+      {
+        "domaine": "redaction-texte",
+        "indice": "fin",
+        "ratioScratch": 3.548898,
+        "ratioApresVague1": 3.401762,
+        "ratioApresVague2": 3.042461
+      },
+      {
+        "domaine": "analyse-documents",
+        "indice": "debut",
+        "ratioScratch": 2.690885,
+        "ratioApresVague1": 3.207852,
+        "ratioApresVague2": 4.487789
+      },
+      {
+        "domaine": "analyse-documents",
+        "indice": "fin",
+        "ratioScratch": 3.066772,
+        "ratioApresVague1": 3.377956,
+        "ratioApresVague2": 4.025112
+      },
+      {
+        "domaine": "generation-code",
+        "indice": "debut",
+        "ratioScratch": 2.838008,
+        "ratioApresVague1": 3.45702,
+        "ratioApresVague2": 3.30048
+      },
+      {
+        "domaine": "generation-code",
+        "indice": "fin",
+        "ratioScratch": 2.757685,
+        "ratioApresVague1": 3.4655,
+        "ratioApresVague2": 3.708835
+      },
+      {
+        "domaine": "analyse-donnees",
+        "indice": "debut",
+        "ratioScratch": 2.812196,
+        "ratioApresVague1": 3.432591,
+        "ratioApresVague2": 3.472283
+      },
+      {
+        "domaine": "analyse-donnees",
+        "indice": "fin",
+        "ratioScratch": 3.583449,
+        "ratioApresVague1": 3.496091,
+        "ratioApresVague2": 3.689352
+      },
+      {
+        "domaine": "cybersecurite",
+        "indice": "debut",
+        "ratioScratch": 3.261825,
+        "ratioApresVague1": 3.368878,
+        "ratioApresVague2": 3.546929
+      },
+      {
+        "domaine": "cybersecurite",
+        "indice": "fin",
+        "ratioScratch": 2.759517,
+        "ratioApresVague1": 3.388581,
+        "ratioApresVague2": 3.584422
+      },
+      {
+        "domaine": "medecine-sante",
+        "indice": "debut",
+        "ratioScratch": 2.874192,
+        "ratioApresVague1": 3.361626,
+        "ratioApresVague2": 3.502744
+      },
+      {
+        "domaine": "medecine-sante",
+        "indice": "fin",
+        "ratioScratch": 3.193727,
+        "ratioApresVague1": 3.327417,
+        "ratioApresVague2": 3.612043
+      },
+      {
+        "domaine": "commerce-economie",
+        "indice": "debut",
+        "ratioScratch": 2.943875,
+        "ratioApresVague1": 3.384793,
+        "ratioApresVague2": 3.603583
+      },
+      {
+        "domaine": "commerce-economie",
+        "indice": "fin",
+        "ratioScratch": 3.566786,
+        "ratioApresVague1": 3.363223,
+        "ratioApresVague2": 3.445532
+      },
+      {
+        "domaine": "langue-communication",
+        "indice": "debut",
+        "ratioScratch": 2.9589,
+        "ratioApresVague1": 3.405763,
+        "ratioApresVague2": 3.448687
+      },
+      {
+        "domaine": "langue-communication",
+        "indice": "fin",
+        "ratioScratch": 3.082963,
+        "ratioApresVague1": 3.385076,
+        "ratioApresVague2": 3.625963
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "indice": "debut",
+        "ratioScratch": 3.573662,
+        "ratioApresVague1": 3.467785,
+        "ratioApresVague2": 3.350718
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "indice": "fin",
+        "ratioScratch": 3.858085,
+        "ratioApresVague1": 3.480362,
+        "ratioApresVague2": 3.410273
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "indice": "debut",
+        "ratioScratch": 3.213962,
+        "ratioApresVague1": 3.413293,
+        "ratioApresVague2": 3.499744
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "indice": "fin",
+        "ratioScratch": 3.473797,
+        "ratioApresVague1": 3.41217,
+        "ratioApresVague2": 3.447385
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "indice": "debut",
+        "ratioScratch": 3.502564,
+        "ratioApresVague1": 3.439178,
+        "ratioApresVague2": 3.469266
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "indice": "fin",
+        "ratioScratch": 3.594308,
+        "ratioApresVague1": 3.415772,
+        "ratioApresVague2": 3.474004
+      },
+      {
+        "domaine": "droit-administration",
+        "indice": "debut",
+        "ratioScratch": 3.218639,
+        "ratioApresVague1": 3.408123,
+        "ratioApresVague2": 3.376624
+      },
+      {
+        "domaine": "droit-administration",
+        "indice": "fin",
+        "ratioScratch": 3.06817,
+        "ratioApresVague1": 3.41631,
+        "ratioApresVague2": 3.405847
+      },
+      {
+        "domaine": "education-recherche",
+        "indice": "debut",
+        "ratioScratch": 3.51911,
+        "ratioApresVague1": 3.389209,
+        "ratioApresVague2": 3.376361
+      },
+      {
+        "domaine": "education-recherche",
+        "indice": "fin",
+        "ratioScratch": 3.102432,
+        "ratioApresVague1": 3.407668,
+        "ratioApresVague2": 3.381535
+      },
+      {
+        "domaine": "transport-immobilier",
+        "indice": "debut",
+        "ratioScratch": 3.058124,
+        "ratioApresVague1": 3.419143,
+        "ratioApresVague2": 3.508006
+      },
+      {
+        "domaine": "transport-immobilier",
+        "indice": "fin",
+        "ratioScratch": 3.809642,
+        "ratioApresVague1": 3.414247,
+        "ratioApresVague2": 3.460426
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "indice": "debut",
+        "ratioScratch": 2.931037,
+        "ratioApresVague1": 3.412385,
+        "ratioApresVague2": 3.367516
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "indice": "fin",
+        "ratioScratch": 3.297755,
+        "ratioApresVague1": 3.402116,
+        "ratioApresVague2": 3.364107
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "indice": "debut",
+        "ratioScratch": 3.805448,
+        "ratioApresVague1": 3.372624,
+        "ratioApresVague2": 3.413911
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "indice": "fin",
+        "ratioScratch": 3.658683,
+        "ratioApresVague1": 3.337536,
+        "ratioApresVague2": 3.427676
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "indice": "debut",
+        "ratioScratch": 3.211405,
+        "ratioApresVague1": 3.321262,
+        "ratioApresVague2": 3.426882
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "indice": "fin",
+        "ratioScratch": 3.181538,
+        "ratioApresVague1": 3.311836,
+        "ratioApresVague2": 3.429137
+      }
+    ],
+    "vague2": [
+      {
+        "domaine": "recherche-web",
+        "indice": "debut",
+        "ratioAvantVague2": 3.306241,
+        "ratioApresVague2": 3.40743
+      },
+      {
+        "domaine": "recherche-web",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303851,
+        "ratioApresVague2": 3.413738
+      },
+      {
+        "domaine": "controle-donnees",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303292,
+        "ratioApresVague2": 3.407037
+      },
+      {
+        "domaine": "controle-donnees",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303025,
+        "ratioApresVague2": 3.397711
+      },
+      {
+        "domaine": "redaction-texte",
+        "indice": "debut",
+        "ratioAvantVague2": 3.300627,
+        "ratioApresVague2": 3.361218
+      },
+      {
+        "domaine": "redaction-texte",
+        "indice": "fin",
+        "ratioAvantVague2": 3.30004,
+        "ratioApresVague2": 3.330418
+      },
+      {
+        "domaine": "analyse-documents",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302551,
+        "ratioApresVague2": 3.316608
+      },
+      {
+        "domaine": "analyse-documents",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302255,
+        "ratioApresVague2": 3.309506
+      },
+      {
+        "domaine": "generation-code",
+        "indice": "debut",
+        "ratioAvantVague2": 3.304398,
+        "ratioApresVague2": 3.307093
+      },
+      {
+        "domaine": "generation-code",
+        "indice": "fin",
+        "ratioAvantVague2": 3.30474,
+        "ratioApresVague2": 3.305331
+      },
+      {
+        "domaine": "analyse-donnees",
+        "indice": "debut",
+        "ratioAvantVague2": 3.304627,
+        "ratioApresVague2": 3.304761
+      },
+      {
+        "domaine": "analyse-donnees",
+        "indice": "fin",
+        "ratioAvantVague2": 3.304273,
+        "ratioApresVague2": 3.304304
+      },
+      {
+        "domaine": "cybersecurite",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302175,
+        "ratioApresVague2": 3.302363
+      },
+      {
+        "domaine": "cybersecurite",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302867,
+        "ratioApresVague2": 3.302027
+      },
+      {
+        "domaine": "medecine-sante",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302391,
+        "ratioApresVague2": 3.302316
+      },
+      {
+        "domaine": "medecine-sante",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302336,
+        "ratioApresVague2": 3.302456
+      },
+      {
+        "domaine": "commerce-economie",
+        "indice": "debut",
+        "ratioAvantVague2": 3.301542,
+        "ratioApresVague2": 3.302339
+      },
+      {
+        "domaine": "commerce-economie",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302871,
+        "ratioApresVague2": 3.301981
+      },
+      {
+        "domaine": "langue-communication",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302841,
+        "ratioApresVague2": 3.302494
+      },
+      {
+        "domaine": "langue-communication",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302112,
+        "ratioApresVague2": 3.301921
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "indice": "debut",
+        "ratioAvantVague2": 3.30312,
+        "ratioApresVague2": 3.303413
+      },
+      {
+        "domaine": "ingenierie-industrie",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303183,
+        "ratioApresVague2": 3.302267
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "indice": "debut",
+        "ratioAvantVague2": 3.301599,
+        "ratioApresVague2": 3.302442
+      },
+      {
+        "domaine": "art-creation-multimedia",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303657,
+        "ratioApresVague2": 3.301733
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "indice": "debut",
+        "ratioAvantVague2": 3.30268,
+        "ratioApresVague2": 3.302284
+      },
+      {
+        "domaine": "agriculture-environnement",
+        "indice": "fin",
+        "ratioAvantVague2": 3.301697,
+        "ratioApresVague2": 3.302519
+      },
+      {
+        "domaine": "droit-administration",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303396,
+        "ratioApresVague2": 3.303936
+      },
+      {
+        "domaine": "droit-administration",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303055,
+        "ratioApresVague2": 3.30272
+      },
+      {
+        "domaine": "education-recherche",
+        "indice": "debut",
+        "ratioAvantVague2": 3.302483,
+        "ratioApresVague2": 3.302032
+      },
+      {
+        "domaine": "education-recherche",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302687,
+        "ratioApresVague2": 3.303156
+      },
+      {
+        "domaine": "transport-immobilier",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303334,
+        "ratioApresVague2": 3.303206
+      },
+      {
+        "domaine": "transport-immobilier",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303153,
+        "ratioApresVague2": 3.303671
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303388,
+        "ratioApresVague2": 3.302167
+      },
+      {
+        "domaine": "sciences-humaines-sociales",
+        "indice": "fin",
+        "ratioAvantVague2": 3.302449,
+        "ratioApresVague2": 3.303336
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "indice": "debut",
+        "ratioAvantVague2": 3.303504,
+        "ratioApresVague2": 3.303395
+      },
+      {
+        "domaine": "ia-specialisee-emergente",
+        "indice": "fin",
+        "ratioAvantVague2": 3.303232,
+        "ratioApresVague2": 3.303166
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "indice": "debut",
+        "ratioAvantVague2": 3.304734,
+        "ratioApresVague2": 3.30454
+      },
+      {
+        "domaine": "apprentissage-entre-ia",
+        "indice": "fin",
+        "ratioAvantVague2": 3.304064,
+        "ratioApresVague2": 3.304532
+      }
+    ]
+  }
+}
