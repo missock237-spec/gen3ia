@@ -55,7 +55,19 @@ const ENDPOINTS = [
   ["robots", "/robots.txt"],
   ["llms.txt", "/llms.txt"],
   ["login", "/login"],
+  // it.73/74 — surface embarquée + sobriété déclarée. Le snapshot binaire
+  // (1,5 Mo) n'est PAS sondé ici (48 téléchargements/jour = gaspillage) :
+  // la sonde locale scripts/sonde_regression_prod.mjs le vérifie (magie+taille).
+  // Endpoints NOUVEAUX du build en cours : marqués dans NOUVEAUX (la parité
+  // des listes avec la sonde de régression reste des paires littérales).
+  ["mobile", "/mobile"],
+  ["api-energie", "/api/energie"],
 ];
+
+/** Endpoints introduits par le build courant : pendant la fenêtre PULL un
+ *  404 est un état de livraison CONNU (recatégorisé « attente »), pas une
+ *  régression — cf. recatégorisation après le calcul de lagSha. */
+const NOUVEAUX = new Set(["api-energie"]);
 
 /** Éligible au re-test post-swap : signatures de réchauffement transitoire.
  *  5xx (502/503 pendant la bascule), TTFB > seuil (cold start), ERR réseau.
@@ -65,7 +77,8 @@ function eligibleRetest(r) {
   return r.statut === "ERR" || (typeof r.statut === "number" && r.statut >= 500) || r.raison.startsWith("TTFB");
 }
 
-async function sondeEndpoint([nom, chemin]) {
+async function sondeEndpoint(e) {
+  const [nom, chemin] = e;
   const debut = Date.now();
   const controle = new AbortController();
   const minuteur = setTimeout(() => controle.abort(), Math.max(MAX_TTFB_MS + 4000, 10000));
@@ -78,10 +91,10 @@ async function sondeEndpoint([nom, chemin]) {
     clearTimeout(minuteur);
     const ttfb = Date.now() - debut;
     const statutOk = (r.status >= 200 && r.status < 400) || r.status === 401;
-    return { nom, chemin, statut: r.status, ttfb, ok: statutOk && ttfb <= MAX_TTFB_MS, raison: !statutOk ? "statut inattendu" : ttfb > MAX_TTFB_MS ? `TTFB > ${MAX_TTFB_MS} ms` : "" };
-  } catch (e) {
+    return { nom, chemin, statut: r.status, ttfb, ok: statutOk && ttfb <= MAX_TTFB_MS, nouveau: NOUVEAUX.has(nom), raison: !statutOk ? "statut inattendu" : ttfb > MAX_TTFB_MS ? `TTFB > ${MAX_TTFB_MS} ms` : "" };
+  } catch (e2) {
     clearTimeout(minuteur);
-    return { nom, chemin, statut: "ERR", ttfb: Date.now() - debut, ok: false, raison: String(e?.cause?.code ?? e?.message ?? e).slice(0, 60) };
+    return { nom, chemin, statut: "ERR", ttfb: Date.now() - debut, ok: false, nouveau: NOUVEAUX.has(nom), raison: String(e2?.cause?.code ?? e2?.message ?? e2).slice(0, 60) };
   }
 }
 
@@ -112,6 +125,18 @@ const buildDate = version?.buildDate ?? null;
 const ageBuildHeures = buildDate ? (Date.now() - Date.parse(buildDate)) / 3_600_000 : Number.POSITIVE_INFINITY;
 const lagSha = Boolean(shaM && prodSha && !shaM.startsWith(prodSha));
 const livraisonBloquee = lagSha && ageBuildHeures > LIVRAISON_BLOQUEE_HEURES;
+
+/* Endpoints NOUVEAUX du build en cours (it.74) : pendant la fenêtre PULL
+ * (poller 2 min, jusqu'à ~21 min), le build servi ≠ main et un 404 est un
+ * état de livraison CONNU — pas une régression. Recatégorisé « attente »
+ * (vert, raison explicite). Une fois le build à jour (!lagSha), un 404
+ * redevient une RÉGRESSION RÉELLE (comportement historique inchangé). */
+for (const r of resultats) {
+  if (r.nouveau && !r.ok && r.statut === 404 && lagSha) {
+    r.ok = true;
+    r.raison = `en attente de basculement PULL (build servi ${prodSha?.slice(0, 8)} ≠ main ${shaM?.slice(0, 8)})`;
+  }
+}
 
 const echecsEndpoints = resultats.filter((r) => !r.ok);
 

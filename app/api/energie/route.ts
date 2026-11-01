@@ -1,0 +1,62 @@
+import { NextResponse } from "next/server";
+
+import { PROFILS_ENERGIE, VAR_ENV_PROFIL_ENERGIE } from "@/lib/neural/core/v2/energie";
+import { profilEnergieActif } from "@/lib/neural/core/v2/profil-production";
+import { lireCompteurEnergieProcess } from "@/lib/neural/core/v2/compteur-energie-process";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/energie — SOBRIÉTÉ ÉNERGÉTIQUE DÉCLARÉE (it.74, candidat №1
+ * déclaré it.73 §7.1) : statut public du profil d'énergie actif et MESURE
+ * réelle de la réduction de charge serveur.
+ *
+ * Réponse : { profil, varEnv, compteur, honnetete }
+ *  - profil   : profil actif (« plein » historique / « eco » / « telephone »),
+ *               SA SOURCE (variable d'environnement locale, fichier versionné
+ *               assets/config/profil-energie-production.json, ou repli
+ *               honnête) et sa description déclarée (module pur it.73) ;
+ *  - compteur : fenêtres neuronales EXÉCUTÉES vs ÉVITÉES depuis le
+ *               démarrage du processus — sommes d'entiers mesurés (jamais
+ *               estimées), réinitialisées à chaque redéploiement ;
+ *  - honnetete : la règle structurante (aucune économie silencieuse — le
+ *               profil « plein » est le comportement historique bit à bit ;
+ *               « eco »/« telephone » répondent par le MÊME pont lexical,
+ *               même texte, testé A/B it.73 ; hors cadre = chemin complet).
+ *
+ * Public et sans donnée sensible (même convention que /api/health) — c'est
+ * la mesure publique de la demande propriétaire : « diminuer la
+ * consommation d'énergie de gen3 tout en gardant sa qualité de réponse ».
+ * ULTRA-LÉGER : deux lectures de mémoire + une lecture JSON disque (~1 Ko).
+ * JAMAIS CACHÉE (no-store) — le compteur doit refléter l'instant.
+ */
+export async function GET() {
+  const actif = profilEnergieActif();
+  const compteur = lireCompteurEnergieProcess();
+
+  return NextResponse.json(
+    {
+      profil: {
+        actif: actif.profil,
+        source: actif.source,
+        description: PROFILS_ENERGIE[actif.profil].description,
+      },
+      varEnv: VAR_ENV_PROFIL_ENERGIE,
+      compteur,
+      honnetete: {
+        regle:
+          "aucune économie silencieuse — « plein » = comportement historique bit à bit (défaut) ; « eco »/« telephone » = économies déclarées et mesurées",
+        qualite:
+          "les questions du cadre d'apprentissage sont répondues par le MÊME pont lexical que la production (même texte, testé A/B it.73) ; hors cadre = chemin historique complet inchangé",
+        mesure:
+          "compteur cumulé en mémoire du processus (réinitialisé à chaque redéploiement) — fenêtres exécutées vs évitées, sommes d'entiers mesurés",
+        priorite:
+          "variable d'environnement (opérateur local) > fichier versionné (dépôt) > « plein »",
+      },
+    },
+    {
+      status: 200,
+      headers: { "Cache-Control": "no-store" },
+    },
+  );
+}

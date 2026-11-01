@@ -60,7 +60,10 @@ import {
 import { CortexColumnnaire, CORTEX_CONFIG_DEFAUTS } from "./core/v2/cortex-columnnaire";
 // it.73 — SOBRIÉTÉ ÉNERGÉTIQUE : profil d'énergie (eco/telephone → horloges
 // u32 compactes sur le cortex de production, −8 Mo résidents à 2^20).
-import { profilEnergieDepuisEnv } from "./core/v2/energie";
+// it.74 — canal VERSIONNÉ : profilEnergieActif() honore aussi le fichier
+// committé assets/config/profil-energie-production.json (env > fichier >
+// plein) — l'activation éco du VPS arrive par le canal PULL standard.
+import { profilEnergieActif } from "./core/v2/profil-production";
 import { ChampCorticalGen3, TAILLE_CHAMP } from "./core/v2/champ-cortical";
 import { EffecteurCortexV2 } from "./core/v2/effecteur-cortex";
 import { CoucheOndesNeuronales } from "./core/couche-rpia";
@@ -250,7 +253,7 @@ export function getNeuralRuntime(): NeuralRuntime {
     const cortex = new CortexColumnnaire({
       colonnes: configV2.colonnes,
       normalisationHomeostatique: true,
-      horlogesCompactes: profilEnergieDepuisEnv() !== "plein",
+      horlogesCompactes: profilEnergieActif().profil !== "plein",
     });
     const champ = new ChampCorticalGen3(SEED_RUNTIME);
     cortexV2 = new EffecteurCortexV2(reseau, cortex, champ, SEED_RUNTIME + 2);

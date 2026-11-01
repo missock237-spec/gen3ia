@@ -100,6 +100,10 @@ const PUBLIC_API_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/api/neural/questions": "public",
   "/api/status": "systeme",
   "/api/deploy-info": "systeme",
+  // ÉNERGIE (it.74) : profil d'énergie actif + compteur réel de fenêtres
+  // évitées/exécutées — aucune donnée utilisateur, lecture seule, la mesure
+  // publique de la sobriété déclarée (demande propriétaire it.73).
+  "/api/energie": "systeme",
   // SLI Prometheus (Task G) : la route applique SA PROPRE garde Bearer
   // (METRICS_TOKEN via timingSafeStringEqual, même convention que /api/cron)
   // — public ici = « non bloqué par la liste blanche », pas « sans auth ».

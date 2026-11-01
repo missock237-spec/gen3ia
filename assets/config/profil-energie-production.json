@@ -1,0 +1,13 @@
+{
+  "profil": "eco",
+  "declare": true,
+  "it": 74,
+  "date": "2026-11-01",
+  "motif": "Demande du propriétaire (it.73) : « cherche un moyen de diminuer la consommation d'énergie de gen3 tout en gardant sa qualité de réponse et son efficacité ». Activation déclarée du profil éco en production : les questions du cadre d'apprentissage sont répondues par le pont vocation SANS fenêtre neuronale — zéro RPIA, zéro cycle, horloges u32 exactes.",
+  "qualite": {
+    "texte": "identique au chemin plein — mêmes fonctions pures, testé A/B bit à bit (energie-eco.guard.test.ts, it.73)",
+    "hors-cadre": "chemin historique complet inchangé",
+    "surveillance": "compteur réel de fenêtres évitées/exécutées exposé par /api/energie"
+  },
+  "retourArriere": "mettre profil à \"plein\" (ou supprimer ce fichier) et redéployer — repli honnête garanti par la garde 43ᵉ"
+}

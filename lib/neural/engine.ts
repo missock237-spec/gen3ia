@@ -27,8 +27,17 @@ import { composerDepuisConnaissances } from "./connaissances-pont";
 import { composerDepuisVocation } from "./vocation-pont";
 // it.73 — SOBRIÉTÉ ÉNERGÉTIQUE : profils plein (historique exact) / eco /
 // telephone — cf. lib/neural/core/v2/energie.ts (module pur partagé).
-import { PROFILS_ENERGIE, profilEnergieDepuisEnv } from "./core/v2/energie";
+// it.74 — canal VERSIONNÉ : le profil actif peut venir du fichier committé
+// assets/config/profil-energie-production.json (priorité env > fichier >
+// plein — cf. profil-production.ts) ; chaque économie reste DÉCLARÉE et le
+// compteur de fenêtres (évitées / exécutées) mesure la réduction réelle.
+import { PROFILS_ENERGIE } from "./core/v2/energie";
 import type { ProfilEnergie } from "./core/v2/energie";
+import { profilEnergieActif } from "./core/v2/profil-production";
+import {
+  enregistrerFenetreExecutee,
+  enregistrerFenetreEvitee,
+} from "./core/v2/compteur-energie-process";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 import type { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
@@ -220,7 +229,7 @@ export class NeuralEngine {
    * composés SANS fenêtre neuronale), la réponse part DIRECTEMENT —
    * zéro RPIA, zéro cycle du noyau, même texte. cf. PROFILS_ENERGIE.
    */
-  private readonly profilEnergie: ProfilEnergie = profilEnergieDepuisEnv();
+  private readonly profilEnergie: ProfilEnergie = profilEnergieActif().profil;
 
   constructor(
     private readonly noyau: NoyauCentralGen3,
@@ -437,6 +446,8 @@ export class NeuralEngine {
     if (!dernierRapport) {
       throw new Error("Aucun cycle neuronal n'a pu être exécuté.");
     }
+    // it.74 — compteur d'énergie du processus : fenêtre complète exécutée.
+    enregistrerFenetreExecutee();
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     // PILOTAGE PLATEFORME d'abord (données réelles du compte) — puis le PONT
@@ -552,6 +563,8 @@ export class NeuralEngine {
     if (!dernierRapport) {
       throw new Error("Aucun cycle neuronal n'a pu être exécuté.");
     }
+    // it.74 — compteur d'énergie du processus : fenêtre complète exécutée.
+    enregistrerFenetreExecutee();
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const knowledgeContext = options.knowledgeContext?.trim() ?? "";
@@ -640,6 +653,8 @@ export class NeuralEngine {
     if (!dernierRapport) {
       throw new Error("Aucun cycle neuronal n'a pu être exécuté.");
     }
+    // it.74 — compteur d'énergie du processus : fenêtre complète exécutée.
+    enregistrerFenetreExecutee();
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const memoire = this.memoirePour(options);
@@ -1013,6 +1028,9 @@ export class NeuralEngine {
         description: PROFILS_ENERGIE[this.profilEnergie].description,
       },
     } as Record<string, unknown>;
+    // it.74 — compteur d'énergie du processus : cette fenêtre n'a PAS
+    // tourné (somme mesurée, exposée par /api/energie).
+    enregistrerFenetreEvitee(EPOQUES_RPIA_CHAT, NEURAL_CYCLES_PAR_GENERATION);
     this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
     return reponse;
