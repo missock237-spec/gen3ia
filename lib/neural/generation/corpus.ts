@@ -17,6 +17,8 @@
  * Module PUR — aucune dépendance Node.
  */
 
+import { CORPUS_DOMAINES_IT84 } from "./corpus-domaines-it84";
+
 /** Paire conversationnelle apprise par le cortex langagier. */
 export interface PaireLangage {
   /** Formulations de déclenchement (une paire = un motif appris). */
@@ -27,8 +29,8 @@ export interface PaireLangage {
   theme: string;
 }
 
-/** Corpus d'amorçage canonique de la plateforme Gen3ia. */
-export const CORPUS_GEN3: readonly PaireLangage[] = [
+/** Corpus d'amorçage canonique de la plateforme Gen3ia (base rédigée à la main). */
+const CORPUS_GEN3_BASE: readonly PaireLangage[] = [
   // ─── Salutations ───────────────────────────────────────────────────────
   {
     motif: "bonjour",
@@ -851,5 +853,13 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
   },
 ];
 
-/** Nombre de paires du corpus d'amorçage. */
+// it.84 — 200 paires réelles des 19 domaines (assimilées par ONDES au cortex
+// 1M, voir scripts/entrainement-ondes-tous-domaines.ts) intégrées au corpus
+// d'amorçage : le chat multi-domaines utilise ce savoir comme code source.
+/** Corpus complet : base rédigée + savoir multi-domaines it.84 (immuable). */
+export const CORPUS_GEN3: readonly PaireLangage[] = [
+  ...CORPUS_GEN3_BASE,
+  ...CORPUS_DOMAINES_IT84,
+];
+
 export const TAILLE_CORPUS_GEN3 = CORPUS_GEN3.length;
