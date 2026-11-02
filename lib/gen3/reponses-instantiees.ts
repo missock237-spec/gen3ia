@@ -96,10 +96,14 @@ function syllogismeInstantie(message: string): string | null {
   // l'assertion « X est un/une a » (a au singulier ou au pluriel)
   const aSingulier = singulier(a);
   const assertion = message.match(
-    new RegExp(`([\\wÀ-ÿ'-]{2,30})\\s+est\\s+(?:un|une|le|la|l')\\s+${aSingulier}\\b`, "i"),
+    new RegExp(
+      `((?:cette|ce|cet|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|leur|leurs|notre|nos|votre|vos)?\\s*[\\wÀ-ÿ'-]{2,30})\\s+est\\s+((?:un|une|le|la|l'))\\s+${aSingulier}\\b`,
+      "i",
+    ),
   );
   if (!assertion) return null;
-  const sujet = assertion[1];
+  const sujet = assertion[1].trim();
+  const articleOrig = assertion[2];
   const conversePosee =
     new RegExp(`tous\\s+les\\s+${b}\\b`, "i").test(message) ||
     /valable/i.test(message);
@@ -109,7 +113,7 @@ function syllogismeInstantie(message: string): string | null {
   return [
     "1) On raisonne par déduction : si les prémisses sont vraies, la conclusion est certaine.",
     `2) Première prémisse : tous les ${a} sont des ${b}.`,
-    `3) Deuxième prémisse : ${sujet} est ${aSingulier}.`,
+    `3) Deuxième prémisse : ${sujet} est ${articleOrig} ${aSingulier}.`,
     `4) Ce qui vaut pour tous les ${a} vaut donc aussi pour ${sujet}.`,
     `Donc : ${sujet} fait partie des ${b}.${converse}`,
   ].join(" ");
