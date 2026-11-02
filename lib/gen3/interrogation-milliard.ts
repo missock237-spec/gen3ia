@@ -664,14 +664,16 @@ export function questionDuBalayage(j: number, N: number): QuestionMilliard {
  * seraient noyées par math_verbal (35 644 / 1,89 Md = 0,002 % de l'espace). */
 const PLANCHER_QUOTA_FAMILLE = 0.02;
 
+export type PlanBalayage = Record<FamilleMilliard, number>;
+
 /** Plan de stratification : nombre de questions par famille pour un balayage
  * de N questions. math_verbal reçoit la part dominante du reste ; chaque
  * autre famille reçoit au moins le plancher, plafonné à sa capacité réelle
  * (impossible d'échantillonner plus de questions distinctes qu'il n'y a
  * d'indices). */
-export function planifierBalayage(N: number): Record<FamilleMilliard, number> {
+export function planifierBalayage(N: number): PlanBalayage {
   const caps = capaciteParFamille();
-  const plan = {} as Record<FamilleMilliard, number>;
+  const plan = {} as PlanBalayage;
   let alloue = 0;
   for (const f of FAMILLES_MILLIARD) {
     if (f === "math_verbal") continue;
@@ -704,8 +706,11 @@ export function questionStratifiee(j: number, N: number): QuestionMilliard {
   const caps = capaciteParFamille();
   const bornes = bornesParFamille();
   let acc = 0;
-  for (const f of FAMILLES_MILLIARD) {
-    const nf = plan[f];
+  // itération DANS L'ORDRE DU PLAN (les familles de diversité y sont
+  // insérées d'abord, math_verbal en dernier — voir planifierBalayage) :
+  // les familles épuisables (35 644 questions au total) sont ainsi posées
+  // dès le premier segment du balayage du milliard.
+  for (const [f, nf] of Object.entries(plan) as Array<[FamilleMilliard, number]>) {
     if (j < acc + nf) {
       const jLocal = j - acc;
       const indexLocal = Math.min(

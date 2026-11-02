@@ -23,6 +23,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAPACITE_MIN_MILLIARD,
   FAMILLES_MILLIARD,
+  type FamilleMilliard,
   N_TOTAL_MILLIARD,
   bornesParFamille,
   capaciteParFamille,
@@ -228,8 +229,9 @@ describe("Balayages (systématique et stratifié)", () => {
     const somme = Object.values(plan).reduce((a, b) => a + b, 0);
     expect(somme).toBe(N);
     // chaque famille est vérifiée AU SEIN de son propre bloc du balayage
+    // (l'ordre des blocs est celui du plan : diversité d'abord, math ensuite)
     let acc = 0;
-    for (const f of FAMILLES_MILLIARD) {
+    for (const [f] of Object.entries(plan) as Array<[FamilleMilliard, number]>) {
       const nf = plan[f];
       expect(questionStratifiee(acc, N).famille).toBe(f); // tête de bloc
       if (nf > 1) {
@@ -238,8 +240,9 @@ describe("Balayages (systématique et stratifié)", () => {
       acc += nf;
     }
     expect(acc).toBe(N);
-    expect(questionStratifiee(N - 1, N).famille).toBe(
-      FAMILLES_MILLIARD[FAMILLES_MILLIARD.length - 1],
-    );
+    // le tout dernier ordre du balayage tombe dans la DERNIÈRE famille du
+    // plan (math_verbal absorbe le reste du milliard en fin de balayage)
+    const dernierFamillePlan = (Object.keys(plan) as FamilleMilliard[]).pop();
+    expect(questionStratifiee(N - 1, N).famille).toBe(dernierFamillePlan);
   });
 });
