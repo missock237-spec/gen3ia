@@ -18,6 +18,9 @@
  */
 
 import { CORPUS_DOMAINES_IT84 } from "./corpus-domaines-it84";
+// it.85 — 192 paires PP « raisonnement humain » (générateur déterministe,
+// 999 935 paires assimilées par ondes, bande 0 « raisonnement-humain-fr »)
+import { CORPUS_RAISONNEMENT_IT85 } from "./corpus-raisonnement-it85";
 
 /** Paire conversationnelle apprise par le cortex langagier. */
 export interface PaireLangage {
@@ -856,10 +859,16 @@ const CORPUS_GEN3_BASE: readonly PaireLangage[] = [
 // it.84 — 200 paires réelles des 19 domaines (assimilées par ONDES au cortex
 // 1M, voir scripts/entrainement-ondes-tous-domaines.ts) intégrées au corpus
 // d'amorçage : le chat multi-domaines utilise ce savoir comme code source.
-/** Corpus complet : base rédigée + savoir multi-domaines it.84 (immuable). */
+// it.85 — 192 paires PP « raisonnement humain » (16 familles de raisonnement,
+// 999 935 paires assimilées par ondes, bande 0 « raisonnement-humain-fr »,
+// scripts/entrainement-raisonnement-humain-it85.ts) : le chat raisonne pas
+// à pas avec le savoir appris.
+/** Corpus complet : base rédigée + savoir multi-domaines it.84 + raisonnement
+ *  humain it.85 (immuable). */
 export const CORPUS_GEN3: readonly PaireLangage[] = [
   ...CORPUS_GEN3_BASE,
   ...CORPUS_DOMAINES_IT84,
+  ...CORPUS_RAISONNEMENT_IT85,
 ];
 
 export const TAILLE_CORPUS_GEN3 = CORPUS_GEN3.length;
