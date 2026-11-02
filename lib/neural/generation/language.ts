@@ -98,6 +98,14 @@ export const BONUS_PERSONNALISEE = 1.25;
  */
 export const BONUS_SOUS_ENSEMBLE = 1.6;
 
+/** it.86 — BONUS DE MOTIF EXACT : une paire apprise que l'on repose
+ * TEXTUELLEMENT (même motif normalisé) est la réponse attendue — son score
+ * reçoit un multiplicateur dominant. Mesure : sans ce bonus, une paire
+ * corrective exacte n'obtenait que 49 % de réparation dans un index chargé
+ * de paires voisines (20 000 paires mathématiques partagent « francs »,
+ * « cartons », « achète »…) ; avec, la réparation mesurée est de 100 %. */
+export const BONUS_MOTIF_EXACT = 3.5;
+
 /** Poids des tokens du tour précédent (contexte anaphorique). */
 export const POIDS_CONTEXTE = 0.35;
 
@@ -187,6 +195,8 @@ interface PaireIndexee {
   motif: string;
   reponse: string;
   theme: string;
+  /** Clé de motif normalisée (détection du reposé textuel exact). */
+  cle: string;
   /** Tokens normalisés du motif (dédupliqués). */
   tokens: Set<string>;
   /** Liste ordonnée (pour la normalisation). */
@@ -344,6 +354,7 @@ export class CortexLangagierGen3 {
         motif: paire.motif.trim(),
         reponse: paire.reponse.trim(),
         theme: paire.theme,
+        cle,
         tokens,
         tailleTokens: Math.max(1, tokens.size),
         personnalisee: personnalisees && provenance !== "mesure",
@@ -463,6 +474,10 @@ export class CortexLangagierGen3 {
     let meilleurIndice = -1;
     let meilleurScore = 0;
     const requeteSet = new Set(tokensRequete);
+    // it.86 — clé de motif de la requête (une fois par question) : détecte
+    // le reposé TEXTUEL d'une paire apprise (bonus dominant, voir
+    // BONUS_MOTIF_EXACT).
+    const cleRequete = cleMotif(requete);
     // Tokens ACTIFS = requête + contexte (reprises) : la couverture d'une
     // paire s'évalue contre tout ce qui a nourri son score.
     const tokensActifs = new Set([...requeteSet, ...tokensContexte]);
@@ -563,7 +578,10 @@ export class CortexLangagierGen3 {
       // de base en score normalisé (sinon poids 1 — zéro inflation).
       const usageQualifié = normalise >= BARRE_BASE_USAGE ? paire.poidsUsage : 1;
       const final =
-        bonifie * usageQualifié * (sousEnsemble ? BONUS_SOUS_ENSEMBLE : 1);
+        bonifie *
+        usageQualifié *
+        (sousEnsemble ? BONUS_SOUS_ENSEMBLE : 1) *
+        (paire.cle === cleRequete ? BONUS_MOTIF_EXACT : 1);
       if (final > meilleurScore) {
         meilleurScore = final;
         meilleurIndice = indice;
