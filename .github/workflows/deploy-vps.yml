@@ -414,13 +414,22 @@ jobs:
       # utilisateur, gen3ia.online). Garde anti-doublon : si une escalade
       # du même titre est déjà ouverte, on la commente au lieu d'en créer
       # une seconde.
-      - name: "Contrôle de livraison PULL après CD (SLE 10 min — issue #109)"
+      - name: "Contrôle de livraison PULL après CD (SLE 20 min — issue #109, calibré #120)"
         id: controle_pull
         if: always() && steps.verify_build.outcome != 'success' && steps.publication.outcome == 'success' && !cancelled()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SLE_SECONDES=600   # promesse documentée « ≤ 2 min » + marge backoff : escalade à 10 min
+          # Calibrage v2 (issue #120, 2026-11-02) : le SLE de 600 s violait
+          # systématiquement des livraisons qui se corrigeaient toutes
+          # seules quelques minutes plus tard — faux rouge + escalades
+          # fantômes. Le pire cas STRUCTUREL du canal pull est :
+          #   poller PM2 (≤ 2 min) + téléchargement 200 Mo (curl -m 600
+          #   : jusqu'à 10 min) + finisher (≈ 1-2 min) ≈ 14 min.
+          # 1200 s couvre ce pire cas avec marge ; l'escalade ne se
+          # déclenche plus que sur une vraie panne (backoff 15 min du
+          # poller ou lien mort), pas sur un téléchargement lent.
+          SLE_SECONDES=1200
           PAS_SECONDES=30
           TITRE="🚨 Production en retard sur main — intervention console VPS requise"
           echo "verify_build non prouvé (${{ steps.verify_build.outcome }}) — contrôle de livraison PULL activé (SLE ${SLE_SECONDES} s après publication)."

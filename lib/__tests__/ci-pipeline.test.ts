@@ -353,21 +353,26 @@ describe("Contrôle de livraison PULL après CD (.github/workflows/deploy-vps.ym
     // sans aucune mesure de l'écart prod↔release. Le step v8 doit donc
     // exister, s'armer avec always() (un step « skipped » n'empêche pas
     // le contrôle) et exiger une publication réussie.
-    expect(cd).toContain('name: "Contrôle de livraison PULL après CD (SLE 10 min — issue #109)"');
+    expect(cd).toContain('name: "Contrôle de livraison PULL après CD (SLE 20 min — issue #109, calibré #120)"');
     expect(cd).toContain("id: controle_pull");
     expect(cd).toContain(
       "if: always() && steps.verify_build.outcome != 'success' && steps.publication.outcome == 'success' && !cancelled()",
     );
   });
 
-  it("SLE encodé 600 s, sondage 30 s, sur la vérité utilisateur gen3ia.online", () => {
-    // La promesse documentée est « ≤ 2 min » (cycle du poller) ; le SLE
-    // d'escalade encode 600 s (marge backoff 900 s). Le sondage lit
-    // gen3ia.online/version.json (vérité visiteur), jamais l'état interne
-    // du VPS.
-    expect(cd).toContain("SLE_SECONDES=600");
+  it("SLE encodé 1200 s (calibré #120), sondage 30 s, sur la vérité utilisateur gen3ia.online", () => {
+    // Calibrage v2 (issue #120, 2026-11-02) : le SLE de 600 s violait
+    // des livraisons qui se corrigeaient toutes seules — le pire cas
+    // structurel du canal pull (poll 2 min + curl -m 600 + finisher)
+    // dépasse 600 s. 1200 s couvre ce pire cas : l'escalade ne se
+    // déclenche plus que sur une vraie panne, pas sur un download lent.
+    // Le sondage lit gen3ia.online/version.json (vérité visiteur),
+    // jamais l'état interne du VPS.
+    expect(cd).toContain("SLE_SECONDES=1200");
     expect(cd).toContain("PAS_SECONDES=30");
     expect(cd).toContain("https://gen3ia.online/version.json?cb=");
+    // Le calibrage doit rester documenté dans le workflow lui-même.
+    expect(cd).toContain("Calibrage v2 (issue #120");
   });
 
   it("la référence du SLE est la publication de la release (meta.json), pas l'horloge du runner", () => {
@@ -480,5 +485,53 @@ describe("Backoff progressif du poller (scripts/vps-auto-deploy/pull-deploy.sh v
     expect(read("app/status/page.tsx")).toContain("nouvelle tentative rapide (1 min)");
     const cd = read(".github/workflows/deploy-vps.yml");
     expect(cd).toContain("backoff progressif du poller (pull-deploy.sh v3 : retry 60 s, puis 2 min, 5 min, plafond 15 min)");
+  });
+});
+
+describe("Reprise de téléchargement du poller (pull-deploy.sh v4 — issue #120)", () => {
+  const poller = read("scripts/vps-auto-deploy/pull-deploy.sh");
+
+  it("le tar partiel n'est plus jeté : curl -C - reprend au bon octet", () => {
+    // Issue #120 : repartir de zéro à chaque échec (200 Mo × N essais)
+    // portait les livraisons au-delà du SLE du CD. La reprise est le
+    // levier principal de la promesse de livraison.
+    expect(poller).toContain('OPT_RESUME=(-C -)');
+    expect(poller).toContain("tar partiel CONSERVÉ pour reprise");
+    // La suppression aveugle du tar en échec (v3) a disparu.
+    expect(poller).not.toContain("téléchargement du tar impossible — nouvelle tentative au prochain poll.\"");
+  });
+
+  it("le marqueur pull-partial.txt empêche tout resume croisé entre SHAs", () => {
+    // Reprendre le tar d'un AUTRE SHA produirait un fichier invalide.
+    // Le marqueur borne chaque partiel à son SHA cible.
+    expect(poller).toContain("PARTIAL_MARK=$STATE_DIR/pull-partial.txt");
+    expect(poller).toContain('[ "$(cat "$PARTIAL_MARK" 2>/dev/null)" = "$TARGET_SHA" ]');
+  });
+
+  it("le sha256 est téléchargé AVANT le tar (preuve d'intégrité disponible même si curl échoue)", () => {
+    // Le test « curl en échec mais tar complet et intègre » (exit 416 du
+    // resume sur fichier complet) exige la somme en main avant le tar.
+    const telechargement = poller.split("6. Téléchargement")[1] ?? "";
+    const positionSha = telechargement.indexOf("next-build.tar.gz.sha256");
+    const positionTar = telechargement.indexOf("next-build.tar.gz?_=");
+    expect(positionSha).toBeGreaterThanOrEqual(0);
+    expect(positionTar).toBeGreaterThan(positionSha);
+    expect(telechargement).toContain("curl en échec mais le tar est complet et intègre");
+  });
+
+  it("l'intégrité sha256 reste le verrou final : tar corrompu = purge + backoff, jamais de déploiement", () => {
+    expect(poller).toContain("(cd /tmp && sha256sum -c next-build.tar.gz.sha256) || {");
+    expect(poller).toContain("intégrité du tar invalide — fichiers purgés");
+    // Au succès, le marqueur de reprise n'a plus d'objet.
+    expect(poller).toContain('rm -f "$PARTIAL_MARK"   # tar complet et intègre');
+  });
+
+  it("le SLE du contrôle de livraison est calibré sur le pire cas du canal pull (1200 s ≥ 14 min)", () => {
+    const cd = read(".github/workflows/deploy-vps.yml");
+    expect(cd).toContain("SLE_SECONDES=1200");
+    // La justification du calibrage (poll 2 min + curl -m 600 + finisher)
+    // doit rester encodée : sans elle, un futur retour à 600 s redonnerait
+    // les faux rouges de l'issue #120.
+    expect(cd).toContain("poller PM2 (≤ 2 min) + téléchargement 200 Mo (curl -m 600");
   });
 });

@@ -154,20 +154,49 @@ if [ -f "$FAIL_FILE" ]; then
   fi
 fi
 
-# --- 6. Téléchargement + intégrité (échec = backoff, PAS de figeage) ---
+# --- 6. Téléchargement + intégrité (échec = backoff, PAS de figeage).
+#        v4 (issue #120, 2026-11-02) — REPRISE : un tar partiel d'un
+#        essai interrompu n'est plus jeté ; curl -C - reprend au bon
+#        octet au prochain poll. Repartir de zéro à chaque échec
+#        (200 Mo × N essais) était la vraie cause des livraisons
+#        dépassant le SLE du CD. Le marqueur pull-partial.txt garantit
+#        qu'on ne « reprend » jamais le tar d'un AUTRE SHA (un resume
+#        croisé produirait un tar invalide). L'intégrité sha256 reste
+#        le verrou final : un tar corrompu ne peut JAMAIS atteindre le
+#        finisher ; après une intégrité invalide, le tar est purgé —
+#        l'essai suivant repart proprement de zéro. ---
 log "PULL: nouveau build $TARGET_SHA — téléchargement depuis la release cd-latest…"
-curl -fsSL -m 600 -o "$DL_TAR" \
-  "https://github.com/$REPO/releases/download/cd-latest/next-build.tar.gz?_=$CACHEBUST" || {
-  log "PULL ERREUR: téléchargement du tar impossible — nouvelle tentative au prochain poll."
-  marquer_echec; rm -f "$DL_TAR"; exit 1; }
-[ -s "$DL_TAR" ] || { log "PULL ERREUR: tar vide — backoff."; marquer_echec; rm -f "$DL_TAR"; exit 1; }
-
-curl -fsSL -m 30 -o "$DL_SHA" \
+curl -fsSL -m 60 -o "$DL_SHA" \
   "https://github.com/$REPO/releases/download/cd-latest/next-build.tar.gz.sha256?_=$CACHEBUST" || {
-  log "PULL ERREUR: somme sha256 indisponible — backoff."; marquer_echec; rm -f "$DL_TAR"; exit 1; }
+  log "PULL ERREUR: somme sha256 indisponible — backoff."; marquer_echec; rm -f "$DL_SHA"; exit 1; }
+PARTIAL_MARK=$STATE_DIR/pull-partial.txt
+# set -u : pas d'élément dans un tableau vide — `${OPT[@]}` est sûr en
+# bash ≥ 4.4 (AlmaLinux EL8+/Ubuntu runners : bash 4.4+ / 5.x).
+if [ -s "$DL_TAR" ] && [ "$(cat "$PARTIAL_MARK" 2>/dev/null)" = "$TARGET_SHA" ]; then
+  log "PULL: reprise du téléchargement interrompu ($(stat -c%s "$DL_TAR" 2>/dev/null || echo 0) octets déjà obtenus)."
+  OPT_RESUME=(-C -)
+else
+  rm -f "$DL_TAR" "$PARTIAL_MARK"
+  OPT_RESUME=()
+fi
+printf '%s\n' "$TARGET_SHA" > "$PARTIAL_MARK" 2>/dev/null || true
+if ! curl -fsSL -m 600 ${OPT_RESUME[@]+"${OPT_RESUME[@]}"} -o "$DL_TAR" \
+    "https://github.com/$REPO/releases/download/cd-latest/next-build.tar.gz?_=$CACHEBUST"; then
+  # Le marqueur est posé (posé AVANT le curl) : le prochain poll reprendra
+  # au bon octet. Seule exception : le tar est DÉJÀ complet (exit 416 de
+  # « resume sur fichier complet ») — l'intégrité le prouve, on poursuit.
+  if (cd /tmp && sha256sum -c next-build.tar.gz.sha256) >/dev/null 2>&1; then
+    log "PULL: curl en échec mais le tar est complet et intègre — poursuite."
+  else
+    log "PULL ERREUR: téléchargement du tar impossible — tar partiel CONSERVÉ pour reprise — nouvelle tentative au prochain poll."
+    marquer_echec; exit 1;
+  fi
+fi
+[ -s "$DL_TAR" ] || { log "PULL ERREUR: tar vide — backoff."; marquer_echec; rm -f "$DL_TAR" "$PARTIAL_MARK"; exit 1; }
 (cd /tmp && sha256sum -c next-build.tar.gz.sha256) || {
   log "PULL ERREUR: intégrité du tar invalide — fichiers purgés, backoff."
-  marquer_echec; rm -f "$DL_TAR" "$DL_SHA"; exit 1; }
+  marquer_echec; rm -f "$DL_TAR" "$DL_SHA" "$PARTIAL_MARK"; exit 1; }
+rm -f "$PARTIAL_MARK"   # tar complet et intègre : la reprise n'a plus d'objet
 
 # --- 7. Finisher versionné AU MÊME SHA (jamais une copie obsolète) ---
 curl -fsSL -m 30 -o /tmp/cd-finisher.sh \
