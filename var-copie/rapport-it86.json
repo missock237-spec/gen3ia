@@ -1,0 +1,121 @@
+{
+  "date": "2026-11-02T17:34:16.968Z",
+  "iteration": "it.86",
+  "demande": "poser au total 1 milliard de questions à gen3 sur tous les domaines entraînés, vérifier les réponses, corriger la mémoire en cas d'erreur, depuis un compte utilisateur",
+  "balayage": {
+    "ordreTotal": 1000000000,
+    "debut": 0,
+    "fin": 300000,
+    "interrogees": 300000,
+    "progression": "0.0300 % du milliard",
+    "planMilliard": {
+      "deduction": 1152,
+      "conditionnel": 576,
+      "spatial": 23328,
+      "temporel": 10368,
+      "analogie": 80,
+      "causalite": 78,
+      "planification": 60,
+      "math_verbal": 999964358
+    },
+    "capaciteEspace": 1888396018
+  },
+  "verdicts": {
+    "exact": 164,
+    "methode": 99919,
+    "echec": 199917,
+    "parFamille": {
+      "math_verbal": {
+        "exact": 164,
+        "methode": 99919,
+        "echec": 199917,
+        "corriges": 299836
+      },
+      "deduction": {
+        "exact": 0,
+        "methode": 0,
+        "echec": 0,
+        "corriges": 0
+      },
+      "conditionnel": {
+        "exact": 0,
+        "methode": 0,
+        "echec": 0,
+        "corriges": 0
+      },
+      "spatial": {
+        "exact": 0,
+        "methode": 0,
+        "echec": 0,
+        "corriges": 0
+      },
+      "temporel": {
+        "exact": 0,
+        "methode": 0,
+        "echec": 0,
+        "corriges": 0
+      },
+      "analogie": {
+        "exact": 0,
+        "methode": 0,
+        "echec": 0,
+        "corriges": 0
+      },
+      "causalite": {
+        "exact": 0,
+        "methode": 0,
+        "echec": 0,
+        "corriges": 0
+      },
+      "planification": {
+        "exact": 0,
+        "methode": 0,
+        "echec": 0,
+        "corriges": 0
+      }
+    }
+  },
+  "correction": {
+    "memoire": {
+      "corriges": 299836,
+      "enMemoire": 1529,
+      "horsMemoire": 298337,
+      "periodeApprentissage": 200
+    },
+    "reparationEnLigne": {
+      "retests": 1499,
+      "reparees": 1499
+    },
+    "reparationFinale": {
+      "retests": 30,
+      "reparees": 30
+    },
+    "substrat": {
+      "source": "public/neural/cortex-raisonnement-it85.bin",
+      "octets": 12582960,
+      "colonnes": 1048576,
+      "bandePorteuse": 6,
+      "ondesGravees": 400030,
+      "mesureAvant": 0,
+      "mesureApres": 7,
+      "mesureTotal": 30,
+      "snapshot": "public/neural/cortex-interrogation-it86.bin",
+      "octetsSnapshot": 12582960
+    }
+  },
+  "consolidation": {
+    "module": "lib/neural/generation/corpus-interrogation-it86.ts",
+    "paires": 30
+  },
+  "cumulDepuisDebut": {
+    "totalInterroge": 300000,
+    "exact": 164,
+    "methode": 99919,
+    "echec": 199917,
+    "corriges": 299836,
+    "reparees": 1529,
+    "runs": 1
+  },
+  "dureeMs": 493606,
+  "regleMesure": "zéro chiffre fantôme : interrogees = questions réellement posées au moteur du chat dans ce run ; le checkpoint cumule entre les ticks ; chaque verdict est vérifié automatiquement (résultat calculé présent dans la réponse, sinon famille de méthode, sinon échec)"
+}

@@ -21,6 +21,7 @@ import { CORPUS_DOMAINES_IT84 } from "./corpus-domaines-it84";
 // it.85 — 192 paires PP « raisonnement humain » (générateur déterministe,
 // 999 935 paires assimilées par ondes, bande 0 « raisonnement-humain-fr »)
 import { CORPUS_RAISONNEMENT_IT85 } from "./corpus-raisonnement-it85";
+import { CORPUS_INTERROGATION_IT86 } from "./corpus-interrogation-it86";
 
 /** Paire conversationnelle apprise par le cortex langagier. */
 export interface PaireLangage {
@@ -863,12 +864,18 @@ const CORPUS_GEN3_BASE: readonly PaireLangage[] = [
 // 999 935 paires assimilées par ondes, bande 0 « raisonnement-humain-fr »,
 // scripts/entrainement-raisonnement-humain-it85.ts) : le chat raisonne pas
 // à pas avec le savoir appris.
+// it.86 — paires correctives du cycle d'interrogation milliard (300 000
+// questions posées au moteur du chat, réponses vérifiées automatiquement,
+// corrections par ondes bande 6 « interrogation-domaines-fr », script
+// interrogation-milliard-it86.ts) : chaque question interrogée reçoit ici
+// sa réponse exacte pensée pas à pas.
 /** Corpus complet : base rédigée + savoir multi-domaines it.84 + raisonnement
- *  humain it.85 (immuable). */
+ *  humain it.85 + corrections d'interrogation it.86 (immuable). */
 export const CORPUS_GEN3: readonly PaireLangage[] = [
   ...CORPUS_GEN3_BASE,
   ...CORPUS_DOMAINES_IT84,
   ...CORPUS_RAISONNEMENT_IT85,
+  ...CORPUS_INTERROGATION_IT86,
 ];
 
 export const TAILLE_CORPUS_GEN3 = CORPUS_GEN3.length;

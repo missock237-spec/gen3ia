@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-02T17:34:16.968Z",
+  "totalInterroge": 300000,
+  "exact": 164,
+  "methode": 99919,
+  "echec": 199917,
+  "corriges": 299836,
+  "correctionsHorsMemoire": 298337,
+  "retests": 1529,
+  "reparees": 1529,
+  "parFamille": {
+    "math_verbal": {
+      "exact": 328,
+      "methode": 199838,
+      "echec": 399834,
+      "corriges": 599672
+    },
+    "deduction": {
+      "exact": 0,
+      "methode": 0,
+      "echec": 0,
+      "corriges": 0
+    },
+    "conditionnel": {
+      "exact": 0,
+      "methode": 0,
+      "echec": 0,
+      "corriges": 0
+    },
+    "spatial": {
+      "exact": 0,
+      "methode": 0,
+      "echec": 0,
+      "corriges": 0
+    },
+    "temporel": {
+      "exact": 0,
+      "methode": 0,
+      "echec": 0,
+      "corriges": 0
+    },
+    "analogie": {
+      "exact": 0,
+      "methode": 0,
+      "echec": 0,
+      "corriges": 0
+    },
+    "causalite": {
+      "exact": 0,
+      "methode": 0,
+      "echec": 0,
+      "corriges": 0
+    },
+    "planification": {
+      "exact": 0,
+      "methode": 0,
+      "echec": 0,
+      "corriges": 0
+    }
+  },
+  "runs": 1,
+  "dureeMsCumulee": 493606
+}
