@@ -113,4 +113,18 @@ describe("Garde it.85 — script d'entraînement raisonnement humain", () => {
     expect(sortie).toContain("Donc :");
     expect(sortie.endsWith(paire.reponse)).toBe(true);
   });
+
+  it("le savoir appris répond AVANT le pont vocation quand l'appariement est fort (anomalie de prod mesurée + corrigée)", () => {
+    const cheminEngine = join(process.cwd(), "lib/neural/engine.ts");
+    const engine = existsSync(cheminEngine) ? readFileSync(cheminEngine, "utf8") : "";
+    // la constante calibrée existe et est documentée par une mesure
+    expect(engine).toContain("SEUIL_CORPUS_PRIORITAIRE = 3");
+    expect(engine).toContain("appariement exact d'une paire apprise vaut 5,67");
+    // la méthode prioritaire est branchée AVANT le pont vocation sur les
+    // chemins de composition (génération, flux, générateur, sans-fenêtre)
+    expect(engine).toContain("this.compositionCorpusPrioritaire(messageUtilisateur) ??");
+    expect(engine.indexOf("compositionCorpusPrioritaire(messageUtilisateur) ??"))
+      .toBeLessThan(engine.indexOf("composerDepuisVocation(messageUtilisateur) ??"));
+    expect(engine).toContain("private compositionCorpusPrioritaire");
+  });
 });

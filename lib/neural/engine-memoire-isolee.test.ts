@@ -38,7 +38,12 @@ function monterMoteur(): {
 
   const contextesCaptures: ContexteLangage[] = [];
   const cortex = {
-    repondre: (_prompt: string, contexte: ContexteLangage) => {
+    repondre: (_prompt: string, contexte?: ContexteLangage) => {
+      // it.85 — l'appel « corpus prioritaire » (SANS contexte mémoire) est
+      // hors périmètre de ces tests : ils verrouillent l'isolation de la
+      // mémoire du composer. Sous le seuil, il rend null et la chaîne
+      // normale (vocation → composer) reprend la main, comme avant.
+      if (contexte === undefined) return null;
       contextesCaptures.push({ ...contexte });
       return {
         texte: "réponse de test déterministe",

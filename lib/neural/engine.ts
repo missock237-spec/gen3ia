@@ -115,6 +115,15 @@ export const MAX_MOTS_CLES = 8;
  */
 export const MAX_TOURS_MEMOIRE_CORTEX = 3;
 
+/** it.85 — SEUIL CORPUS PRIORITAIRE : au-dessus de ce score d'appariement,
+ *  le savoir APPRIS du cortex langagier (corpus commis) répond AVANT le pont
+ *  vocation — un raisonnement appris bat l'ancrage générique d'un domaine.
+ *  Calibré par mesure : l'appariement exact d'une paire apprise vaut 5,67
+ *  (test réel au chat), un recouvrement de mots-clés seul reste ≪ 1 — le
+ *  pont vocation garde donc la main sur tout ce que le corpus ne connaît
+ *  pas fortement. */
+export const SEUIL_CORPUS_PRIORITAIRE = 3;
+
 /** Réponse du moteur neuronal : AIResponse complet, provider neural. */
 export interface NeuralAIResponse extends Omit<AIResponse, "provider"> {
   provider: NeuralProvider;
@@ -464,6 +473,10 @@ export class NeuralEngine {
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
+      // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT : une paire apprise avec
+      // un appariement fort répond AVANT le pont vocation (le raisonnement
+      // appris bat l'ancrage générique — mesure : appariement exact 5,67).
+      this.compositionCorpusPrioritaire(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
     this.memoriser(messageUtilisateur, composition.texte, memoire);
@@ -579,6 +592,10 @@ export class NeuralEngine {
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
+      // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT : une paire apprise avec
+      // un appariement fort répond AVANT le pont vocation (le raisonnement
+      // appris bat l'ancrage générique — mesure : appariement exact 5,67).
+      this.compositionCorpusPrioritaire(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
 
@@ -664,6 +681,8 @@ export class NeuralEngine {
     // que les deux chemins principaux (génération et flux).
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
+      // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT (même règle que generate).
+      this.compositionCorpusPrioritaire(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
 
@@ -712,6 +731,30 @@ export class NeuralEngine {
       const score = this.espace.readResonance(spikedNeurones, canal) * poids;
       if (score > (resonances[canal] ?? 0)) resonances[canal] = score;
     }
+  }
+
+  /**
+   * it.85 — CORPUS PRIORITAIRE : consulte le cortex langagier sur le message
+   * brut et ne retient la réponse que si l'appariement est FORT
+   * (≥ SEUIL_CORPUS_PRIORITAIRE). Sous le seuil : null — la chaîne normale
+   * (connaissances → vocation → composer) reprend la main, inchangée.
+   */
+  private compositionCorpusPrioritaire(messageUtilisateur: string): CompositionReponse | null {
+    if (!this.cortex) return null;
+    const reponse = this.cortex.repondre(messageUtilisateur);
+    if (!reponse || reponse.score < SEUIL_CORPUS_PRIORITAIRE) return null;
+    return {
+      texte: reponse.texte,
+      source:
+        reponse.source === "personnalisee"
+          ? "cortex_personnalisee"
+          : reponse.source === "contexte"
+            ? "cortex_contexte"
+            : "cortex_corpus",
+      theme: reponse.theme,
+      scoreAppariement: reponse.score,
+      clePair: reponse.cle,
+    };
   }
 
   /**
@@ -991,6 +1034,8 @@ export class NeuralEngine {
       (knowledgeContext
         ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext)
         : null) ??
+      // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT (même règle que generate).
+      this.compositionCorpusPrioritaire(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur);
     if (!composition) return null;
 
