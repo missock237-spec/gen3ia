@@ -1,19 +1,19 @@
 {
-  "date": "2026-11-02T17:34:16.968Z",
-  "totalInterroge": 300000,
-  "exact": 164,
-  "methode": 99919,
-  "echec": 199917,
-  "corriges": 299836,
-  "correctionsHorsMemoire": 298337,
-  "retests": 1529,
-  "reparees": 1529,
+  "date": "2026-11-02T21:21:05.217Z",
+  "totalInterroge": 550000,
+  "exact": 166,
+  "methode": 183251,
+  "echec": 366583,
+  "corriges": 549834,
+  "correctionsHorsMemoire": 547086,
+  "retests": 2808,
+  "reparees": 2808,
   "parFamille": {
     "math_verbal": {
-      "exact": 328,
-      "methode": 199838,
-      "echec": 399834,
-      "corriges": 599672
+      "exact": 660,
+      "methode": 566340,
+      "echec": 1133000,
+      "corriges": 1699340
     },
     "deduction": {
       "exact": 0,
@@ -58,6 +58,6 @@
       "corriges": 0
     }
   },
-  "runs": 1,
-  "dureeMsCumulee": 493606
+  "runs": 2,
+  "dureeMsCumulee": 850827
 }

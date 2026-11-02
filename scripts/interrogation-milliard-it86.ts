@@ -82,7 +82,12 @@ const PERIODE_APPRENTISSAGE = 200; // 1 correction APPRISE toutes les 200 échec
 const LABEL_DOMAINE = "interrogation-domaines-fr"; // hash FNV-1a % 32 = bande 6 — libre (aucune collision it.84/it.85) ET structurellement audible (CSR : bandes 0-7 ≈ 1,1 arête/colonne)
 const DIR_OUT = "var/interrogation-milliard-it86";
 const DIR_SNAP = "public/neural";
-const SNAPSHOT_SOURCE = "public/neural/cortex-raisonnement-it85.bin";
+// Chaîne cumulative : si le snapshot corrigé du tick précédent existe (gravures
+// bande 6 déjà posées), on en part — les ondes correctives s'accumulent d'un
+// tick à l'autre au lieu d'être réécrites à zéro (convention it.84 → it.85).
+const SNAPSHOT_SOURCE = existsSync("public/neural/cortex-interrogation-it86.bin")
+  ? "public/neural/cortex-interrogation-it86.bin"
+  : "public/neural/cortex-raisonnement-it85.bin";
 const SNAPSHOT_SORTIE = "public/neural/cortex-interrogation-it86.bin";
 const MODULE_PAIRES = "lib/neural/generation/corpus-interrogation-it86.ts";
 const CHEMIN_CHECKPOINT = join(DIR_OUT, "progression.json");

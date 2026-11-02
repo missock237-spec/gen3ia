@@ -20,6 +20,7 @@ import { decodeResponse, poidsResonanceParCycle } from "./decoding/response-deco
 import type { NeuralDecodedResponse } from "./decoding/response-decoder";
 import type { CortexLangagierGen3, ContexteLangage } from "./generation/language";
 import { creerCacheReponses } from "./generation/cache-reponses";
+import { reponseInstantiee } from "../gen3/reponses-instantiees";
 import { HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
@@ -741,6 +742,15 @@ export class NeuralEngine {
    * (connaissances → vocation → composer) reprend la main, inchangée.
    */
   private compositionCorpusPrioritaire(messageUtilisateur: string): CompositionReponse | null {
+    // it.86-b — RÉPONSE INSTANCIÉE D'ABORD : pour les gabarits calculables
+    // (addition verbale, heure + durée, chaîne spatiale, syllogisme simple),
+    // la réponse est CALCULÉE depuis la question posée — aucune paire
+    // apprise ne peut servir des nombres figés d'une autre question
+    // (mesure : « 4435 … et 29 » recevait « 3 + 2 = 5 »).
+    const instantiee = reponseInstantiee(messageUtilisateur);
+    if (instantiee) {
+      return { texte: instantiee, source: "cortex_corpus", theme: "calcul:instantie" };
+    }
     if (!this.cortex) return null;
     const reponse = this.cortex.repondre(messageUtilisateur);
     if (reponse && reponse.score >= SEUIL_CORPUS_PRIORITAIRE) {
@@ -821,6 +831,13 @@ export class NeuralEngine {
       const enCache = this.cacheReponses.lire(cleCache);
       if (enCache) {
         return { ...enCache, cache: "hit" };
+      }
+
+      // it.86-b — RÉPONSE INSTANCIÉE : le calcul exact de la question posée
+      // prime toute paire apprise (zéro nombre figé possible).
+      const instantiee = reponseInstantiee(prompt);
+      if (instantiee) {
+        return { texte: instantiee, source: "cortex_corpus", theme: "calcul:instantie" };
       }
 
       const reponse = this.cortex.repondre(prompt, contexte);

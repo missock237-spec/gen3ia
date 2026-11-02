@@ -30,6 +30,40 @@
 import { tokenize } from "../encoding/text-encoder";
 import type { PaireLangage } from "./corpus";
 
+/**
+ * it.86-b — GARDE DE COHÉRENCE NUMÉRIQUE (anti-désinformation, mesurée) :
+ * une paire dont la réponse CALCULE (« a + b = c ») ne peut répondre que si
+ * ses opérandes figurent dans la requête — sinon elle répond à une AUTRE
+ * question avec des nombres figés. Mesure motrice (interrogatoire
+ * utilisateur réel, tick 05:10) : « 4435 … et 29 le soir » recevait
+ * « Somme : 3 + 2 = 5 » d'une paire consolidée lexicalement voisine à
+ * petites valeurs. Une réponse sans équation explicite est neutre.
+ */
+function equationCoherente(requete: string, reponse: string): boolean {
+  const equations = [
+    ...reponse.matchAll(
+      /(\d[\d\u202f\u00a0 .,]*)\s*([+\-×*x/−])\s*(\d[\d\u202f\u00a0 .,]*)\s*(?:=\s*(\d[\d\u202f\u00a0 .,]*))?/g,
+    ),
+  ];
+  if (equations.length === 0) return true; // pas de calcul explicite → neutre
+  const connus = new Set(
+    requete.replace(/[\u202f\u00a0 ]/g, "").match(/\d+/g) ?? [],
+  );
+  const norm = (s: string): string => s.replace(/[\u202f\u00a0 .,]/g, "");
+  for (const eq of equations) {
+    const a = norm(eq[1]);
+    const b = norm(eq[3]);
+    // RÈGLE DU PAS-À-PAS LÉGITIME : chaque équation consomme au moins un
+    // nombre DE LA QUESTION ou un RÉSULTAT PRÉCÉDENT de la même réponse
+    // (valeurs intermédiaires : « 3 × 24 = 72 » puis « 72 × 400 = 28 800 »).
+    // Deux opérandes inconnus = calcul hors-sol = paire d'une autre question.
+    if (!connus.has(a) && !connus.has(b)) return false;
+    const c = eq[4] ? norm(eq[4]) : null;
+    if (c) connus.add(c); // le résultat alimente la chaîne
+  }
+  return true;
+}
+
 /** Seuil d'appariement (score cosinus pondéré IDF) au-delà duquel une paire répond. */
 export const SEUIL_APPARIEMENT = 0.34;
 
@@ -573,6 +607,10 @@ export class CortexLangagierGen3 {
           continue;
         }
       }
+      // it.86-b — GARDE DE COHÉRENCE NUMÉRIQUE : une paire de calcul dont
+      // les opérandes ne figurent pas dans la requête est ignorée — la
+      // méthode de famille ou la réponse instanciée prend alors la main.
+      if (!equationCoherente(requete, paire.reponse)) continue;
       // La plasticité d'usage NE SECOURS PAS une correspondance médiocre :
       // le multiplicateur ne s'applique que si la paire passe déjà la barre
       // de base en score normalisé (sinon poids 1 — zéro inflation).
