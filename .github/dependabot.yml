@@ -19,11 +19,10 @@ updates:
       - dependency-name: "next"
         update-types: ["version-update:semver-major"]
 
-  - package-ecosystem: "npm"
-    directory: "/sandbox"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 3
+  # NB (2026-11-02) : la section « npm /sandbox » a été retirée — le
+  # répertoire sandbox/ n'existe plus depuis la restructuration de la
+  # racine (4ba979d) et faisait échouer le check Dependabot sur chaque
+  # push touchant npm/actions (« failure » systématique).
 
   - package-ecosystem: "github-actions"
     directory: "/"
