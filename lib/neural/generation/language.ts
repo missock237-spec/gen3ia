@@ -34,6 +34,24 @@ import type { PaireLangage } from "./corpus";
 export const SEUIL_APPARIEMENT = 0.34;
 
 /**
+ * it.85-r — COUVERTURE MINIMALE DE LA PAIRE (calibrée par mesure) : pour
+ * une requête riche (≥ 4 tokens actifs), la paire candidate doit présenter
+ * au moins 45 % de ses tokens (hors nombres) dans la requête. Mesure
+ * motrice : « Bravo, tu as vraiment perfectionné ton talent… » → paire
+ * remerciement scoreait 8,53 avec UN token partagé sur ~6 (couverture
+ * 0,25 → rejetée) ; l'appariement exact 5,67 conserve une couverture
+ * ~1,0 → passe inchangée.
+ */
+export const COUVERTURE_PAIRE_MIN = 0.45;
+
+/**
+ * it.85-r (2e calibrage) — couverture minimale de la REQUÊTE : la part des
+ * tokens actifs de la requête que la paire porte. Tuée par mesure : le
+ * faux match « Bravo… » portait 2 tokens sur 9 actifs (0,22 < 0,25).
+ */
+export const COUVERTURE_REQUETE_MIN = 0.25;
+
+/**
  * BARRE DE QUALITÉ DE BASE — un score normalisé en dessous de cette barre
  * ne bénéficie PAS de la plasticité d'usage (poidsUsage) : une paire très
  * utilisée ne peut plus faire passer une correspondance médiocre au-dessus
@@ -136,6 +154,32 @@ const STOPWORDS = new Set([
 /** Filtre les tokens informatifs (hors stopwords). */
 function tokensInformatifs(tokens: string[]): string[] {
   return tokens.filter((t) => !STOPWORDS.has(t));
+}
+
+/**
+ * it.85-r — RACINISATION LÉGÈRE SYMÉTRIQUE (re-test production 18:10) :
+ * « chats » et « chat », « animaux » et « animal » étaient des tokens
+ * DISTINCTS — la couverture s'effondrait sur les reformulations au
+ * pluriel. Racines appliquées UNE FOIS, symétriquement (requête ET
+ * paires) : ce qui compte est la cohérence requête↔paire, pas la
+ * linguistique. Seuils de longueur pour ne jamais écraser les mots
+ * courts (sel, vis, as). « aux → al » couvre les pluriels irréguliers
+ * courants (animaux→animal, chevaux→cheval, journaux→journal) ; les
+ * verbes récurrents sont alignés (-ent→-e, -ez→-e, -er→-e : regarder,
+ * achète, achetez partagent la même racine que acheter).
+ * Persistance : `cleMotif` reste calculée sur les tokens BRUTS — les
+ * clés de motifs et poids d'usage déjà persistés restent valides.
+ */
+export function racineLegere(token: string): string {
+  if (token.length >= 7 && token.endsWith("aux")) return token.slice(0, -2) + "l";
+  if (token.length >= 5 && token.endsWith("x")) return token.slice(0, -1);
+  if (token.length >= 4 && token.endsWith("s")) return token.slice(0, -1);
+  if (token.length >= 7 && token.endsWith("ent")) return token.slice(0, -2);
+  if (token.length >= 6 && token.endsWith("ez")) return token.slice(0, -1);
+  // « achète »→achete, « achètez »→achete, « acheter »→achete : converger
+  // vers la même racine que les formes conjuguées (règle -er → -e).
+  if (token.length >= 6 && token.endsWith("er")) return token.slice(0, -1);
+  return token;
 }
 
 /** Paire interne indexée. */
@@ -288,7 +332,9 @@ export class CortexLangagierGen3 {
         break;
       }
 
-      const tokens = new Set(tokensInformatifs(tokenize(paire.motif)));
+      const tokens = new Set(
+        tokensInformatifs(tokenize(paire.motif)).map(racineLegere),
+      );
       if (tokens.size === 0) {
         // Motif 100 % stopwords : non indexable, jamais rappelable — ignoré.
         doublons += 1;
@@ -344,14 +390,23 @@ export class CortexLangagierGen3 {
   ): ReponseLangage | null {
     if (this.paires.length === 0) return null;
 
-    const tokensRequete = tokensInformatifs([...new Set(tokenize(requete))]);
+    // it.85-r : racinisation légère symétrique — la requête est comparée
+    // aux paires sur des racines (pluriels/verbes alignés), jamais sur
+    // des formes fléchies divergentes.
+    const tokensRequete = [
+      ...new Set(tokensInformatifs([...new Set(tokenize(requete))]).map(racineLegere)),
+    ];
     if (tokensRequete.length === 0) return null;
 
     // Tokens de contexte (reprises) : uniquement ceux absents de la requête.
     const tokensContexte = contexte.messagePrecedent
-      ? tokensInformatifs([...new Set(tokenize(contexte.messagePrecedent))]).filter(
-          (t) => !tokensRequete.includes(t),
-        )
+      ? [
+          ...new Set(
+            tokensInformatifs([...new Set(tokenize(contexte.messagePrecedent))])
+              .map(racineLegere)
+              .filter((t) => !tokensRequete.includes(t)),
+          ),
+        ]
       : [];
 
     // Contexte étendu : jusqu'à MAX_TOURS_CONTEXTE tours antérieurs, chacun
@@ -367,7 +422,7 @@ export class CortexLangagierGen3 {
           if (poids < 0.05) return;
           for (const token of tokensInformatifs([
             ...new Set(tokenize(tour.message)),
-          ])) {
+          ]).map(racineLegere)) {
             if (déjàVus.has(token)) continue;
             déjàVus.add(token);
             poidsHistorique.set(token, poids);
@@ -439,9 +494,54 @@ export class CortexLangagierGen3 {
         (t) => tokensActifs.has(t) && nonNumérique(t),
       ).length;
       const requêteCourte = tokensRequete.length <= 3;
+      const actifsNonNumériques = [...tokensActifs].filter(nonNumérique).length;
+      // Requête « riche » = ≥ 4 tokens actifs hors nombres (calibrage 2e
+      // itération : « Calcule 47 + 38… » porte 5 actifs dont 2 repris de la
+      // paire « Calcule 20 % de 5,238 francs… » — le seuil 6 laissait ce
+      // faux voisin répondre ; à 4, les gardes de couverture s'appliquent
+      // et la couverture paire 0,33 < 0,45 le rejette).
+      const requêteRiche = actifsNonNumériques >= 4;
+      // it.85-r — COUVERTURE DE LA PAIRE (faux matchs tués par mesure) :
+      // « Bravo, tu as vraiment perfectionné ton talent… » scoreait 8,53
+      // contre la paire remerciement — UN seul token rare (« bravo ») sur
+      // une question longue dictait la réponse. Désormais, une requête
+      // riche exige que la paire soit substantiellement COUVERTE : ≥ 45 %
+      // de ses tokens (hors nombres) doivent être présents, ET porter ≥ 25
+      // % des tokens actifs de la requête. Une paire exacte reprise en
+      // quasi-totalité passe (~1,0) ; un token isolé sur une paire de 8
+      // tokens (0,12) est rejeté — la méthode de famille ou le pont
+      // vocation prend alors la main. Requêtes courtes exemptées.
+      const tokensPaireNonNumériques = [...paire.tokens].filter(nonNumérique);
+      const couverturePaire =
+        tokensPaireNonNumériques.length > 0
+          ? partagés / tokensPaireNonNumériques.length
+          : 0;
+      // it.85-r (2e itération de calibrage) : une paire COURTE est facile à
+      // « couvrir » côté paire (2 tokens sur 3 = 0,67) — le faux match
+      // « Bravo… » (8,53) survivait à la seule couverture paire. Critère
+      // conjoint pour les requêtes riches : la paire doit être couverte
+      // (≥ 45 % d'elle-même) ET porter une part réelle de la requête
+      // (≥ 25 % des tokens actifs) — un token isolé dictant la réponse
+      // d'une question à 9 tokens (0,22) est rejeté des deux côtés.
+      const couvertureRequete =
+        actifsNonNumériques > 0 ? partagés / actifsNonNumériques : 0;
       const couvertureOK =
-        (sousEnsemble && [...paire.tokens].some(nonNumérique)) ||
-        partagés >= 2 ||
+        // Sous-ensemble exact : le motif ENTIER est posé. Deux limites
+        // mesurées : (1) une paire à 1-2 tokens (« bravo ») est un
+        // sous-ensemble trivial de toute question longue — IDF rare ×
+        // bonus sous-ensemble scoreait 8,53 → seules les paires
+        // SUBSTANTIELLES (≥ 3 tokens hors nombres) sont sauvées sur une
+        // requête riche ; (2) une paire 100 % NUMÉRIQUE (« 38 ») n'est
+        // jamais un sujet — bug réel : une paire commerciale réveillée
+        // par un chiffre isolé d'un calcul (les nombres sont exclus de
+        // `partagés`, ils ne sauvent pas le sous-ensemble non plus).
+        (sousEnsemble &&
+          (tokensPaireNonNumériques.length >= 3 ||
+            (requêteCourte && tokensPaireNonNumériques.length >= 1))) ||
+        (partagés >= 2 &&
+          (!requêteRiche ||
+            (couverturePaire >= COUVERTURE_PAIRE_MIN &&
+              couvertureRequete >= COUVERTURE_REQUETE_MIN))) ||
         (requêteCourte && partagés >= 1);
       if (!couvertureOK) continue;
       // GARDE DE LANGUE — une paire d'une autre langue que la requête ne

@@ -25,6 +25,7 @@ import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
 import { composerDepuisVocation } from "./vocation-pont";
+import { detecterMethodeRaisonnement } from "../gen3/familles-methodes";
 // it.73 — SOBRIÉTÉ ÉNERGÉTIQUE : profils plein (historique exact) / eco /
 // telephone — cf. lib/neural/core/v2/energie.ts (module pur partagé).
 // it.74 — canal VERSIONNÉ : le profil actif peut venir du fichier committé
@@ -742,19 +743,36 @@ export class NeuralEngine {
   private compositionCorpusPrioritaire(messageUtilisateur: string): CompositionReponse | null {
     if (!this.cortex) return null;
     const reponse = this.cortex.repondre(messageUtilisateur);
-    if (!reponse || reponse.score < SEUIL_CORPUS_PRIORITAIRE) return null;
-    return {
-      texte: reponse.texte,
-      source:
-        reponse.source === "personnalisee"
-          ? "cortex_personnalisee"
-          : reponse.source === "contexte"
-            ? "cortex_contexte"
-            : "cortex_corpus",
-      theme: reponse.theme,
-      scoreAppariement: reponse.score,
-      clePair: reponse.cle,
-    };
+    if (reponse && reponse.score >= SEUIL_CORPUS_PRIORITAIRE) {
+      return {
+        texte: reponse.texte,
+        source:
+          reponse.source === "personnalisee"
+            ? "cortex_personnalisee"
+            : reponse.source === "contexte"
+              ? "cortex_contexte"
+              : "cortex_corpus",
+        theme: reponse.theme,
+        scoreAppariement: reponse.score,
+        clePair: reponse.cle,
+      };
+    }
+    // it.85-r — GÉNÉRALISATION PAR MÉTHODE : pas d'appariement fort sur
+    // le corpus, mais les signaux d'une famille de raisonnement sont
+    // reconnus → la méthode générique de la famille répond, à la place
+    // du pont vocation qui était hors-sujet (mesure : « Art et création
+    // multimédia » à une question de syllogisme). Honnêteté : la méthode
+    // annonce qu'elle est générique, elle ne prétend pas être un exemple
+    // mémorisé.
+    const methode = detecterMethodeRaisonnement(messageUtilisateur);
+    if (methode) {
+      return {
+        texte: methode.texte,
+        source: "cortex_corpus",
+        theme: `methode:${methode.famille}`,
+      };
+    }
+    return null;
   }
 
   /**
