@@ -153,17 +153,47 @@ describe("Les 18 domaines de gen3", () => {
     }
   }, 30_000);
 
-  it("lireDatasetDomaine : schéma du générateur respecté (bilingue, méta complètes)", async () => {
-    const echantillons = await lireDatasetDomaine("video");
-    expect(echantillons.length).toBeGreaterThan(0);
-    const langues = new Set(echantillons.map((e) => e.language));
-    expect(langues.has("fr")).toBe(true);
-    expect(langues.has("en")).toBe(true);
-    for (const echantillon of echantillons.slice(0, 10)) {
-      expect(echantillon.metadata.bilingual_pair_id).toMatch(/^bp-video-/);
-      expect(echantillon.metadata.dedup_hash).toMatch(/^sha1:/);
-      expect(echantillon.metadata.quality_score).toBeGreaterThan(0.5);
-      expect(echantillon.metadata.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  it("lireDatasetDomaine : chaîne de sources — externes HF/Kaggle PRIORITAIRES, atelier en repli", async () => {
+    // it.84 (demande propriétaire 02/11/2026) : la matière réelle externe
+    // (échantillon commis echantillons_externes/) est lue d'abord ; les
+    // échantillons atelier restent le repli si le fichier externe manque.
+    const video = await lireDatasetDomaine("video");
+    expect(video.length).toBeGreaterThan(0);
+    // Les externes commis sont au format du générateur (instruction/output
+    // obligatoires) mais leur provenance est huggingface, pas l'atelier.
+    expect(video[0]!.metadata.source_style).toMatch(/^hf:/);
+    expect(video[0]!.metadata.license).toBeDefined();
+    // L'atelier reste lisible directement (repli structurel conservé) :
+    const atelier = await lireJsonlDirect("video");
+    expect(atelier.length).toBeGreaterThan(0);
+    expect(atelier[0]!.metadata.bilingual_pair_id).toMatch(/^bp-video-/);
+  }, 30_000);
+
+  it("construirePairesDomaines : jusqu'à 3 motifs/langue — le chat reçoit la matière externe", async () => {
+    const paires = await construirePairesDomaines();
+    expect(paires.length).toBeGreaterThan(36); // 18 × 2 (1/langue) serait l'ancien régime
+    // Thèmes exclusivement de domaine, réponses non vides.
+    for (const paire of paires) {
+      expect(paire.theme).toMatch(/^domaine:/);
+      expect(paire.motif.length).toBeGreaterThan(0);
+      expect(paire.reponse.length).toBeGreaterThan(0);
     }
   }, 30_000);
 });
+
+/** Lecture directe du fichier atelier (hors chaîne de priorités). */
+async function lireJsonlDirect(domaineId: string) {
+  const { readFile } = await import("node:fs/promises");
+  const path = await import("node:path");
+  const brut = await readFile(
+    path.join(
+      process.cwd(),
+      `training/gen3-domain-datasets/data/echantillons/${domaineId}.jsonl`,
+    ),
+    "utf8",
+  );
+  return brut
+    .split("\n")
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as { metadata: { bilingual_pair_id: string } });
+}

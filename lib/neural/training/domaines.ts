@@ -256,6 +256,18 @@ export const DIR_COMPLET = path.join(
   "training/gen3-domain-datasets/data/complet",
 );
 
+/** Datasets EXTERNES complets (HF/Kaggle réels, hors git, régénérables
+ *  par scripts/selecteur-datasets-externes.py — Job 478451, 02/11/2026). */
+export const DIR_EXTERNES_COMPLETS = path.join(DIR_COMPLET, "externes");
+
+/** Échantillon COMMIS des datasets externes (120/domaine, seed 20261102)
+ *  — la matière réelle HF/Kaggle qui voyage dans le dépôt, comme les
+ *  échantillons de l'atelier. */
+export const DIR_ECHANTILLONS_EXTERNE = path.join(
+  process.cwd(),
+  "training/gen3-domain-datasets/data/echantillons_externes",
+);
+
 /** Échantillon JSONL du dépôt (schéma du générateur Python). */
 export interface EchantillonDomaine {
   id: string;
@@ -280,24 +292,38 @@ export interface EchantillonDomaine {
 }
 
 /**
- * Lit le fichier JSONL d'un domaine. `complet` = true tente le dataset
- * complet (100 000 lignes, hors git) et retombe sur l'échantillon commis.
+ * Lit le fichier JSONL d'un domaine. Chaîne de sources (première présente,
+ * zéro fabrication) :
+ *   1. `complet` : dataset complet généré (100 000 lignes, hors git) ;
+ *   2. externes RÉELS : datasets sélectionnés depuis Hugging Face / Kaggle
+ *      par scripts/selecteur-datasets-externes.py (Job 478451, demande
+ *      propriétaire 02/11/2026) — complet hors git (complet/externes/) et
+ *      échantillon commis (echantillons_externes/) ;
+ *   3. échantillon commis de l'atelier gen3ia (echantillons/).
  */
 export async function lireDatasetDomaine(
   domaineId: string,
   opts: { complet?: boolean } = {},
 ): Promise<EchantillonDomaine[]> {
-  const cible = opts.complet
-    ? path.join(DIR_COMPLET, `${domaineId}.jsonl`)
-    : path.join(DIR_ECHANTILLONS, `${domaineId}.jsonl`);
-  let brut: string | null = null;
+  const cibles: string[] = [];
+  if (opts.complet) {
+    cibles.push(path.join(DIR_COMPLET, `${domaineId}.jsonl`));
+    cibles.push(path.join(DIR_EXTERNES_COMPLETS, `${domaineId}.jsonl`));
+  }
+  cibles.push(path.join(DIR_ECHANTILLONS_EXTERNE, `${domaineId}.jsonl`));
+  cibles.push(path.join(DIR_ECHANTILLONS, `${domaineId}.jsonl`));
+  for (const cible of cibles) {
+    const lignes = await lireJsonlEchantillons(cible);
+    if (lignes.length > 0) return lignes;
+  }
+  return [];
+}
+
+async function lireJsonlEchantillons(cible: string): Promise<EchantillonDomaine[]> {
+  let brut: string;
   try {
     brut = await readFile(cible, "utf8");
   } catch {
-    if (opts.complet) {
-      // Retombe sur l'échantillon commis si le complet est absent.
-      return lireDatasetDomaine(domaineId, { complet: false });
-    }
     return [];
   }
   const lignes: EchantillonDomaine[] = [];
@@ -496,9 +522,10 @@ export const MAX_PAIRES_CORTEX_DOMAINES = 220;
 
 /**
  * Construit les paires conversationnelles du cortex langagier à partir des
- * datasets : pour chaque domaine, UNE paire canonique FR et UNE paire EN
- * (l'instruction sert de motif, la réponse d'énoncé — données réelles du
- * générateur, plafonnées à MAX_PAIRES_CORTEX_DOMAINES).
+ * datasets : pour chaque domaine, jusqu'à 3 paires FR et 3 paires EN
+ * (l'instruction sert de motif, la réponse d'énoncé — données réelles :
+ * échantillon externe HF/Kaggle commis d'abord, atelier gen3ia ensuite ;
+ * plafonnées à MAX_PAIRES_CORTEX_DOMAINES).
  */
 export async function construirePairesDomaines(): Promise<PaireLangage[]> {
   const paires: PaireLangage[] = [];
@@ -509,17 +536,28 @@ export async function construirePairesDomaines(): Promise<PaireLangage[]> {
     });
     for (const langue of ["fr", "en"] as const) {
       if (paires.length >= MAX_PAIRES_CORTEX_DOMAINES) break;
-      const exemplaire = echantillons.find((e) => e.language === langue);
-      if (!exemplaire) continue;
-      // Motif court : la première phrase de l'instruction (le cortex matche
-      // par tokens — une phrase entière serait trop spécifique).
-      const motif = exemplaire.instruction.split(/[.!?]/)[0].trim();
-      if (motif.length < 12) continue;
-      paires.push({
-        motif,
-        reponse: exemplaire.output,
-        theme: `domaine:${domaine.id}`,
-      });
+      // it.84 — jusqu'à 3 exemplaires par langue (motifs distincts) : les
+      // datasets externes réels (HF/Kaggle, échantillon commis d'abord)
+      // élargissent ce que le chat sait vraiment répondre.
+      let prisLangue = 0;
+      const motifsVus = new Set<string>();
+      for (const exemplaire of echantillons) {
+        if (prisLangue >= 3) break;
+        if (exemplaire.language !== langue) continue;
+        // Motif court : la première phrase de l'instruction (le cortex matche
+        // par tokens — une phrase entière serait trop spécifique).
+        const motif = exemplaire.instruction.split(/[.!?]/)[0].trim();
+        if (motif.length < 12) continue;
+        const cle = motif.toLowerCase();
+        if (motifsVus.has(cle)) continue;
+        motifsVus.add(cle);
+        paires.push({
+          motif,
+          reponse: exemplaire.output,
+          theme: `domaine:${domaine.id}`,
+        });
+        prisLangue += 1;
+      }
     }
   }
   return paires;

@@ -1,0 +1,335 @@
+{
+ "version": 1,
+ "generated_at": "2026-11-02T05:27:49+00:00",
+ "regle": "échantillons externes réels HF/Kaggle, seed 20261102, quota demandé 800, échantillon commis 120/domaine",
+ "domaines": {
+  "developpement_web": {
+   "total_extraits": 799,
+   "commis": 120,
+   "langues": {
+    "fr": 4,
+    "en": 795
+   },
+   "sources": [
+    {
+     "dataset": "nickrosh/Evol-Instruct-Code-80k-v1",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 799
+    }
+   ],
+   "journal": []
+  },
+  "analyse_donnees": {
+   "total_extraits": 800,
+   "commis": 120,
+   "langues": {
+    "fr": 0,
+    "en": 800
+   },
+   "sources": [
+    {
+     "dataset": "gretelai/synthetic_text_to_sql",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 800
+    }
+   ],
+   "journal": []
+  },
+  "sciences_humaines": {
+   "total_extraits": 764,
+   "commis": 120,
+   "langues": {
+    "fr": 4,
+    "en": 760
+   },
+   "sources": [
+    {
+     "dataset": "databricks/databricks-dolly-15k",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 764
+    }
+   ],
+   "journal": []
+  },
+  "recherche_scientifique": {
+   "total_extraits": 161,
+   "commis": 120,
+   "langues": {
+    "fr": 0,
+    "en": 161
+   },
+   "sources": [
+    {
+     "dataset": "allenai/sciq",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 161
+    }
+   ],
+   "journal": []
+  },
+  "sante_medical": {
+   "total_extraits": 700,
+   "commis": 120,
+   "langues": {
+    "fr": 0,
+    "en": 700
+   },
+   "sources": [
+    {
+     "dataset": "openlifescienceai/medmcqa",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 700
+    }
+   ],
+   "journal": []
+  },
+  "cybersecurite": {
+   "total_extraits": 800,
+   "commis": 120,
+   "langues": {
+    "fr": 0,
+    "en": 800
+   },
+   "sources": [
+    {
+     "dataset": "Trendyol/Trendyol-Cybersecurity-Instruction-Tuning-Dataset",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 800
+    }
+   ],
+   "journal": []
+  },
+  "redaction_documents": {
+   "total_extraits": 178,
+   "commis": 120,
+   "langues": {
+    "fr": 1,
+    "en": 177
+   },
+   "sources": [
+    {
+     "dataset": "databricks/databricks-dolly-15k",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 178
+    }
+   ],
+   "journal": []
+  },
+  "generation_images": {
+   "total_extraits": 499,
+   "commis": 120,
+   "langues": {
+    "fr": 499,
+    "en": 0
+   },
+   "sources": [
+    {
+     "dataset": "Gustavosta/Stable-Diffusion-Prompts",
+     "config": "default",
+     "split": "test",
+     "lignes_source": 500,
+     "prises": 499
+    }
+   ],
+   "journal": [
+    "erreur rows offset=500: HTTP Error 429: Too Many Requests"
+   ]
+  },
+  "video": {
+   "total_extraits": 800,
+   "commis": 120,
+   "langues": {
+    "fr": 800,
+    "en": 0
+   },
+   "sources": [
+    {
+     "dataset": "hugginglearners/netflix-shows",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 800
+    }
+   ],
+   "journal": []
+  },
+  "son": {
+   "total_extraits": 399,
+   "commis": 120,
+   "langues": {
+    "fr": 399,
+    "en": 0
+   },
+   "sources": [
+    {
+     "dataset": "openslr/librispeech_asr",
+     "config": "clean",
+     "split": "validation",
+     "lignes_source": 400,
+     "prises": 399
+    }
+   ],
+   "journal": [
+    "erreur rows offset=400: The read operation timed out"
+   ]
+  },
+  "clips_musicaux": {
+   "total_extraits": 797,
+   "commis": 120,
+   "langues": {
+    "fr": 797,
+    "en": 0
+   },
+   "sources": [
+    {
+     "dataset": "D3STRON/music_lyrics_500k",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 797
+    }
+   ],
+   "journal": []
+  },
+  "multimodal": {
+   "total_extraits": 800,
+   "commis": 120,
+   "langues": {
+    "fr": 800,
+    "en": 0
+   },
+   "sources": [
+    {
+     "dataset": "jxie/coco_captions",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 800
+    }
+   ],
+   "journal": []
+  },
+  "vente": {
+   "total_extraits": 800,
+   "commis": 120,
+   "langues": {
+    "fr": 1,
+    "en": 799
+   },
+   "sources": [
+    {
+     "dataset": "DeepMostInnovations/saas-sales-conversations",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 800
+    }
+   ],
+   "journal": []
+  },
+  "conseiller_commercial": {
+   "total_extraits": 800,
+   "commis": 120,
+   "langues": {
+    "fr": 0,
+    "en": 800
+   },
+   "sources": [
+    {
+     "dataset": "Lakshan2003/customer_service_client_agent_conversations_40k_multi_task",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 800
+    }
+   ],
+   "journal": []
+  },
+  "test": {
+   "total_extraits": 800,
+   "commis": 120,
+   "langues": {
+    "fr": 6,
+    "en": 794
+   },
+   "sources": [
+    {
+     "dataset": "openai/gsm8k",
+     "config": "main",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 800
+    }
+   ],
+   "journal": []
+  },
+  "hacker": {
+   "total_extraits": 800,
+   "commis": 120,
+   "langues": {
+    "fr": 4,
+    "en": 796
+   },
+   "sources": [
+    {
+     "dataset": "7h3-R3v3n4n7/pentest-agent-dataset-alpaca",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 800
+    }
+   ],
+   "journal": []
+  },
+  "construction_machines": {
+   "total_extraits": 771,
+   "commis": 120,
+   "langues": {
+    "fr": 0,
+    "en": 771
+   },
+   "sources": [
+    {
+     "dataset": "sanjayram-a/ifixit-repair-chatml",
+     "config": "default",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 771
+    }
+   ],
+   "journal": []
+  },
+  "recherche_web": {
+   "total_extraits": 711,
+   "commis": 120,
+   "langues": {
+    "fr": 1,
+    "en": 710
+   },
+   "sources": [
+    {
+     "dataset": "microsoft/ms_marco",
+     "config": "v2.1",
+     "split": "train",
+     "lignes_source": 800,
+     "prises": 711
+    }
+   ],
+   "journal": []
+  }
+ }
+}
