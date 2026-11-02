@@ -22,8 +22,9 @@ push/PR GitHub (main)
         sa présence = build complet) → canaux de livraison :
           · SSH (accélérateur best-effort, swap atomique cd-finisher) ;
           · POLLER PULL (faisant autorité) : le VPS relit la release
-            toutes les 120 s et bascule (pull-deploy.sh, backoff 900 s
-            sur échec transient).
+            toutes les 120 s et bascule (pull-deploy.sh v3, backoff
+            progressif sur échec transient : retry 60 s, puis 2 min,
+            5 min, plafond 15 min).
    └─ MESURE POST-PUBLICATION (issue #109) : si verify_build est sauté
         (SSH muet), le step « Contrôle de livraison PULL » sonde
         gen3ia.online/version.json toutes les 30 s pendant le SLE

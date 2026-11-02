@@ -181,7 +181,9 @@ export default async function PageStatut() {
             <dt className="font-medium text-neutral-900 dark:text-neutral-100">Livraison des mises à jour</dt>
             <dd className="text-neutral-600 dark:text-neutral-400">
               cycle de déploiement visé ≤ 2 min après publication ; au-delà de 10 min sans bascule,
-              une alerte automatique est déclenchée et visible publiquement (issue + run rouge)
+              une alerte automatique est déclenchée et visible publiquement (issue + run rouge) ;
+              en cas d&apos;échec de livraison, nouvelle tentative rapide (1 min), puis espacée
+              (2, 5 puis 15 min)
             </dd>
           </div>
         </dl>

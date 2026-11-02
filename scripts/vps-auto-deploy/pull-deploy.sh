@@ -22,10 +22,18 @@
 #      local divergent.
 #   3. BUG v1 « jamais de reprise » corrigé : v1 écrivait son stamp AVANT
 #      le téléchargement — un échec réseau figeait le SHA pour toujours
-#      (e49ca45 bloqué 2 h). Désormais : backoff 15 min puis réessai.
+#      (e49ca45 bloqué 2 h). Désormais : backoff puis réessai — la
+#      reprise est garantie.
 #   4. BUG v1 « retéléchargement en boucle » corrigé : v1 supprimait son
 #      stamp après un succès — le même build (200 Mo) était retéléchargé
 #      toutes les 2 min. Dernier SHA déployé + site sain → silence.
+#   5. v3 (2026-11-02, levier identifié par it.81-c) : BACKOFF PROGRESSIF.
+#      v2 imposait 15 min fixes après un échec transient — une livraison
+#      mesurée à ~21 min (e256e55) alors que la cible est ≤ 2 min.
+#      Désormais : retry rapide 60 s, puis 2 min, 5 min, plafond 15 min
+#      (inchangé : 200 Mo par essai, la bande passante reste protégée).
+#      Le compteur d'échecs est persisté PAR SHA (remis à zéro si le
+#      build cible change), et un succès efface l'état d'échec.
 #
 # Garanties inchangées (déléguées à cd-finisher.sh) :
 #   swap atomique, .env.production jamais touché, health check,
@@ -33,6 +41,9 @@
 #
 # Usage : bash pull-deploy.sh            (poller ou manuel)
 # Forcer un retéléchargement : rm -f /opt/gen3ia-updater/state/pull-fail.txt
+#
+# Politique de backoff (v3, mesurée et documentée) :
+#   échec #1 → 60 s · #2 → 2 min · #3 → 5 min · #4+ → 15 min (plafond)
 # =====================================================================
 set -u
 
@@ -41,16 +52,40 @@ UPDATER_DIR=/opt/gen3ia-updater
 STATE_DIR=$UPDATER_DIR/state
 LAST_DEPLOYED=$STATE_DIR/last-deployed.txt
 FAILED_COMMITS=$STATE_DIR/failed_commits.txt
-FAIL_FILE=$STATE_DIR/pull-fail.txt     # « <sha> <epoch> » du dernier échec TRANSIENT
-BACKOFF_S=900                          # 15 min entre deux tentatives du même SHA
+FAIL_FILE=$STATE_DIR/pull-fail.txt     # « <sha> <epoch> <compteur> » du dernier échec TRANSIENT
+# v3 — backoff progressif : retry rapide (un échec transient réseau se
+# répare en secondes), puis paliers ; le plafond v2 reste la protection
+# bande passante (200 Mo par essai, 2 Go de RAM).
+BACKOFF_PLAFOND_S=900                  # plafond : 15 min entre deux tentatives du même SHA
+PALIERS_S=(60 120 300)                 # retry rapide 60 s, puis 2 min, 5 min
 DL_TAR=/tmp/next-build.tar.gz
 DL_SHA=/tmp/next-build.tar.gz.sha256
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$STATE_DIR/deploy.log"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 
+palier_pour() {
+  # $1 = compteur d'échecs (≥1) → secondes à attendre avant la prochaine
+  # tentative : 60 s, 2 min, 5 min, puis plafond 15 min (v2 inchangé).
+  case "${1:-1}" in
+    1) echo 60 ;;
+    2) echo 120 ;;
+    3) echo 300 ;;
+    *) echo "$BACKOFF_PLAFOND_S" ;;
+  esac
+}
+
 marquer_echec() {
-  printf '%s %s\n' "$TARGET_SHA" "$(date +%s)" > "$FAIL_FILE" 2>/dev/null || true
+  # Incrémente le compteur d'échecs du SHA courant (repart à 1 si le
+  # build cible a changé — un nouveau SHA repart avec le retry rapide).
+  local ancien_sha ancien_n nouveau_n palier
+  ancien_sha=$(cut -d' ' -f1 "$FAIL_FILE" 2>/dev/null || true)
+  ancien_n=$(cut -d' ' -f3 "$FAIL_FILE" 2>/dev/null || true)
+  case "$ancien_n" in ''|*[!0-9]*) ancien_n=0 ;; esac
+  if [ "$ancien_sha" = "$TARGET_SHA" ]; then nouveau_n=$((ancien_n + 1)); else nouveau_n=1; fi
+  printf '%s %s %s\n' "$TARGET_SHA" "$(date +%s)" "$nouveau_n" > "$FAIL_FILE" 2>/dev/null || true
+  palier=$(palier_pour "$nouveau_n")
+  log "PULL: échec #$nouveau_n sur $TARGET_SHA — prochaine tentative dans ${palier}s (backoff progressif)."
 }
 
 # --- 1. Manifeste du dernier build publié (meta.json déposé en dernier
@@ -99,16 +134,22 @@ if [ -f "$LAST_DEPLOYED" ] && [ "$(cat "$LAST_DEPLOYED" 2>/dev/null)" = "$TARGET
   exit 0
 fi
 
-# --- 5. Backoff transient : le même SHA a échoué il y a < 15 min
-#        (réseau, intégrité, finisher non blacklistant) → attendre.
-#        Un échec NE FIGE PLUS le SHA : la reprise est garantie. ---
+# --- 5. Backoff transient progressif (v3) : le même SHA a échoué —
+#        l'attente dépend du compteur d'échecs persisté (60 s, puis
+#        2/5/15 min) au lieu des 15 min fixes de v2 qui portaient les
+#        livraisons à ~21 min. Un état v2 (2 champs, sans compteur) est
+#        lu avec le compteur par défaut 1 (retry rapide). Un échec NE
+#        FIGE PLUS le SHA : la reprise est garantie. ---
 if [ -f "$FAIL_FILE" ]; then
   FSHA=$(cut -d' ' -f1 "$FAIL_FILE" 2>/dev/null)
   FTS=$(cut -d' ' -f2 "$FAIL_FILE" 2>/dev/null)
+  FN=$(cut -d' ' -f3 "$FAIL_FILE" 2>/dev/null)
+  case "$FN" in ''|*[!0-9]*) FN=1 ;; esac
+  PALIER=$(palier_pour "$FN")
   MAINTENANT=$(date +%s)
   if [ "$FSHA" = "$TARGET_SHA" ] && [ -n "$FTS" ] \
      && [ "$MAINTENANT" -ge 0 ] 2>/dev/null \
-     && [ $((MAINTENANT - FTS)) -lt "$BACKOFF_S" ]; then
+     && [ $((MAINTENANT - FTS)) -lt "$PALIER" ]; then
     exit 0
   fi
 fi
@@ -117,7 +158,7 @@ fi
 log "PULL: nouveau build $TARGET_SHA — téléchargement depuis la release cd-latest…"
 curl -fsSL -m 600 -o "$DL_TAR" \
   "https://github.com/$REPO/releases/download/cd-latest/next-build.tar.gz?_=$CACHEBUST" || {
-  log "PULL ERREUR: téléchargement du tar impossible — nouvelle tentative au prochain poll (backoff ${BACKOFF_S}s)."
+  log "PULL ERREUR: téléchargement du tar impossible — nouvelle tentative au prochain poll."
   marquer_echec; rm -f "$DL_TAR"; exit 1; }
 [ -s "$DL_TAR" ] || { log "PULL ERREUR: tar vide — backoff."; marquer_echec; rm -f "$DL_TAR"; exit 1; }
 
@@ -141,7 +182,7 @@ if [ "$CODE" -eq 0 ]; then
   log "PULL: déploiement $TARGET_SHA terminé avec succès."
   rm -f "$FAIL_FILE"
 else
-  log "PULL: cd-finisher.sh a retourné $CODE (blacklist/rollback éventuel) — backoff ${BACKOFF_S}s."
+  log "PULL: cd-finisher.sh a retourné $CODE (blacklist/rollback éventuel)."
   marquer_echec
 fi
 exit "$CODE"

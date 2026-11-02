@@ -422,3 +422,63 @@ describe("Contrôle de livraison PULL après CD (.github/workflows/deploy-vps.ym
     expect(cd).toContain("gh issue create");
   });
 });
+
+describe("Backoff progressif du poller (scripts/vps-auto-deploy/pull-deploy.sh v3 — levier it.81-c)", () => {
+  const poller = read("scripts/vps-auto-deploy/pull-deploy.sh");
+
+  it("politique encodée : retry rapide 60 s, puis 2/5 min, plafond 15 min (protection v2 inchangée)", () => {
+    // Livraison e256e55 mesurée à ~21 min : le backoff FIXE de 15 min de
+    // v2 portait chaque échec transient au-delà de la cible « ≤ 2 min ».
+    // v3 : retry rapide 60 s (un échec réseau se répare en secondes),
+    // puis paliers progressifs ; le plafond v2 protège toujours la
+    // bande passante (200 Mo par essai, VPS 2 Go).
+    expect(poller).toContain("PALIERS_S=(60 120 300)");
+    expect(poller).toContain("BACKOFF_PLAFOND_S=900");
+    expect(poller).toContain("échec #1 → 60 s · #2 → 2 min · #3 → 5 min · #4+ → 15 min (plafond)");
+  });
+
+  it("chaque palier est atteignable via palier_pour (1, 2, 3, au-delà)", () => {
+    expect(poller).toContain("1) echo 60 ;;");
+    expect(poller).toContain("2) echo 120 ;;");
+    expect(poller).toContain("3) echo 300 ;;");
+    expect(poller).toContain('*) echo "$BACKOFF_PLAFOND_S" ;;');
+  });
+
+  it("le compteur d'échecs persiste PAR SHA : incrément au même SHA, reset si build cible change", () => {
+    // Sans compteur, un backoff progressif retombe à zéro à chaque poll
+    // (poller toutes les 2 min) — c'est l'incrément qui fait monter le
+    // palier ; et un NOUVEAU SHA repart avec le retry rapide.
+    expect(poller).toContain("nouveau_n=$((ancien_n + 1))");
+    expect(poller).toContain('if [ "$ancien_sha" = "$TARGET_SHA" ]; then nouveau_n=$((ancien_n + 1)); else nouveau_n=1; fi');
+  });
+
+  it("la fenêtre d'attente est le palier CALCULÉ, jamais une constante fixe (régression v2 impossible)", () => {
+    expect(poller).toContain('PALIER=$(palier_pour "$FN")');
+    expect(poller).toContain('-lt "$PALIER"');
+    // La constante 900 ne doit plus être utilisée directement comme
+    // fenêtre d'attente — uniquement via palier_pour (plafond).
+    expect(poller).not.toMatch(/BACKOFF_S=900/); // ancien nom v2 disparu
+  });
+
+  it("le succès efface l'état d'échec et le log annonce le palier appliqué", () => {
+    expect(poller).toContain('rm -f "$FAIL_FILE"');
+    expect(poller).toContain("backoff progressif");
+  });
+
+  it("compat arrière : un état v2 (2 champs, sans compteur) est lu avec le compteur par défaut", () => {
+    // Le VPS peut porter un pull-fail.txt écrit par v2 (<sha> <epoch>) :
+    // lecture défendue contre l'absence du 3e champ (compteur → 1).
+    expect(poller).toContain("ancien_n=0");
+    expect(poller).toContain("FN=1");
+  });
+
+  it("les surfaces publiques documentent la même politique (runbook, /status, workflow)", () => {
+    // Une seule politique, trois endroits : si l'un diverge, l'utilisateur
+    // reçoit une promesse de livraison différente du comportement réel.
+    expect(read("docs/runbooks/deployment.md")).toContain("pull-deploy.sh v3");
+    expect(read("docs/runbooks/deployment.md")).toContain("retry 60 s, puis 2 min,");
+    expect(read("app/status/page.tsx")).toContain("nouvelle tentative rapide (1 min)");
+    const cd = read(".github/workflows/deploy-vps.yml");
+    expect(cd).toContain("backoff progressif du poller (pull-deploy.sh v3 : retry 60 s, puis 2 min, 5 min, plafond 15 min)");
+  });
+});

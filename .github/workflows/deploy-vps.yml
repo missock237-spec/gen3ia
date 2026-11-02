@@ -491,7 +491,7 @@ jobs:
             echo "| SLE | ${SLE_SECONDES} s — VIOLÉ |"
             echo "| SHA attendu | \`$GITHUB_SHA\` |"
             echo "| SHA servi par gen3ia.online | ${sha_prod:-injoignable} |"
-            echo "| Hypothèse | backoff du poller (BACKOFF_S=900) ou poller absent/mort |"
+            echo "| Hypothèse | échec transient + backoff progressif du poller (retry 60 s, puis 2/5 min, plafond 15 min) ou poller absent/mort |"
           } >> "$GITHUB_STEP_SUMMARY"
           # Escalade : même titre que le guérisseur (refermeture auto à
           # l'alignement) — un seul doublon jamais (anti-doublon).
@@ -502,7 +502,7 @@ jobs:
           Le build \`$BUILD_ID\` (sha \`$GITHUB_SHA\`) a été publié sur la release \`cd-latest\` à **${PUBLIE_A:-heure inconnue}** ; après **${SLE_SECONDES} s** de sondage (30 s de pas), gen3ia.online ne sert **pas** ce commit (servi : ${sha_prod:-injoignable}).
 
           - verify_build était « ${{ steps.verify_build.outcome }} » (canal SSH muet ou fenêtre dépassée) — l'écart prod↔release n'était donc mesuré NULLE PART avant ce contrôle (constat it.30 : 21 min sans signal).
-          - Hypothèse principale : échec transient du pull → backoff 900 s (BACKOFF_S) → succès au retry ; ou poller absent/mort.
+          - Hypothèse principale : échec transient du pull → backoff progressif du poller (pull-deploy.sh v3 : retry 60 s, puis 2 min, 5 min, plafond 15 min) → succès au retry ; ou poller absent/mort.
 
           ### Log du poller VPS (tail -n 40 /opt/gen3ia-updater/state/deploy.log)
 
