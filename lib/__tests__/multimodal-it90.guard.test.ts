@@ -7,19 +7,20 @@ import { ASSETS_MULTIMODAL_IT90, PAIRES_MULTIMODAL_IT90 } from "../neural/genera
 import { CORPUS_GEN3 } from "../neural/generation/corpus";
 
 /**
- * GARDE it.90 — assets multimodaux RÉELS intégrés au cerveau.
+ * GARDE it.90→it.96 — assets multimodaux RÉELS intégrés au cerveau.
  * Vérifie que chaque asset existe physiquement dans public/, que les
  * métadonnées mesurées sont cohérentes (octets réels, empreinte présente)
  * et que les paires sont assimilées par le corpus de production.
+ * it.96 : expansion +12 (COCO lignes 60-75, FLEURS 12-15) → 58 assets.
  */
 describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90.ts)", () => {
-  it("46 assets réels sont présents (28 images + 12 audios FLEURS + 2 vidéos UCF101 + 4 TTS)", () => {
-    expect(ASSETS_MULTIMODAL_IT90).toHaveLength(46);
+  it("58 assets réels sont présents (36 images + 16 audios FLEURS + 2 vidéos UCF101 + 4 TTS)", () => {
+    expect(ASSETS_MULTIMODAL_IT90).toHaveLength(58);
     const comptes = ASSETS_MULTIMODAL_IT90.reduce<Record<string, number>>((acc, a) => {
       acc[a.modality] = (acc[a.modality] ?? 0) + 1;
       return acc;
     }, {});
-    expect(comptes).toEqual({ image: 28, audio: 12, video: 2, "audio-généré": 4 });
+    expect(comptes).toEqual({ image: 36, audio: 16, video: 2, "audio-généré": 4 });
   });
 
   it("chaque fichier existe physiquement et son octetage mesuré correspond au module", () => {
@@ -43,8 +44,8 @@ describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90
     expect(total).toBeGreaterThan(3_000_000);
   });
 
-  it("les 46 paires multimodales sont assimilées par le corpus de production", () => {
-    expect(PAIRES_MULTIMODAL_IT90).toHaveLength(46);
+  it("les 58 paires multimodales sont assimilées par le corpus de production", () => {
+    expect(PAIRES_MULTIMODAL_IT90).toHaveLength(58);
     const motifs = new Set(PAIRES_MULTIMODAL_IT90.map((p) => p.motif));
     for (const p of PAIRES_MULTIMODAL_IT90) {
       expect(motifs.has(p.motif)).toBe(true);
@@ -62,8 +63,8 @@ describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90
     const coco = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("rafaelpadilla/coco2017"));
     const fleurs = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("google/fleurs"));
     const ucf = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("sayakpaul/ucf101-subset"));
-    expect(coco).toHaveLength(28);
-    expect(fleurs).toHaveLength(12);
+    expect(coco).toHaveLength(36);
+    expect(fleurs).toHaveLength(16);
     expect(ucf).toHaveLength(2);
     // transcription FLEURS réelle (française, ponctuée) — pas une légende fabriquée
     for (const f of fleurs) {

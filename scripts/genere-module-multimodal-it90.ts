@@ -83,7 +83,7 @@ const comptes = assets.reduce<Record<string, number>>((acc, a) => {
 function paireImage(a: Asset): { motif: string; reponse: string; theme: string } {
   return {
     motif: `Que contient l'image ${a.id} ?`,
-    reponse: `L'image ${a.id} est un asset RÉEL de COCO-2017 (validation, ${a.dataset.split("#")[1] ?? "val"}, ${a.bytes.toLocaleString("fr-FR")} octets, empreinte ${a.sha256}). La légende exacte issue des annotations : ${a.legende_reelle}. Elle est servie publiquement à ${a.file} et fait partie des 20 images réelles intégrées au cerveau de gen3 au tick it.90.`,
+    reponse: `L'image ${a.id} est un asset RÉEL de COCO-2017 (validation, ${a.dataset.split("#")[1] ?? "val"}, ${a.bytes.toLocaleString("fr-FR")} octets, empreinte ${a.sha256}). La légende exacte issue des annotations : ${a.legende_reelle}. Elle est servie publiquement à ${a.file} et fait partie des ${comptes.image} images réelles intégrées au cerveau de gen3 (accumulées aux ticks it.90, it.95 et it.96).`,
     theme: "multimodal-image",
   };
 }

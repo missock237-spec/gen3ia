@@ -1,6 +1,6 @@
 {
-  "total_octets": 6366075,
-  "n": 42,
+  "total_octets": 9366692,
+  "n": 54,
   "assets": [
     {
       "id": "kext90_image_001",
@@ -421,6 +421,126 @@
       "bytes": 422458,
       "sha256": "509017baa276fccb",
       "legende_reelle": "Les Espagnols ont inauguré la période de la colonisation, laquelle a duré trois siècles."
+    },
+    {
+      "id": "kext96_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "253433",
+      "file": "public/multimodal-it90/images/image_028.jpg",
+      "bytes": 49265,
+      "sha256": "952a4bb24b872553",
+      "legende_reelle": "scène contenant : canapé, ours en peluche (2 objets annotés)"
+    },
+    {
+      "id": "kext96_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "396568",
+      "file": "public/multimodal-it90/images/image_029.jpg",
+      "bytes": 71514,
+      "sha256": "b18dc924842df2d5",
+      "legende_reelle": "scène contenant : train (1 objets annotés)"
+    },
+    {
+      "id": "kext96_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "89045",
+      "file": "public/multimodal-it90/images/image_030.jpg",
+      "bytes": 48730,
+      "sha256": "d8aaed5553cf0c32",
+      "legende_reelle": "scène contenant : canapé, chaise, horloge, livre, plante en pot, table, vase (9 objets annotés)"
+    },
+    {
+      "id": "kext96_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "387383",
+      "file": "public/multimodal-it90/images/image_031.jpg",
+      "bytes": 31863,
+      "sha256": "76dd1002b1aff366",
+      "legende_reelle": "scène contenant : chat, lit (2 objets annotés)"
+    },
+    {
+      "id": "kext96_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "95155",
+      "file": "public/multimodal-it90/images/image_032.jpg",
+      "bytes": 48367,
+      "sha256": "f07388b0a81c65c2",
+      "legende_reelle": "scène contenant : personne, snowboard (8 objets annotés)"
+    },
+    {
+      "id": "kext96_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "36494",
+      "file": "public/multimodal-it90/images/image_033.jpg",
+      "bytes": 66991,
+      "sha256": "dc070b7255a61ae2",
+      "legende_reelle": "scène contenant : bol, bouteille, chaise, horloge, personne, réfrigérateur, table, tasse, vase (52 objets annotés)"
+    },
+    {
+      "id": "kext96_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "495054",
+      "file": "public/multimodal-it90/images/image_034.jpg",
+      "bytes": 41666,
+      "sha256": "680fecff1887c909",
+      "legende_reelle": "scène contenant : avion, camion (8 objets annotés)"
+    },
+    {
+      "id": "kext96_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "297595",
+      "file": "public/multimodal-it90/images/image_035.jpg",
+      "bytes": 38469,
+      "sha256": "e2f23fe0c45dc62b",
+      "legende_reelle": "scène contenant : personne, planche de surf (2 objets annotés)"
+    },
+    {
+      "id": "kext96_audio_001",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1581",
+      "file": "public/multimodal-it90/audio/audio_012.wav",
+      "bytes": 472378,
+      "sha256": "b5b1b0ed62d80510",
+      "legende_reelle": "L'Amazone est également le fleuve le plus large de la planète, atteignant parfois 10 km de large."
+    },
+    {
+      "id": "kext96_audio_002",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1647",
+      "file": "public/multimodal-it90/audio/audio_013.wav",
+      "bytes": 510778,
+      "sha256": "e4c13c5d36e45338",
+      "legende_reelle": "Les opinions présentées sont souvent superficielles, générales et trop simplifiées par rapport aux informations plus détaillées disponibles ailleurs."
+    },
+    {
+      "id": "kext96_audio_003",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1538",
+      "file": "public/multimodal-it90/audio/audio_014.wav",
+      "bytes": 867898,
+      "sha256": "0df20542013093e2",
+      "legende_reelle": "Le tronçon entre Point Marion et Fairmont présente les conditions de conduite les plus difficiles sur l’autoroute Buffalo-Pittsburgh, passant fréquemment par des terrains isolés de l’arrière-pays."
+    },
+    {
+      "id": "kext96_audio_004",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1632",
+      "file": "public/multimodal-it90/audio/audio_015.wav",
+      "bytes": 752698,
+      "sha256": "411ab087ec962f99",
+      "legende_reelle": "Les femmes doivent réaliser que certaines différences culturelles peuvent entraîner des comportements qu'elles considèrent comme du harcèlement. Il est en effet courant qu'elles soient suivies, attrapées par le bras, etc."
     }
   ]
 }

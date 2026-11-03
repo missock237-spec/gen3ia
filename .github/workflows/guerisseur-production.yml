@@ -99,6 +99,7 @@ jobs:
       battement_age_s: ${{ steps.battement.outputs.age_s }}
       battement_target: ${{ steps.battement.outputs.target_sha }}
       battement_served: ${{ steps.battement.outputs.served_sha }}
+      battement_note: ${{ steps.battement.outputs.note }}
     steps:
       # v10 — SOMMEIL DE CADENCE du relais : le run auto-dispatché attend
       # 10 min AVANT de mesurer, pour que la chaîne d'incident tourne à
@@ -144,7 +145,7 @@ jobs:
       # 600 s + finisher avec npm ci — reste sous ~17 min). Ce step tourne
       # TOUJOURS (aligné ou non) : un poller mort est un incident même
       # quand la production est à jour — la PROCHAINE livraison pend.
-      - name: "Lire le battement du poller (télémétrie HTTPS, v9)"
+      - name: "Lire le battement du poller (télémétrie HTTPS, v9 + phase v6)"
         id: battement
         run: |
           cb=$(date +%s)
@@ -152,16 +153,22 @@ jobs:
           EPOCH=$(echo "$HB" | jq -r '.epoch // 0' 2>/dev/null || echo 0)
           TARGET=$(echo "$HB" | jq -r '.targetSha // ""' 2>/dev/null || echo "")
           SERVED=$(echo "$HB" | jq -r '.servedSha // ""' 2>/dev/null || echo "")
+          NOTE=$(echo "$HB" | jq -r '.note // ""' 2>/dev/null || echo "")
           ETAT="absent"; AGE=""
           case "$EPOCH" in ''|0|*[!0-9]*) ETAT="absent" ;; *)
             AGE=$(( $(date +%s) - EPOCH ))
             if [ "$AGE" -lt 1200 ]; then ETAT="vivant"; else ETAT="silencieux"; fi ;;
           esac
-          echo "battement = $ETAT (âge ${AGE:-?} s, cible ${TARGET:-—}, servi ${SERVED:-—})"
+          # v11 — télémétrie de phase (pull-deploy v6) : la note dit CE QUE
+          # FAIT le poller (dl-debut/dl-en-cours/dl-fin/finisher-debut/
+          # deploie/finisher-echec/echec-backoff) — un téléchargement lent
+          # se distingue enfin d'un finisher bloqué, sans SSH.
+          echo "battement = $ETAT (âge ${AGE:-?} s, cible ${TARGET:-—}, servi ${SERVED:-—}, phase ${NOTE:-—})"
           echo "etat=$ETAT" >> "$GITHUB_OUTPUT"
           echo "age_s=$AGE" >> "$GITHUB_OUTPUT"
           echo "target_sha=$TARGET" >> "$GITHUB_OUTPUT"
           echo "served_sha=$SERVED" >> "$GITHUB_OUTPUT"
+          echo "note=$NOTE" >> "$GITHUB_OUTPUT"
 
       # Bug constaté 2026-10-28 06:00 UTC : la refermeture de l'escalade
       # vivait dans l'étape « Escalade » du job `guerir` (if: always() AU
@@ -464,6 +471,7 @@ jobs:
           BATTEMENT_AGE_S: ${{ needs.verifier.outputs.battement_age_s }}
           BATTEMENT_TARGET: ${{ needs.verifier.outputs.battement_target }}
           BATTEMENT_SERVED: ${{ needs.verifier.outputs.battement_served }}
+          BATTEMENT_NOTE: ${{ needs.verifier.outputs.battement_note }}
           REPO: ${{ github.repository }}
         run: |
           TITRE="🚨 Production en retard sur main — intervention console VPS requise"
@@ -503,6 +511,7 @@ jobs:
           relancé.
 
           - Battement      : silencieux (âge %HB_AGE% s)
+          - Phase du poller       : `%HB_NOTE%` (pull-deploy v6 — dl-… = téléchargement, finisher-… = bascule, echec-backoff = échecs répétés)
           - SHA servi (battement) : `%HB_SERVED%`
           - SHA cible (release)   : `%HB_TARGET%`
           - SHA main       : `%SHA_MAIN%`
@@ -522,10 +531,11 @@ jobs:
             CORPS_POLLER="${CORPS_POLLER//%HB_AGE%/${BATTEMENT_AGE_S:-?}}"
             CORPS_POLLER="${CORPS_POLLER//%HB_SERVED%/${BATTEMENT_SERVED:-absent}}"
             CORPS_POLLER="${CORPS_POLLER//%HB_TARGET%/${BATTEMENT_TARGET:-absent}}"
+            CORPS_POLLER="${CORPS_POLLER//%HB_NOTE%/${BATTEMENT_NOTE:-—}}"
             CORPS_POLLER="${CORPS_POLLER//%SHA_MAIN%/$SHA_MAIN}"
             CORPS_POLLER="${CORPS_POLLER//%SHA_PROD%/$SHA_PROD}"
             if [ -n "$NUM_P" ]; then
-              gh issue comment "$NUM_P" -R "$REPO" -b "Tick $(date -u +%FT%TZ) — battement toujours silencieux (âge ${BATTEMENT_AGE_S:-?} s, servi ${BATTEMENT_SERVED:-absent})."
+              gh issue comment "$NUM_P" -R "$REPO" -b "Tick $(date -u +%FT%TZ) — battement toujours silencieux (âge ${BATTEMENT_AGE_S:-?} s, servi ${BATTEMENT_SERVED:-absent}, phase ${BATTEMENT_NOTE:-—})."
               echo "Issue poller #$NUM_P commentée (silence confirmé)."
             else
               gh issue create -R "$REPO" --title "$TITRE_POLLER" --body "$CORPS_POLLER" >/dev/null \

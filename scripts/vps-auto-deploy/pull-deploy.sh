@@ -54,6 +54,17 @@
 #   que le poller vit, son silence PROUVE qu'il est mort — observable
 #   par le guérisseur en HTTPS pur, sans SSH, sans sonde à risque
 #   d'auto-bannissement (guérisseur v9).
+#
+# v6 (it.96, 2026-11-04) — TÉLÉMÉTRIE DE PHASE :
+#   fait mesuré à it.95 : une livraison de 45 min (vs ~13) n'était PAS
+#   diagnostiquable depuis l'extérieur — le battement prouvait que le
+#   poller VIVAIT, pas ce qu'il FAISAIT. Désormais le heartbeat porte la
+#   PHASE dans "note" : "dl-debut" → "dl-en-cours" (batteur interne
+#   borné 10×60 s, jamais orphelin infini) → "dl-fin" →
+#   "finisher-debut" → "deploie" / "finisher-echec", plus
+#   "echec-backoff" à chaque échec transient (backoff v3 visible).
+#   Lire /poller-heartbeat.json suffit désormais à distinguer un
+#   téléchargement lent d'un finisher bloqué — sans SSH.
 # =====================================================================
 set -u
 
@@ -79,8 +90,8 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$STATE_DIR/deploy.log"; ech
 # v5 — battement : écrit le heartbeat. Ne JAMAIS laisser un échec
 # d'écriture tuer le déploiement (|| true). Les notes sont des chaînes
 # ASCII fixes maîtrisées ici — pas d'injection JSON possible.
-battement() { # $1 = sha cible lu du meta.json ("" si release absente), $2 = note courte
-  printf '{"ok":true,"ts":"%s","epoch":%s,"poller":"pull-deploy v5","targetSha":"%s","servedSha":"%s","note":"%s"}\n' \
+battement() { # $1 = sha cible lu du meta.json ("" si release absente), $2 = note courte (= PHASE en v6)
+  printf '{"ok":true,"ts":"%s","epoch":%s,"poller":"pull-deploy v6","targetSha":"%s","servedSha":"%s","note":"%s"}\n' \
     "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$(date +%s)" "$1" \
     "$(cat "$LAST_DEPLOYED" 2>/dev/null || echo '')" "$2" \
     > "$HEARTBEAT" 2>/dev/null || true
@@ -109,6 +120,10 @@ marquer_echec() {
   printf '%s %s %s\n' "$TARGET_SHA" "$(date +%s)" "$nouveau_n" > "$FAIL_FILE" 2>/dev/null || true
   palier=$(palier_pour "$nouveau_n")
   log "PULL: échec #$nouveau_n sur $TARGET_SHA — prochaine tentative dans ${palier}s (backoff progressif)."
+  # v6 — la phase d'échec est visible de l'extérieur : note="echec-backoff"
+  # fraîche + cible ≠ servi = le téléchargement échoue répétitivement
+  # (diagnostic sans SSH, complément des phases dl-/finisher-).
+  battement "$TARGET_SHA" "echec-backoff"
 }
 
 # --- 1. Manifeste du dernier build publié (meta.json déposé en dernier
@@ -199,6 +214,13 @@ fi
 #        finisher ; après une intégrité invalide, le tar est purgé —
 #        l'essai suivant repart proprement de zéro. ---
 log "PULL: nouveau build $TARGET_SHA — téléchargement depuis la release cd-latest…"
+# v6 — phase visible : début de téléchargement, puis batteur interne
+# (borné : 10 itérations de 60 s puis il s'arrête SEUL — jamais un
+# orphelin infini ; kill au EXIT du script via trap, idempotent).
+battement "$TARGET_SHA" "dl-debut"
+( for i in 1 2 3 4 5 6 7 8 9 10; do sleep 60; battement "$TARGET_SHA" "dl-en-cours"; done ) &
+BATTEUR=$!
+trap 'kill "${BATTEUR:-}" 2>/dev/null || true' EXIT
 curl -fsSL -m 60 -o "$DL_SHA" \
   "https://github.com/$REPO/releases/download/cd-latest/next-build.tar.gz.sha256?_=$CACHEBUST" || {
   log "PULL ERREUR: somme sha256 indisponible — backoff."; marquer_echec; rm -f "$DL_SHA"; exit 1; }
@@ -231,6 +253,11 @@ fi
   marquer_echec; rm -f "$DL_TAR" "$DL_SHA" "$PARTIAL_MARK"; exit 1; }
 rm -f "$PARTIAL_MARK"   # tar complet et intègre : la reprise n'a plus d'objet
 
+# v6 — fin de la phase téléchargement : batteur stoppé (le trap EXIT
+# couvre les sorties précoces — échecs sha256/intégrité — avant ceci).
+kill "$BATTEUR" 2>/dev/null || true; wait "$BATTEUR" 2>/dev/null || true
+battement "$TARGET_SHA" "dl-fin"
+
 # --- 7. Finisher versionné AU MÊME SHA (jamais une copie obsolète) ---
 curl -fsSL -m 30 -o /tmp/cd-finisher.sh \
   "https://raw.githubusercontent.com/$REPO/$TARGET_SHA/infra/deploy/cd-finisher.sh" || {
@@ -238,13 +265,18 @@ curl -fsSL -m 30 -o /tmp/cd-finisher.sh \
   marquer_echec; exit 1; }
 
 # --- 8. Bascule (swap atomique + health check + rollback + blacklist) ---
+# v6 — phase finisher observable : un heartbeat "finisher-debut" qui
+# vieillit sans "deploie" = finisher bloqué (le 2e angle mort d'it.95).
+battement "$TARGET_SHA" "finisher-debut"
 bash /tmp/cd-finisher.sh "$TARGET_SHA"
 CODE=$?
 if [ "$CODE" -eq 0 ]; then
   log "PULL: déploiement $TARGET_SHA terminé avec succès."
   rm -f "$FAIL_FILE"
+  battement "$TARGET_SHA" "deploie"
 else
   log "PULL: cd-finisher.sh a retourné $CODE (blacklist/rollback éventuel)."
   marquer_echec
+  battement "$TARGET_SHA" "finisher-echec"
 fi
 exit "$CODE"
