@@ -44,6 +44,16 @@
 #
 # Politique de backoff (v3, mesurée et documentée) :
 #   échec #1 → 60 s · #2 → 2 min · #3 → 5 min · #4+ → 15 min (plafond)
+#
+# v5 (it.92, 2026-11-03) — TÉLÉMÉTRIE SORTANTE (heartbeat HTTPS) :
+#   fait mesuré au 6e blocage (04:34→10:05Z, 5 h 30) : le poller est
+#   mort SANS AUCUN SIGNAL observable — deploy.log n'est lisible que
+#   par SSH, et le SSH était muet. Désormais ce script écrit à CHAQUE
+#   cycle (y compris « rien à faire ») un heartbeat dans le répertoire
+#   servi par le site (/poller-heartbeat.json) : sa fraîcheur PROUVE
+#   que le poller vit, son silence PROUVE qu'il est mort — observable
+#   par le guérisseur en HTTPS pur, sans SSH, sans sonde à risque
+#   d'auto-bannissement (guérisseur v9).
 # =====================================================================
 set -u
 
@@ -53,6 +63,9 @@ STATE_DIR=$UPDATER_DIR/state
 LAST_DEPLOYED=$STATE_DIR/last-deployed.txt
 FAILED_COMMITS=$STATE_DIR/failed_commits.txt
 FAIL_FILE=$STATE_DIR/pull-fail.txt     # « <sha> <epoch> <compteur> » du dernier échec TRANSIENT
+PROD_DIR=/opt/gen3ia
+# v5 — heartbeat sortant : servi par l'app à https://gen3ia.online/poller-heartbeat.json
+HEARTBEAT=$PROD_DIR/public/poller-heartbeat.json
 # v3 — backoff progressif : retry rapide (un échec transient réseau se
 # répare en secondes), puis paliers ; le plafond v2 reste la protection
 # bande passante (200 Mo par essai, 2 Go de RAM).
@@ -62,6 +75,16 @@ DL_TAR=/tmp/next-build.tar.gz
 DL_SHA=/tmp/next-build.tar.gz.sha256
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$STATE_DIR/deploy.log"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+# v5 — battement : écrit le heartbeat. Ne JAMAIS laisser un échec
+# d'écriture tuer le déploiement (|| true). Les notes sont des chaînes
+# ASCII fixes maîtrisées ici — pas d'injection JSON possible.
+battement() { # $1 = sha cible lu du meta.json ("" si release absente), $2 = note courte
+  printf '{"ok":true,"ts":"%s","epoch":%s,"poller":"pull-deploy v5","targetSha":"%s","servedSha":"%s","note":"%s"}\n' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$(date +%s)" "$1" \
+    "$(cat "$LAST_DEPLOYED" 2>/dev/null || echo '')" "$2" \
+    > "$HEARTBEAT" 2>/dev/null || true
+}
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 
 palier_pour() {
@@ -93,10 +116,20 @@ marquer_echec() {
 CACHEBUST="$(date +%s)"
 META=$(curl -fsSL -m 20 -H "Cache-Control: no-cache" \
   "https://github.com/$REPO/releases/download/cd-latest/meta.json?_=$CACHEBUST" 2>/dev/null) || {
-  log "PULL: release cd-latest indisponible (aucun build runner publié ?) — silence."; exit 0; }
+  log "PULL: release cd-latest indisponible (aucun build runner publié ?) — silence."
+  battement "" "release cd-latest indisponible"; exit 0; }
 
 TARGET_SHA=$(printf '%s' "$META" | grep -o '"sha":"[0-9a-f]*"' | head -1 | sed 's/.*:"//; s/"$//')
-[ -n "$TARGET_SHA" ] || { log "PULL: meta.json illisible — silence."; exit 0; }
+[ -n "$TARGET_SHA" ] || { log "PULL: meta.json illisible — silence."; battement "" "meta.json illisible"; exit 0; }
+
+# --- v5 : heartbeat écrit CHAQUE cycle, AVANT toute sortie précoce
+#        (self-update, blacklist, « déjà déployé + site sain », backoff)
+#        — c'est le cas majoritaire « rien à faire » qui doit prouver la
+#        vie du poller. Un téléchargement long (600 s max) ou une bascule
+#        (finisher, updater suspendu) peuvent porter l'écart entre deux
+#        battements à ~17 min : le guérisseur v9 ne conclut au silence
+#        qu'au-delà de 1200 s. ---
+battement "$TARGET_SHA" ""
 
 # --- 2. AUTO-MISE À JOUR du script au SHA cible (AVANT tout le reste) :
 #        la version qui s'exécute doit toujours être celle du build qu'elle

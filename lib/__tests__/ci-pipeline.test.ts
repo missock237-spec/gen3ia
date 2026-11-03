@@ -234,6 +234,54 @@ describe("Guérisseur production (.github/workflows/guerisseur-production.yml)",
     expect(guerisseur).toContain("contents: read");
     expect(guerisseur).toContain("actions: write");
   });
+
+  it("v9 battement HTTPS du poller : émission à chaque cycle, lecture par le guérisseur, escalade sur silence prouvé", () => {
+    // Constat 6e blocage (04:34→10:05Z, 5 h 30 sans AUCUN signal) :
+    // deploy.log n'est lisible que par SSH — et le SSH était muet. Le
+    // poller v5 émet désormais un heartbeat à CHAQUE cycle (« rien à
+    // faire » compris) dans le répertoire servi par le site : sa
+    // fraîcheur prouve la vie du poller, son silence prouve sa mort —
+    // observable en HTTPS pur, sans sonde SSH (anti auto-bannissement).
+    const pull = read("scripts/vps-auto-deploy/pull-deploy.sh");
+    expect(pull).toContain("poller-heartbeat.json");
+    expect(pull).toContain("battement()");
+    // le battement est émis AVANT les sorties précoces — le cas majoritaire
+    // « rien à faire » est précisément celui qui doit prouver la vie :
+    expect(pull).toContain('battement "$TARGET_SHA" ""');
+    // et aussi quand la release est absente / meta illisible :
+    expect(pull).toContain('battement "" "release cd-latest indisponible"');
+    expect(pull).toContain('battement "" "meta.json illisible"');
+    // le stub route l'URL dès le premier build (le poller l'écrase ensuite) :
+    expect(read("public/poller-heartbeat.json")).toContain("stub-repo");
+    // le guérisseur lit le battement (HTTPS, cache-busté) :
+    expect(guerisseur).toContain("poller-heartbeat.json?cb=");
+    // états : absent (poller pré-v5 — fail-closed), vivant, silencieux :
+    expect(guerisseur).toContain('ETAT="absent"');
+    expect(guerisseur).toContain('ETAT="vivant"');
+    expect(guerisseur).toContain('ETAT="silencieux"');
+    // seuil de silence 1200 s > pire écart légitime (dl 600 s + finisher ~17 min) :
+    expect(guerisseur).toContain("-lt 1200");
+    // escalade immédiate sur silence PROUVÉ, sans sonde, même build frais :
+    expect(guerisseur).toContain('[ "$BATTEMENT_ETAT" = "silencieux" ]');
+    expect(guerisseur).toContain(
+      "🚨 Poller VPS silencieux (battement HTTPS) — intervention console requise",
+    );
+    // refermeture miroir dès que le battement redevient vivant :
+    expect(guerisseur).toContain("steps.battement.outputs.etat == 'vivant'");
+    // les sorties du job verifier sont propagées au job guerir :
+    expect(guerisseur).toContain("battement_etat: ${{ steps.battement.outputs.etat }}");
+    expect(guerisseur).toContain("BATTEMENT_ETAT: ${{ needs.verifier.outputs.battement_etat }}");
+    // l'ordre compte : la preuve par battement AVANT la fenêtre fraîche v8
+    // (un build frais n'aide pas un poller mort) — mais APRÈS le retour
+    // « SSH joignable » (un armement en cours n'est pas une panne).
+    const escalade = guerisseur.split("Escalade — issue visible quand prod en retard")[1] ?? "";
+    const posOui = escalade.indexOf('"$JOIGNABLE" = "oui"');
+    const posV9 = escalade.indexOf('"$BATTEMENT_ETAT" = "silencieux"');
+    const posV8 = escalade.indexOf('"$JOIGNABLE" = "fraiche"');
+    expect(posOui).toBeGreaterThan(-1);
+    expect(posV9).toBeGreaterThan(posOui);
+    expect(posV8).toBeGreaterThan(posV9);
+  });
 });
 
 describe("CD VPS (.github/workflows/deploy-vps.yml) — refermeture à la source", () => {

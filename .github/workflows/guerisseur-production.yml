@@ -78,6 +78,10 @@ jobs:
       besoin: ${{ steps.ecart.outputs.besoin }}
       sha_main: ${{ steps.ecart.outputs.sha_main }}
       sha_prod: ${{ steps.ecart.outputs.sha_prod }}
+      battement_etat: ${{ steps.battement.outputs.etat }}
+      battement_age_s: ${{ steps.battement.outputs.age_s }}
+      battement_target: ${{ steps.battement.outputs.target_sha }}
+      battement_served: ${{ steps.battement.outputs.served_sha }}
     steps:
       - name: Comparer les empreintes
         id: ecart
@@ -102,6 +106,36 @@ jobs:
           echo "sha_main=$SHA_MAIN" >> "$GITHUB_OUTPUT"
           echo "sha_prod=$SHA_PROD" >> "$GITHUB_OUTPUT"
 
+      # v9 (it.92, 2026-11-03) — TÉLÉMÉTRIE HTTPS PURE DU POLLER :
+      # le 6e blocage (04:34→10:05Z, 5 h 30) est resté INVISIBLE faute de
+      # signal sortant du VPS. Le poller (pull-deploy v5) écrit désormais
+      # un heartbeat à CHAQUE cycle dans public/ — sa fraîcheur prouve la
+      # vie du poller, son silence prouve sa mort, SANS SSH (aucune sonde
+      # à risque d'auto-bannissement). État : « absent » = poller encore
+      # pré-v5 (logique v8 inchangée, fail-closed) ; « vivant » < 1200 s ;
+      # « silencieux » ≥ 1200 s (le pire écart légitime — téléchargement
+      # 600 s + finisher avec npm ci — reste sous ~17 min). Ce step tourne
+      # TOUJOURS (aligné ou non) : un poller mort est un incident même
+      # quand la production est à jour — la PROCHAINE livraison pend.
+      - name: "Lire le battement du poller (télémétrie HTTPS, v9)"
+        id: battement
+        run: |
+          cb=$(date +%s)
+          HB=$(curl -fsSL -m 20 "https://gen3ia.online/poller-heartbeat.json?cb=$cb" || true)
+          EPOCH=$(echo "$HB" | jq -r '.epoch // 0' 2>/dev/null || echo 0)
+          TARGET=$(echo "$HB" | jq -r '.targetSha // ""' 2>/dev/null || echo "")
+          SERVED=$(echo "$HB" | jq -r '.servedSha // ""' 2>/dev/null || echo "")
+          ETAT="absent"; AGE=""
+          case "$EPOCH" in ''|0|*[!0-9]*) ETAT="absent" ;; *)
+            AGE=$(( $(date +%s) - EPOCH ))
+            if [ "$AGE" -lt 1200 ]; then ETAT="vivant"; else ETAT="silencieux"; fi ;;
+          esac
+          echo "battement = $ETAT (âge ${AGE:-?} s, cible ${TARGET:-—}, servi ${SERVED:-—})"
+          echo "etat=$ETAT" >> "$GITHUB_OUTPUT"
+          echo "age_s=$AGE" >> "$GITHUB_OUTPUT"
+          echo "target_sha=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "served_sha=$SERVED" >> "$GITHUB_OUTPUT"
+
       # Bug constaté 2026-10-28 06:00 UTC : la refermeture de l'escalade
       # vivait dans l'étape « Escalade » du job `guerir` (if: always() AU
       # NIVEAU STEP seulement) — mais ce job entier est SKIPPÉ quand
@@ -122,6 +156,25 @@ jobs:
             echo "Issue #$NUM refermée (production alignée)."
           else
             echo "Aucune escalade ouverte — rien à refermer."
+          fi
+
+      # v9 — refermeture MIRROIR de l'escalade « poller silencieux » : le
+      # battement redevient frais = poller ressuscité (redémarrage console,
+      # retour de bannissement…) — l'issue dédiée doit mourir, même si la
+      # production n'est pas encore alignée.
+      - name: "Refermer l'escalade poller — battement de nouveau vivant"
+        if: steps.battement.outputs.etat == 'vivant'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          TITRE="🚨 Poller VPS silencieux (battement HTTPS) — intervention console requise"
+          NUM=$(gh issue list -R "$REPO" --state open --search "$TITRE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$NUM" ]; then
+            gh issue close "$NUM" -R "$REPO" -c "✅ Battement du poller de nouveau vivant (HTTPS) — poller ressuscité, escalade résolue automatiquement."
+            echo "Issue #$NUM refermée (poller vivant)."
+          else
+            echo "Aucune escalade poller ouverte — rien à refermer."
           fi
 
       # v7 (2026-10-30, itération 34 Job 478451) — RELAIS DE CADENCE :
@@ -356,6 +409,7 @@ jobs:
           echo "release = ${{ steps.release.outputs.release_sha }} (âge ${{ steps.release.outputs.release_age_min || '?' }} min)"
           echo "garde   = ${{ steps.garde.outcome }} (${{ steps.garde.outputs.libre }})"
           echo "sonde   = ${{ steps.sonde.outcome }} (${{ steps.sonde.outputs.joignable }})"
+          echo "battement = ${{ needs.verifier.outputs.battement_etat }} (âge ${{ needs.verifier.outputs.battement_age_s || '?' }} s, cible ${{ needs.verifier.outputs.battement_target || '—' }})"
           echo "pull    = ${{ steps.pull.outcome }} (${{ steps.pull.outputs.verdict }})"
           echo "secours-ip = ${{ steps.secours-ip.outcome || 'skipped' }} (v6.2 renouvellement d'IP)"
           echo "Rappel : le canal pull (poller VPS, install console unique) rend ce rattrapage instantané —"
@@ -379,6 +433,10 @@ jobs:
           JOIGNABLE: ${{ steps.sonde.outputs.joignable }}
           RELEASE_SHA: ${{ steps.release.outputs.release_sha }}
           RELEASE_AGE_MIN: ${{ steps.release.outputs.release_age_min }}
+          BATTEMENT_ETAT: ${{ needs.verifier.outputs.battement_etat }}
+          BATTEMENT_AGE_S: ${{ needs.verifier.outputs.battement_age_s }}
+          BATTEMENT_TARGET: ${{ needs.verifier.outputs.battement_target }}
+          BATTEMENT_SERVED: ${{ needs.verifier.outputs.battement_served }}
           REPO: ${{ github.repository }}
         run: |
           TITRE="🚨 Production en retard sur main — intervention console VPS requise"
@@ -397,6 +455,58 @@ jobs:
             echo "SSH joignable — rattrapage en cours par les canaux normaux, pas d'escalade."
             exit 0
           fi
+
+          # v9 — PREUVE PAR LE BATTEMENT (it.92) : un heartbeat silencieux
+          # ≥ 1200 s PROUVE la mort du poller en HTTPS pur — escalade
+          # immédiate, SANS sonde SSH (zéro risque d'auto-bannissement) et
+          # même sur un build frais : la fenêtre v8 protège la sonde, pas
+          # un poller mort (un build frais n'aide pas un poller mort).
+          # C'est le scénario exact du 6e blocage (04:34→10:05Z), désormais
+          # détectable en ≤ 1 tick au lieu de 5 h 30.
+          if [ "$BATTEMENT_ETAT" = "silencieux" ]; then
+            TITRE_POLLER="🚨 Poller VPS silencieux (battement HTTPS) — intervention console requise"
+            NUM_P=$(gh issue list -R "$REPO" --state open --search "$TITRE_POLLER in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+            CORPS_POLLER=$(cat <<'EOFP'
+          ## Poller VPS silencieux — preuve HTTPS (sans SSH)
+
+          Le heartbeat du poller (`/poller-heartbeat.json`, écrit à chaque
+          cycle par pull-deploy.sh v5) est **silencieux** depuis ≥ 20 min :
+          le poller PM2 « updater » ne tourne plus — les builds publiés sur
+          `cd-latest` ne seront plus jamais tirés tant qu'il n'est pas
+          relancé.
+
+          - Battement      : silencieux (âge %HB_AGE% s)
+          - SHA servi (battement) : `%HB_SERVED%`
+          - SHA cible (release)   : `%HB_TARGET%`
+          - SHA main       : `%SHA_MAIN%`
+          - SHA production : `%SHA_PROD%`
+
+          **Action unique depuis la console du fournisseur (spaceship.com
+          → console root)** — une seule commande, sans SSH :
+
+          ```
+          curl -fsSL https://raw.githubusercontent.com/missock237-spec/gen3ia/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash
+          ```
+
+          _Issue ouverte par le guérisseur v9 (Job 478451). Refermeture
+          automatique dès que le battement redevient vivant._
+          EOFP
+            )
+            CORPS_POLLER="${CORPS_POLLER//%HB_AGE%/${BATTEMENT_AGE_S:-?}}"
+            CORPS_POLLER="${CORPS_POLLER//%HB_SERVED%/${BATTEMENT_SERVED:-absent}}"
+            CORPS_POLLER="${CORPS_POLLER//%HB_TARGET%/${BATTEMENT_TARGET:-absent}}"
+            CORPS_POLLER="${CORPS_POLLER//%SHA_MAIN%/$SHA_MAIN}"
+            CORPS_POLLER="${CORPS_POLLER//%SHA_PROD%/$SHA_PROD}"
+            if [ -n "$NUM_P" ]; then
+              gh issue comment "$NUM_P" -R "$REPO" -b "Tick $(date -u +%FT%TZ) — battement toujours silencieux (âge ${BATTEMENT_AGE_S:-?} s, servi ${BATTEMENT_SERVED:-absent})."
+              echo "Issue poller #$NUM_P commentée (silence confirmé)."
+            else
+              gh issue create -R "$REPO" --title "$TITRE_POLLER" --body "$CORPS_POLLER" >/dev/null \
+                && echo "Issue d'escalade POLLER créée (preuve HTTPS, sans sonde SSH)."
+            fi
+            exit 0
+          fi
+
           # v8 — build FRAIS (sonde évitée, anti auto-bannissement) : le
           # poller peut encore livrer dans ses ~10 premiers cycles — pas
           # d'escalade bruyante pendant cette fenêtre.
