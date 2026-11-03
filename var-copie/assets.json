@@ -1,6 +1,6 @@
 {
-  "total_octets": 12185356,
-  "n": 66,
+  "total_octets": 3604216,
+  "n": 78,
   "assets": [
     {
       "id": "kext90_image_001",
@@ -207,9 +207,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1524",
-      "file": "public/multimodal-it90/audio/audio_000.wav",
-      "bytes": 462798,
-      "sha256": "7c0cce7e9991c128",
+      "file": "public/multimodal-it90/audio/audio_000.opus",
+      "bytes": 41250,
+      "sha256": "2db7825fcd2e952d",
       "legende_reelle": "Il y a de nombreuses répercussions sociales et politiques telles que l'utilisation du système métrique, le passage de l'absolutisme au républicanisme, le nationalisme et la conviction que le pays appartient au peuple et non à un seul dirigeant."
     },
     {
@@ -217,9 +217,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1570",
-      "file": "public/multimodal-it90/audio/audio_001.wav",
-      "bytes": 192078,
-      "sha256": "bddac0d3e0e1cd56",
+      "file": "public/multimodal-it90/audio/audio_001.opus",
+      "bytes": 14494,
+      "sha256": "1c756fb286d934b1",
       "legende_reelle": "Il n'avait pas non plus le pouvoir de déroger aux lois fiscales ni à celles sur les droits de douane entre les États."
     },
     {
@@ -227,9 +227,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1620",
-      "file": "public/multimodal-it90/audio/audio_002.wav",
-      "bytes": 491598,
-      "sha256": "7515e68012cbf258",
+      "file": "public/multimodal-it90/audio/audio_002.opus",
+      "bytes": 46802,
+      "sha256": "d6288a0e015e4d7c",
       "legende_reelle": "Maintenant, largement disponible dans tout l’archipel, la cuisine javanaise propose un éventail de plats simplement assaisonnés, les saveurs prédominantes que les Javanais privilégient étant les cacahuètes, les piments, le sucre (en particulier le sucre de coco javanais) et diverses épices aromatiques."
     },
     {
@@ -237,9 +237,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1533",
-      "file": "public/multimodal-it90/audio/audio_003.wav",
-      "bytes": 251598,
-      "sha256": "924c11ac849d8c14",
+      "file": "public/multimodal-it90/audio/audio_003.opus",
+      "bytes": 22698,
+      "sha256": "44f195cbf0f51c21",
       "legende_reelle": "De nombreux formats courants (famille de formats APS, par exemple) sont égaux à ce rapport d’aspect ou s’en approchent de près."
     },
     {
@@ -247,9 +247,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1652",
-      "file": "public/multimodal-it90/audio/audio_004.wav",
-      "bytes": 272718,
-      "sha256": "6c0579ad9ea9b3af",
+      "file": "public/multimodal-it90/audio/audio_004.opus",
+      "bytes": 23779,
+      "sha256": "3dc96d7731e8dc65",
       "legende_reelle": "La principale religion en Moldavie est le christianisme orthodoxe."
     },
     {
@@ -257,9 +257,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1640",
-      "file": "public/multimodal-it90/audio/audio_005.wav",
-      "bytes": 236238,
-      "sha256": "0f3c590b38b26c9b",
+      "file": "public/multimodal-it90/audio/audio_005.opus",
+      "bytes": 21578,
+      "sha256": "d9087e410a33c74b",
       "legende_reelle": "Sur les routes glacées et enneigées, le frottement est faible et vous ne pouvez pas conduire comme si vous étiez sur l'asphalte nu."
     },
     {
@@ -267,9 +267,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1616",
-      "file": "public/multimodal-it90/audio/audio_006.wav",
-      "bytes": 384078,
-      "sha256": "468439a6a24958da",
+      "file": "public/multimodal-it90/audio/audio_006.opus",
+      "bytes": 33866,
+      "sha256": "77a7ba223c45d182",
       "legende_reelle": "La science montre désormais que cette économie massivement basée sur le carbone a délogé la biosphère de son état de stabilité qui a soutenu l'évolution humaine pendant deux millions d'années."
     },
     {
@@ -277,9 +277,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1553",
-      "file": "public/multimodal-it90/audio/audio_007.wav",
-      "bytes": 220878,
-      "sha256": "2e1afa62fc61ff84",
+      "file": "public/multimodal-it90/audio/audio_007.opus",
+      "bytes": 20521,
+      "sha256": "f7a4c91f5a5255a3",
       "legende_reelle": "Noël est l'une des fêtes les plus importantes de la chrétienté, elle célèbre la naissance de Jésus."
     },
     {
@@ -387,9 +387,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1523",
-      "file": "public/multimodal-it90/audio/audio_008.wav",
-      "bytes": 672058,
-      "sha256": "d2c9a9184315037a",
+      "file": "public/multimodal-it90/audio/audio_008.opus",
+      "bytes": 29519,
+      "sha256": "b4453b4d7d821c32",
       "legende_reelle": "Le match s'est joué à un point, 21 à 20, mettant fin à la série de 15 victoires des All Blacks."
     },
     {
@@ -397,9 +397,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1558",
-      "file": "public/multimodal-it90/audio/audio_009.wav",
-      "bytes": 537658,
-      "sha256": "a7bb871cae23ad1c",
+      "file": "public/multimodal-it90/audio/audio_009.opus",
+      "bytes": 25238,
+      "sha256": "a831a9a711bb0d8d",
       "legende_reelle": "Avant qu'une organisation ne soit innovante, sa direction doit créer une culture de l'innovation, des connaissances partagées et sa propre culture de l'apprentissage."
     },
     {
@@ -407,9 +407,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1656",
-      "file": "public/multimodal-it90/audio/audio_010.wav",
-      "bytes": 476218,
-      "sha256": "c3f25fd72ffa7d8b",
+      "file": "public/multimodal-it90/audio/audio_010.opus",
+      "bytes": 21042,
+      "sha256": "a88624dfc18e7f2e",
       "legende_reelle": "La police a déclaré qu’il semblerait que le corps se trouvait là depuis un jour environ."
     },
     {
@@ -417,9 +417,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1636",
-      "file": "public/multimodal-it90/audio/audio_011.wav",
-      "bytes": 422458,
-      "sha256": "509017baa276fccb",
+      "file": "public/multimodal-it90/audio/audio_011.opus",
+      "bytes": 14993,
+      "sha256": "4f6fbcfe50064eb8",
       "legende_reelle": "Les Espagnols ont inauguré la période de la colonisation, laquelle a duré trois siècles."
     },
     {
@@ -507,9 +507,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1581",
-      "file": "public/multimodal-it90/audio/audio_012.wav",
-      "bytes": 472378,
-      "sha256": "b5b1b0ed62d80510",
+      "file": "public/multimodal-it90/audio/audio_012.opus",
+      "bytes": 20845,
+      "sha256": "5747ddd4fe6db610",
       "legende_reelle": "L'Amazone est également le fleuve le plus large de la planète, atteignant parfois 10 km de large."
     },
     {
@@ -517,9 +517,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1647",
-      "file": "public/multimodal-it90/audio/audio_013.wav",
-      "bytes": 510778,
-      "sha256": "e4c13c5d36e45338",
+      "file": "public/multimodal-it90/audio/audio_013.opus",
+      "bytes": 24008,
+      "sha256": "2cf95dd77d33d649",
       "legende_reelle": "Les opinions présentées sont souvent superficielles, générales et trop simplifiées par rapport aux informations plus détaillées disponibles ailleurs."
     },
     {
@@ -527,9 +527,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1538",
-      "file": "public/multimodal-it90/audio/audio_014.wav",
-      "bytes": 867898,
-      "sha256": "0df20542013093e2",
+      "file": "public/multimodal-it90/audio/audio_014.opus",
+      "bytes": 39996,
+      "sha256": "9c921540eeb4b9d3",
       "legende_reelle": "Le tronçon entre Point Marion et Fairmont présente les conditions de conduite les plus difficiles sur l’autoroute Buffalo-Pittsburgh, passant fréquemment par des terrains isolés de l’arrière-pays."
     },
     {
@@ -537,9 +537,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1632",
-      "file": "public/multimodal-it90/audio/audio_015.wav",
-      "bytes": 752698,
-      "sha256": "411ab087ec962f99",
+      "file": "public/multimodal-it90/audio/audio_015.opus",
+      "bytes": 34277,
+      "sha256": "c287230b16c2fa5d",
       "legende_reelle": "Les femmes doivent réaliser que certaines différences culturelles peuvent entraîner des comportements qu'elles considèrent comme du harcèlement. Il est en effet courant qu'elles soient suivies, attrapées par le bras, etc."
     },
     {
@@ -627,9 +627,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1543",
-      "file": "public/multimodal-it90/audio/audio_016.wav",
-      "bytes": 606778,
-      "sha256": "ad466dd7fd11af3a",
+      "file": "public/multimodal-it90/audio/audio_016.opus",
+      "bytes": 26186,
+      "sha256": "10f070b4f565829b",
       "legende_reelle": "Le patient s'était rendu au Nigeria, où certains cas de virus Ebola se sont produits."
     },
     {
@@ -637,9 +637,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1596",
-      "file": "public/multimodal-it90/audio/audio_017.wav",
-      "bytes": 506938,
-      "sha256": "39502025f6dfcb30",
+      "file": "public/multimodal-it90/audio/audio_017.opus",
+      "bytes": 23307,
+      "sha256": "f6cc8c337efddeae",
       "legende_reelle": "Les naturalistes et les philosophes se sont concentrés sur les textes anciens, et en particulier sur la Bible en latin."
     },
     {
@@ -647,9 +647,9 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1579",
-      "file": "public/multimodal-it90/audio/audio_018.wav",
-      "bytes": 572218,
-      "sha256": "a66043dc5b948d59",
+      "file": "public/multimodal-it90/audio/audio_018.opus",
+      "bytes": 25680,
+      "sha256": "324638b89420d12f",
       "legende_reelle": "Il avertit que personne ne peut garantir que toute action en Irak à ce stade mettra fin à la guerre sectaire, à la violence croissante ou au glissement vers le chaos."
     },
     {
@@ -657,10 +657,130 @@
       "modality": "audio",
       "dataset": "google/fleurs#fr_fr/validation",
       "row_id": "1529",
-      "file": "public/multimodal-it90/audio/audio_019.wav",
-      "bytes": 733498,
-      "sha256": "fa47c611a0b2bba6",
+      "file": "public/multimodal-it90/audio/audio_019.opus",
+      "bytes": 28074,
+      "sha256": "7c2e46608a85e1c2",
       "legende_reelle": "Auparavant, le PDG de Ring, Jamie Siminoff, a fait remarquer qu'il a lancé l'entreprise lorsque la sonnette de sa porte d'entrée n'était pas audible depuis son magasin dans son garage."
+    },
+    {
+      "id": "kext99_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "3661",
+      "file": "public/multimodal-it90/images/image_044.jpg",
+      "bytes": 25674,
+      "sha256": "91580743377d827f",
+      "legende_reelle": "scène contenant : banane, clavier, tasse (3 objets annotés)"
+    },
+    {
+      "id": "kext99_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "383838",
+      "file": "public/multimodal-it90/images/image_045.jpg",
+      "bytes": 30167,
+      "sha256": "990bdd4245904647",
+      "legende_reelle": "scène contenant : chaise, personne, télécommande (4 objets annotés)"
+    },
+    {
+      "id": "kext99_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "409268",
+      "file": "public/multimodal-it90/images/image_046.jpg",
+      "bytes": 86545,
+      "sha256": "5190554704e8fe36",
+      "legende_reelle": "scène contenant : ours en peluche (1 objets annotés)"
+    },
+    {
+      "id": "kext99_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "112798",
+      "file": "public/multimodal-it90/images/image_047.jpg",
+      "bytes": 36176,
+      "sha256": "c62826b7753c3cc9",
+      "legende_reelle": "scène contenant : chat, livre, ordinateur portable (4 objets annotés)"
+    },
+    {
+      "id": "kext99_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "288584",
+      "file": "public/multimodal-it90/images/image_048.jpg",
+      "bytes": 71215,
+      "sha256": "4865be748a92abd0",
+      "legende_reelle": "scène contenant : chaise, personne, sac à dos, sac à main, table (19 objets annotés)"
+    },
+    {
+      "id": "kext99_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "231879",
+      "file": "public/multimodal-it90/images/image_049.jpg",
+      "bytes": 47690,
+      "sha256": "c464004ed9e1f45e",
+      "legende_reelle": "scène contenant : chaise, gâteau, personne, table (9 objets annotés)"
+    },
+    {
+      "id": "kext99_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "496571",
+      "file": "public/multimodal-it90/images/image_050.jpg",
+      "bytes": 50374,
+      "sha256": "e585f457d80afefc",
+      "legende_reelle": "scène contenant : bol, couteau, cuillère, fourchette, personne, table, tasse, téléphone portable (14 objets annotés)"
+    },
+    {
+      "id": "kext99_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "143998",
+      "file": "public/multimodal-it90/images/image_051.jpg",
+      "bytes": 67389,
+      "sha256": "c6e92b2a002bb5ab",
+      "legende_reelle": "scène contenant : carotte, couteau, table (7 objets annotés)"
+    },
+    {
+      "id": "kext99_audio_001",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1593",
+      "file": "public/multimodal-it90/audio/audio_020.opus",
+      "bytes": 20732,
+      "sha256": "0756f608afb0d7d5",
+      "legende_reelle": "Finalement, les roues en bois ont été remplacées par des roues en fer. En 1767, les premiers rails en fer ont fait leur apparition."
+    },
+    {
+      "id": "kext99_audio_002",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1603",
+      "file": "public/multimodal-it90/audio/audio_021.opus",
+      "bytes": 37232,
+      "sha256": "64b572e61065ff20",
+      "legende_reelle": "Les accidents aériens sont fréquents en Iran, qui dispose d'une flotte vieillissante et mal entretenue autant pour les vols civils que militaires."
+    },
+    {
+      "id": "kext99_audio_003",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1654",
+      "file": "public/multimodal-it90/audio/audio_022.opus",
+      "bytes": 22908,
+      "sha256": "b1619f93ae6ca40b",
+      "legende_reelle": "Je ne sais pas si vous vous en rendez compte, mais la plupart des marchandises en provenance d'Amérique centrale sont entrées dans notre pays exonérées de taxes."
+    },
+    {
+      "id": "kext99_audio_004",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1658",
+      "file": "public/multimodal-it90/audio/audio_023.opus",
+      "bytes": 28165,
+      "sha256": "3e52fda92571c2ec",
+      "legende_reelle": "Avec seulement dix-huit médailles disponibles par jour, un certain nombre de pays n'ont pas réussi à monter sur le podium des médaillés."
     }
   ]
 }

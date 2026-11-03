@@ -127,8 +127,8 @@ fi
 etape "finisher-fetch"
 SYNC_SOURCE=1
 if ! timeout 60 git fetch origin --quiet 2>>"$DEPLOY_LOG"; then
-  log "CD AVERTISSEMENT: git fetch origin a échoué (borné 60 s) — repli URL anonyme (dépôt public)…"
-  if timeout 60 git fetch "$REPO_ANONYME" --quiet 2>>"$DEPLOY_LOG"; then
+  log "CD AVERTISSEMENT: git fetch origin a échoué (borné 60 s) — repli URL anonyme (dépôt public, branche main seule)…"
+  if timeout 60 git fetch "$REPO_ANONYME" main --quiet 2>>"$DEPLOY_LOG"; then
     log "CD: fetch anonyme OK — l'origin configuré est vraisemblablement porteur d'un jeton périmé (à corriger en console, non bloquant)."
   elif git cat-file -e "$TARGET_SHA" 2>/dev/null; then
     SYNC_SOURCE=0
