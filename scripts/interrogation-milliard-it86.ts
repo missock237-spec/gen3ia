@@ -74,12 +74,28 @@ import {
 
 const N_TOTAL = N_TOTAL_MILLIARD; // l'ordre total du balayage : 1 milliard
 const QUANTITE = Math.max(1, Number(process.env.QUANTITE ?? "1000000"));
-const MAX_SECONDES = Math.max(60, Number(process.env.MAX_SECONDES ?? "780"));
+// it.87 (levier 1) : segment élargi 780 → 1500 s — le débit mesuré au tick 05:10
+// (~710 questions/s d'interrogation) laisse un segment ≈ 1 M questions en ~23 min
+// de balayage, plus les phases de correction : ~30 min de run par tick de 2 h.
+const MAX_SECONDES = Math.max(60, Number(process.env.MAX_SECONDES ?? "1500"));
 const CYCLES = Math.max(1, Math.min(8, Number(process.env.CYCLES ?? "5")));
 const CORRECTIONS_ONDES = Math.max(1, Number(process.env.CORRECTIONS_ONDES ?? "200000"));
 const CONSOLIDATION_PAR_FAMILLE = 30;
-const PERIODE_APPRENTISSAGE = 200; // 1 correction APPRISE toutes les 200 échecs
-const LABEL_DOMAINE = "interrogation-domaines-fr"; // hash FNV-1a % 32 = bande 6 — libre (aucune collision it.84/it.85) ET structurellement audible (CSR : bandes 0-7 ≈ 1,1 arête/colonne)
+// it.87 (levier 2) : échantillonnage resserré 200 → 50 — l'écriture des
+// corrections (≈ 600/s mesurée) n'est pas le goulot de l'interrogation
+// (≈ 710/s) : à 1/50, un segment de 1 M de questions apprend ≈ 7 400 paires
+// correctives de plus par run (5/s ≪ 600/s), toujours sous le garde-fou
+// d'index enMemoire < 120 000 (par run — jamais atteint à ce débit).
+const PERIODE_APPRENTISSAGE = 50; // 1 correction APPRISE toutes les 50 échecs
+// it.87 (levier 3) : ROTATION MULTI-BANDES — la gravure répétée sur une seule
+// bande dilue le signal individuel (mesure it.86 : dominance 14/30 → 6/30 sur
+// la bande 6). La bande-porteuse du run tourne, déterministe au numéro de run
+// (checkpoint `runs`), parmi les bandes structurellement audibles de la CSR
+// (0-7 ≈ 1,1 arête/colonne) en évitant la bande 0 (it.85 raisonnement-humain)
+// et la bande 6 (déjà chargée de 600 030 ondes it.86 — elle repose).
+const BANDES_ROTATION = [1, 2, 3, 4, 5, 7];
+const PREFIXE_LABEL = "interrogation-it87-b"; // suffixe cherché pour viser la bande cible (FNV-1a % 32)
+const LABEL_HISTORIQUE = "interrogation-domaines-fr"; // bande 6 — gravures it.86 (605 030 ondes), conservé pour la traçabilité
 const DIR_OUT = "var/interrogation-milliard-it86";
 const DIR_SNAP = "public/neural";
 // Chaîne cumulative : si le snapshot corrigé du tick précédent existe (gravures
@@ -104,6 +120,15 @@ function fnv1a(chaine: string): number {
 }
 
 const PHI_OR = 1.618033988749895;
+
+/** it.87 : label d'un run pour viser une bande cible (recherche déterministe du suffixe — FNV-1a % 32). */
+function labelPourBande(bandeCible: number, prefixe: string): string {
+  for (let n = 0; n < 4096; n++) {
+    const candidat = `${prefixe}${n}`;
+    if (fnv1a(candidat) % 32 === bandeCible) return candidat;
+  }
+  throw new Error(`aucun label trouvé pour la bande ${bandeCible}`);
+}
 
 function ondeToken(token: string, position: number): { w: number; phi: number; a: number } {
   const h = fnv1a(token);
@@ -344,9 +369,13 @@ function main(): void {
       if (!cortexSnn.importerPoids(poidsF32)) throw new Error("Import des poids it.85 : longueur inattendue.");
       const nbColonnes = cortexSnn.config.colonnes;
       const nbBandes = cortexSnn.config.bandes;
-      const bande = fnv1a(LABEL_DOMAINE) % nbBandes;
+      // it.87 : rotation déterministe de la bande-porteuse au numéro de run
+      // (checkpoint) — les gravures se répartissent sur les bandes audibles
+      // au lieu de saturer une seule bande (mesure it.86 : 14/30 → 6/30).
+      const bande = BANDES_ROTATION[cp.runs % BANDES_ROTATION.length] % nbBandes;
+      const labelRun = labelPourBande(bande, PREFIXE_LABEL);
       progression(
-        `PASSE C — cerveau it.85 importé (${octetsSource} octets, ${nbColonnes} colonnes) ; domaine « ${LABEL_DOMAINE} » → bande ${bande}`,
+        `PASSE C — cerveau importé (${octetsSource} octets, ${nbColonnes} colonnes) ; run ${cp.runs} → bande ${bande} (rotation it.87, label « ${labelRun} »)`,
       );
 
       const mesurer = (liste: QuestionMilliard[]): { hits: number; total: number } => {
@@ -450,7 +479,8 @@ function main(): void {
   const moduleTS = `/**
  * CORPUS INTERROGATION it.86 — paires correctives consolidées du cycle
  * d'interrogation milliard (scripts/interrogation-milliard-it86.ts,
- * bande-porteuse ${fnv1a(LABEL_DOMAINE) % 32} « ${LABEL_DOMAINE} »).
+ * bande-porteuse tournante it.87 (rotations ${BANDES_ROTATION.join("/")},
+ * ex-band ${fnv1a(LABEL_HISTORIQUE) % 32} « ${LABEL_HISTORIQUE} » pour it.86).
  *
  * Ces ${pairesConsolidees.length} paires (question → pensée pas à pas → résultat EXACT,
  * vérifié automatiquement par le générateur) corrigent la mémoire du chat :
