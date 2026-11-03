@@ -1,0 +1,306 @@
+{
+  "total_octets": 3875559,
+  "n": 30,
+  "assets": [
+    {
+      "id": "kext90_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "353051",
+      "file": "public/multimodal-it90/images/image_000.jpg",
+      "bytes": 76976,
+      "sha256": "fb6175deed1f913a",
+      "legende_reelle": "scène contenant : cheval, personne (2 objets annotés)"
+    },
+    {
+      "id": "kext90_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "191471",
+      "file": "public/multimodal-it90/images/image_001.jpg",
+      "bytes": 63197,
+      "sha256": "7da4c9dc66097c36",
+      "legende_reelle": "scène contenant : panneau stop (1 objets annotés)"
+    },
+    {
+      "id": "kext90_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "539962",
+      "file": "public/multimodal-it90/images/image_002.jpg",
+      "bytes": 78186,
+      "sha256": "a87c0bf40a9de7db",
+      "legende_reelle": "scène contenant : chaise, frisbee, parapluie, personne, table (18 objets annotés)"
+    },
+    {
+      "id": "kext90_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "462371",
+      "file": "public/multimodal-it90/images/image_003.jpg",
+      "bytes": 41227,
+      "sha256": "023f8628e5f025fd",
+      "legende_reelle": "scène contenant : couteau, cravate, gâteau, personne, tasse (11 objets annotés)"
+    },
+    {
+      "id": "kext90_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "574315",
+      "file": "public/multimodal-it90/images/image_004.jpg",
+      "bytes": 43500,
+      "sha256": "288f80523e2865df",
+      "legende_reelle": "scène contenant : canapé, chat, clavier, ordinateur portable, personne (5 objets annotés)"
+    },
+    {
+      "id": "kext90_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "5037",
+      "file": "public/multimodal-it90/images/image_005.jpg",
+      "bytes": 59099,
+      "sha256": "16b03f54c20f8179",
+      "legende_reelle": "scène contenant : bus, personne, voiture (10 objets annotés)"
+    },
+    {
+      "id": "kext90_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "83540",
+      "file": "public/multimodal-it90/images/image_006.jpg",
+      "bytes": 74748,
+      "sha256": "edc2d8b64c870d20",
+      "legende_reelle": "scène contenant : personne, skis (2 objets annotés)"
+    },
+    {
+      "id": "kext90_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "145665",
+      "file": "public/multimodal-it90/images/image_007.jpg",
+      "bytes": 35243,
+      "sha256": "5b54d5a39935a221",
+      "legende_reelle": "scène contenant : personne, skateboard (2 objets annotés)"
+    },
+    {
+      "id": "kext90_image_009",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "174231",
+      "file": "public/multimodal-it90/images/image_008.jpg",
+      "bytes": 20852,
+      "sha256": "2e3eb3a0b071d7fe",
+      "legende_reelle": "scène contenant : chaise, chat, ordinateur portable (3 objets annotés)"
+    },
+    {
+      "id": "kext90_image_010",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "389812",
+      "file": "public/multimodal-it90/images/image_009.jpg",
+      "bytes": 84007,
+      "sha256": "13b47f5b3e0a3d85",
+      "legende_reelle": "scène contenant : banane, personne (4 objets annotés)"
+    },
+    {
+      "id": "kext90_image_011",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "245513",
+      "file": "public/multimodal-it90/images/image_010.jpg",
+      "bytes": 42708,
+      "sha256": "41a7d1d55a86b5ba",
+      "legende_reelle": "scène contenant : girafe, oiseau, panneau stop (4 objets annotés)"
+    },
+    {
+      "id": "kext90_image_012",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "122046",
+      "file": "public/multimodal-it90/images/image_011.jpg",
+      "bytes": 51556,
+      "sha256": "4274c57f6c195793",
+      "legende_reelle": "scène contenant : chaise, parapluie, personne (3 objets annotés)"
+    },
+    {
+      "id": "kext90_image_013",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "143931",
+      "file": "public/multimodal-it90/images/image_012.jpg",
+      "bytes": 48819,
+      "sha256": "62bae9561d7d0b27",
+      "legende_reelle": "scène contenant : bus, personne (2 objets annotés)"
+    },
+    {
+      "id": "kext90_image_014",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "555005",
+      "file": "public/multimodal-it90/images/image_013.jpg",
+      "bytes": 43294,
+      "sha256": "126d2b2e12dd9fe2",
+      "legende_reelle": "scène contenant : chien, lit, livre (11 objets annotés)"
+    },
+    {
+      "id": "kext90_image_015",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "142472",
+      "file": "public/multimodal-it90/images/image_014.jpg",
+      "bytes": 70172,
+      "sha256": "179cb4052764e8c5",
+      "legende_reelle": "scène contenant : bus, camion, personne, voiture (12 objets annotés)"
+    },
+    {
+      "id": "kext90_image_016",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "246883",
+      "file": "public/multimodal-it90/images/image_015.jpg",
+      "bytes": 21324,
+      "sha256": "74b27cf62dcc7477",
+      "legende_reelle": "scène contenant : personne, planche de surf (4 objets annotés)"
+    },
+    {
+      "id": "kext90_image_017",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "459272",
+      "file": "public/multimodal-it90/images/image_016.jpg",
+      "bytes": 38849,
+      "sha256": "19385cec4d3313f2",
+      "legende_reelle": "scène contenant : personne, téléphone portable (11 objets annotés)"
+    },
+    {
+      "id": "kext90_image_018",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "356261",
+      "file": "public/multimodal-it90/images/image_017.jpg",
+      "bytes": 72196,
+      "sha256": "fce144c1171f1e96",
+      "legende_reelle": "scène contenant : cheval (2 objets annotés)"
+    },
+    {
+      "id": "kext90_image_019",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "169996",
+      "file": "public/multimodal-it90/images/image_018.jpg",
+      "bytes": 69400,
+      "sha256": "7be45a2376ad1adf",
+      "legende_reelle": "scène contenant : camion, feu tricolore, personne, voiture, vélo (16 objets annotés)"
+    },
+    {
+      "id": "kext90_image_020",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "311909",
+      "file": "public/multimodal-it90/images/image_019.jpg",
+      "bytes": 74984,
+      "sha256": "0d48c8482e4828bd",
+      "legende_reelle": "scène contenant : bus (1 objets annotés)"
+    },
+    {
+      "id": "kext90_audio_001",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1524",
+      "file": "public/multimodal-it90/audio/audio_000.wav",
+      "bytes": 462798,
+      "sha256": "7c0cce7e9991c128",
+      "legende_reelle": "Il y a de nombreuses répercussions sociales et politiques telles que l'utilisation du système métrique, le passage de l'absolutisme au républicanisme, le nationalisme et la conviction que le pays appartient au peuple et non à un seul dirigeant."
+    },
+    {
+      "id": "kext90_audio_002",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1570",
+      "file": "public/multimodal-it90/audio/audio_001.wav",
+      "bytes": 192078,
+      "sha256": "bddac0d3e0e1cd56",
+      "legende_reelle": "Il n'avait pas non plus le pouvoir de déroger aux lois fiscales ni à celles sur les droits de douane entre les États."
+    },
+    {
+      "id": "kext90_audio_003",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1620",
+      "file": "public/multimodal-it90/audio/audio_002.wav",
+      "bytes": 491598,
+      "sha256": "7515e68012cbf258",
+      "legende_reelle": "Maintenant, largement disponible dans tout l’archipel, la cuisine javanaise propose un éventail de plats simplement assaisonnés, les saveurs prédominantes que les Javanais privilégient étant les cacahuètes, les piments, le sucre (en particulier le sucre de coco javanais) et diverses épices aromatiques."
+    },
+    {
+      "id": "kext90_audio_004",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1533",
+      "file": "public/multimodal-it90/audio/audio_003.wav",
+      "bytes": 251598,
+      "sha256": "924c11ac849d8c14",
+      "legende_reelle": "De nombreux formats courants (famille de formats APS, par exemple) sont égaux à ce rapport d’aspect ou s’en approchent de près."
+    },
+    {
+      "id": "kext90_audio_005",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1652",
+      "file": "public/multimodal-it90/audio/audio_004.wav",
+      "bytes": 272718,
+      "sha256": "6c0579ad9ea9b3af",
+      "legende_reelle": "La principale religion en Moldavie est le christianisme orthodoxe."
+    },
+    {
+      "id": "kext90_audio_006",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1640",
+      "file": "public/multimodal-it90/audio/audio_005.wav",
+      "bytes": 236238,
+      "sha256": "0f3c590b38b26c9b",
+      "legende_reelle": "Sur les routes glacées et enneigées, le frottement est faible et vous ne pouvez pas conduire comme si vous étiez sur l'asphalte nu."
+    },
+    {
+      "id": "kext90_audio_007",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1616",
+      "file": "public/multimodal-it90/audio/audio_006.wav",
+      "bytes": 384078,
+      "sha256": "468439a6a24958da",
+      "legende_reelle": "La science montre désormais que cette économie massivement basée sur le carbone a délogé la biosphère de son état de stabilité qui a soutenu l'évolution humaine pendant deux millions d'années."
+    },
+    {
+      "id": "kext90_audio_008",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1553",
+      "file": "public/multimodal-it90/audio/audio_007.wav",
+      "bytes": 220878,
+      "sha256": "2e1afa62fc61ff84",
+      "legende_reelle": "Noël est l'une des fêtes les plus importantes de la chrétienté, elle célèbre la naissance de Jésus."
+    },
+    {
+      "id": "kext90_video_001",
+      "modality": "video",
+      "dataset": "sayakpaul/ucf101-subset#default/train",
+      "row_id": "0",
+      "file": "public/multimodal-it90/video/video_000.mp4",
+      "bytes": 116542,
+      "sha256": "9f36651d5f48a4ef",
+      "legende_reelle": "Vidéo réelle du sous-ensemble UCF101 (dataset professionnel d'analyse d'actions humaines)"
+    },
+    {
+      "id": "kext90_video_002",
+      "modality": "video",
+      "dataset": "sayakpaul/ucf101-subset#default/train",
+      "row_id": "1",
+      "file": "public/multimodal-it90/video/video_001.mp4",
+      "bytes": 136696,
+      "sha256": "843346808bd57b08",
+      "legende_reelle": "Vidéo réelle du sous-ensemble UCF101 (dataset professionnel d'analyse d'actions humaines)"
+    }
+  ]
+}

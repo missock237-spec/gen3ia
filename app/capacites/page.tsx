@@ -204,6 +204,24 @@ export default function CapacitesPage() {
           )}
         </section>
 
+        {/* ---------- Multimodal réel (it.90) ---------- */}
+        <section aria-label="Échantillons multimodaux réels" className="mx-auto max-w-4xl px-4 pb-12 sm:px-6">
+          <div className="rounded-2xl border border-[var(--g3-primary-soft)] bg-[var(--g3-surface)]/80 p-5 backdrop-blur">
+            <h2 className="font-[family-name:var(--font-display)] text-lg font-bold">
+              Échantillons multimodaux réels intégrés au cerveau
+            </h2>
+            <p className="mt-2 text-sm leading-7 text-[var(--g3-muted)]">
+              34 assets professionnels mesurés (4,50 Mo) : 20 images COCO-2017 annotées, 8 clips de
+              parole française Google FLEURS, 2 vidéos UCF101 et 4 voix naturelles TTS. Ils sont
+              visibles et jouables sur la page{" "}
+              <Link href="/multimodal" className="underline decoration-dotted transition hover:text-[var(--g3-primary-strong)]">
+                /multimodal
+              </Link>
+              , et le chat connaît la légende exacte de chacun.
+            </p>
+          </div>
+        </section>
+
         {/* ---------- Thèmes réellement couverts ---------- */}
         {etat.disponible && etat.themes.length > 0 && (
           <section aria-label="Thèmes couverts par le corpus" className="mx-auto max-w-4xl px-4 pb-12 sm:px-6">

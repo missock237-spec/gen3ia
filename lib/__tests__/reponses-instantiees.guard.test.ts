@@ -222,6 +222,46 @@ describe("Réponses instanciées it.87 (familles épuisables + gabarits généra
     expect(reponseInstantiee("Peux-tu me parler de l'histoire de l'art ?")).toBeNull();
   });
 
+  it("it.90 ROBUSTESSE MÉLANGES (faille mesurée en production, re-test Q4) : accords réels et phrasé sans hexa servis", () => {
+    // accord féminin réel (« lumière verte ») — avant it.90 : non servi,
+    // tombait dans la famille reconnaissance (mesuré 4/5 sur gen3ia.online)
+    const accorde = reponseInstantiee(
+      "On mélange de la lumière rouge (#FF0000) et de la lumière verte (#00FF00). Quelle couleur obtient-on ?",
+    );
+    expect(accorde).not.toBeNull();
+    expect(accorde).toContain("#FFFF00");
+    expect(accorde).toContain("jaune");
+    // phrasé courant SANS codes hexa
+    const sansHexa = reponseInstantiee(
+      "On mélange de la lumière rouge et de la lumière verte. Quelle couleur obtient-on ?",
+    );
+    expect(sansHexa).not.toBeNull();
+    expect(sansHexa).toContain("#FFFF00");
+    // phrasé « en mélangeant … » + accord « bleue »
+    // bleu (0,0,255) + jaune (255,255,0) en lumière = (255,255,255) blanc
+    const melangeant = reponseInstantiee(
+      "Qu'obtient-on en mélangeant de la lumière bleue et de la lumière jaune ?",
+    );
+    expect(melangeant).not.toBeNull();
+    expect(melangeant).toContain("#FFFFFF");
+    // accord pluriel « pigments rouges » (voie pigmentaire)
+    const pluriel = reponseInstantiee(
+      "On mélange des pigments rouges (#FF0000) et des pigments verts (#00FF00).",
+    );
+    expect(pluriel).not.toBeNull();
+    expect(pluriel).toContain("pigments (soustractif");
+    // « vert anis » (nom composé) reste servi sans hexa
+    const compose = reponseInstantiee(
+      "On mélange de la lumière vert anis et de la lumière magenta.",
+    );
+    expect(compose).not.toBeNull();
+    // anti-régression : le phrasé générateur d'origine reste servi
+    const generateur = reponseInstantiee(
+      "On mélange de la lumière rouge (#FF0000) et de la lumière vert (#00FF00). Quelle couleur obtient-on ?",
+    );
+    expect(generateur).toContain("#FFFF00");
+  });
+
   it("it.89 : le nom EXACT du dataset réel Kaggle color-names est servi (1 156 couleurs intégrées)", () => {
     // #0048BA « Absolute zero » — une couleur RÉELLE de la base Kaggle,
     // impossible à deviner par la seule palette (24 couleurs)

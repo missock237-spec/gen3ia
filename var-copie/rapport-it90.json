@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-03T07:41:18.567Z",
+  "dureeMs": 1027,
+  "assets": {
+    "total": 34,
+    "octets": 4499015,
+    "parModalite": {
+      "image": 20,
+      "audio": 8,
+      "video": 2,
+      "audio-généré": 4
+    },
+    "pairesServies": 34
+  },
+  "couleurs": {
+    "paires": 31023,
+    "capacite": 117441064
+  },
+  "corpusProduction": 676,
+  "snn": {
+    "source": "public/neural/cortex-couleurs-it89.bin",
+    "octetsSource": 12582960,
+    "bandePorteuse": 1,
+    "label": "couleurs-it90-b71",
+    "ondesGravees": 5427,
+    "avant": 12,
+    "apres": 29,
+    "total": 30,
+    "snapshot": "public/neural/cortex-couleurs-it90.bin",
+    "octets": 12582960
+  },
+  "snapshot": "public/neural/cortex-couleurs-it90.bin"
+}

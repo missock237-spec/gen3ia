@@ -23,6 +23,7 @@ import { CORPUS_DOMAINES_IT84 } from "./corpus-domaines-it84";
 import { CORPUS_RAISONNEMENT_IT85 } from "./corpus-raisonnement-it85";
 import { CORPUS_INTERROGATION_IT86 } from "./corpus-interrogation-it86";
 import { CORPUS_COULEURS_IT89 } from "./corpus-couleurs-it89";
+import { PAIRES_MULTIMODAL_IT90 } from "./multimodal-it90";
 
 /** Paire conversationnelle apprise par le cortex langagier. */
 export interface PaireLangage {
@@ -879,6 +880,9 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
   ...CORPUS_RAISONNEMENT_IT85,
   ...CORPUS_INTERROGATION_IT86,
   ...CORPUS_COULEURS_IT89,
+  // it.90 — assets multimodaux RÉELS (COCO-2017, FLEURS fr_fr, UCF101, TTS) :
+  // 34 paires id↔légende/transcription servies par le cortex langagier.
+  ...PAIRES_MULTIMODAL_IT90,
 ];
 
 export const TAILLE_CORPUS_GEN3 = CORPUS_GEN3.length;

@@ -37,6 +37,7 @@ import {
   qualifieLuminosite,
   versHex,
   voisine,
+  type CouleurPalette,
 } from "./couleurs-it89";
 import { NOMS_KAGGLE } from "../neural/generation/couleurs-kaggle-it89";
 
@@ -289,16 +290,38 @@ export function reponseInstantiee(message: string): string | null {
 //      — mêmes fonctions pures que le générateur (couleurs-it89.ts,
 //      source de vérité unique) : 16 777 216 couleurs reconnues par calcul.
 
+/** it.90 : « lumière verte » / « pigments rouges » / « bleue » → entrée de PALETTE. */
+function couleurPaletteDepuisFragment(brut: string): CouleurPalette | undefined {
+  const base = brut.trim().toLowerCase();
+  const candidats = [base];
+  if (base.endsWith("es")) candidats.push(base.slice(0, -2)); // « vertes » → « vert »
+  if (base.endsWith("s")) candidats.push(base.slice(0, -1)); // « noirs » → « noir »
+  if (base.endsWith("e")) candidats.push(base.slice(0, -1)); // « verte » → « vert », « bleue » → « bleu »
+  for (const c of candidats) {
+    const trouvee = parNom(c);
+    if (trouvee) return trouvee;
+  }
+  return undefined;
+}
+
 function couleurInstantiee(message: string): string | null {
   // mélanges : « On mélange de la lumière X (…) et de la lumière Y (…). »
   //            « On mélange des pigments X (…) et Y (…). »
-  const segments = message.match(
-    /^[Oo]n mélange (?:de la lumière|des pigments) ([\wéèàûôî\s]+?) \(#[0-9a-fA-F]{6}\) et (?:de la lumière|des pigments) ([\wéèàûôî\s]+?) \(#[0-9a-fA-F]{6}\)\./,
-  );
+  // it.90 (faille mesurée en production, re-test Q4) : le nom saisi par un
+  // utilisateur réel s'accorde (« lumière verte », « pigments rouges ») et le
+  // phrasé courant omet les codes hexa (« en mélangeant … ») — les deux sont
+  // désormais servis, toujours par les MÊMES fonctions pures du générateur.
+  const segments =
+    message.match(
+      /^[Oo]n mélange (?:de la lumière|des pigments) ([\wéèàûôîœç\s]+?) \(#[0-9a-fA-F]{6}\) et (?:de la lumière|des pigments) ([\wéèàûôîœç\s]+?) \(#[0-9a-fA-F]{6}\)/,
+    ) ??
+    message.match(
+      /(?:[Oo]n mélange|[Mm]élangeant) (?:de la lumière|des pigments) ([\wéèàûôîœç\s]+?) et (?:de la lumière|des pigments) ([\wéèàûôîœç-]+)/,
+    );
   if (segments) {
     const isLumiere = /lumière/i.test(message);
-    const a = parNom(segments[1]);
-    const b = parNom(segments[2]);
+    const a = couleurPaletteDepuisFragment(segments[1]);
+    const b = couleurPaletteDepuisFragment(segments[2]);
     if (a && b) {
       const res = isLumiere ? melangeLumiere(a.rgb, b.rgb) : melangePigment(a.rgb, b.rgb);
       const nom = voisine(res).nom;
