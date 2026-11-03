@@ -414,22 +414,24 @@ jobs:
       # utilisateur, gen3ia.online). Garde anti-doublon : si une escalade
       # du même titre est déjà ouverte, on la commente au lieu d'en créer
       # une seconde.
-      - name: "Contrôle de livraison PULL après CD (SLE 20 min — issue #109, calibré #120)"
+      - name: "Contrôle de livraison PULL après CD (SLE 40 min — issue #109, calibré #120, it.87)"
         id: controle_pull
         if: always() && steps.verify_build.outcome != 'success' && steps.publication.outcome == 'success' && !cancelled()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Calibrage v2 (issue #120, 2026-11-02) : le SLE de 600 s violait
-          # systématiquement des livraisons qui se corrigeaient toutes
-          # seules quelques minutes plus tard — faux rouge + escalades
-          # fantômes. Le pire cas STRUCTUREL du canal pull est :
-          #   poller PM2 (≤ 2 min) + téléchargement 200 Mo (curl -m 600
-          #   : jusqu'à 10 min) + finisher (≈ 1-2 min) ≈ 14 min.
-          # 1200 s couvre ce pire cas avec marge ; l'escalade ne se
-          # déclenche plus que sur une vraie panne (backoff 15 min du
-          # poller ou lien mort), pas sur un téléchargement lent.
-          SLE_SECONDES=1200
+          # Calibrage v3 (it.87, 2026-11-03) : livraisons réelles MESURÉES de
+          # 27 min (rapport 20:10) puis ~52 min (addendum 05:10, backoff
+          # accumulé du poller après releases rapprochées) — le SLE 1200 s
+          # violait encore des livraisons réelles (run rouge sur af4a4b9
+          # livré 23:02:37 UTC). Pire cas structurel mis à jour :
+          #   poller PM2 backoff (jusqu'à 15 min entre sondages) +
+          #   téléchargement + décompression 214 Mo sur 1 vCPU/2 Go (curl -m
+          #   600 : jusqu'à 10 min) + finisher (≈ 1-2 min) ≈ 28 min ;
+          #   avec backoff accumulé : ≈ 55 min.
+          # 2400 s couvre ce pire cas ; l'escalade ne se déclenche plus que
+          # sur une vraie panne (lien mort), pas sur un téléchargement lent.
+          SLE_SECONDES=2400
           PAS_SECONDES=30
           TITRE="🚨 Production en retard sur main — intervention console VPS requise"
           echo "verify_build non prouvé (${{ steps.verify_build.outcome }}) — contrôle de livraison PULL activé (SLE ${SLE_SECONDES} s après publication)."

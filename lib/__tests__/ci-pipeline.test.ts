@@ -353,26 +353,30 @@ describe("Contrôle de livraison PULL après CD (.github/workflows/deploy-vps.ym
     // sans aucune mesure de l'écart prod↔release. Le step v8 doit donc
     // exister, s'armer avec always() (un step « skipped » n'empêche pas
     // le contrôle) et exiger une publication réussie.
-    expect(cd).toContain('name: "Contrôle de livraison PULL après CD (SLE 20 min — issue #109, calibré #120)"');
+    expect(cd).toContain('name: "Contrôle de livraison PULL après CD (SLE 40 min — issue #109, calibré #120, it.87)"');
     expect(cd).toContain("id: controle_pull");
     expect(cd).toContain(
       "if: always() && steps.verify_build.outcome != 'success' && steps.publication.outcome == 'success' && !cancelled()",
     );
   });
 
-  it("SLE encodé 1200 s (calibré #120), sondage 30 s, sur la vérité utilisateur gen3ia.online", () => {
-    // Calibrage v2 (issue #120, 2026-11-02) : le SLE de 600 s violait
-    // des livraisons qui se corrigeaient toutes seules — le pire cas
-    // structurel du canal pull (poll 2 min + curl -m 600 + finisher)
-    // dépasse 600 s. 1200 s couvre ce pire cas : l'escalade ne se
-    // déclenche plus que sur une vraie panne, pas sur un download lent.
+  it("SLE encodé 2400 s (calibré #120, it.87), sondage 30 s, sur la vérité utilisateur gen3ia.online", () => {
+    // Calibrage v3 (it.87, 2026-11-03) : le SLE de 1200 s violait encore
+    // des livraisons réelles MESURÉES (27 min rapport 20:10 ; ~52 min
+    // addendum 05:10, backoff accumulé du poller — run rouge sur af4a4b9
+    // pourtant livré à 23:02:37 UTC). Pire cas structurel actualisé :
+    // poller PM2 backoff (jusqu'à 15 min) + curl -m 600 (10 min) +
+    // finisher (≈ 2 min) ≈ 28 min ; backoff accumulé ≈ 55 min. 2400 s
+    // couvre ce pire cas : l'escalade ne se déclenche plus que sur une
+    // vraie panne (lien mort), pas sur un téléchargement lent.
     // Le sondage lit gen3ia.online/version.json (vérité visiteur),
     // jamais l'état interne du VPS.
-    expect(cd).toContain("SLE_SECONDES=1200");
+    expect(cd).toContain("SLE_SECONDES=2400");
     expect(cd).toContain("PAS_SECONDES=30");
     expect(cd).toContain("https://gen3ia.online/version.json?cb=");
     // Le calibrage doit rester documenté dans le workflow lui-même.
-    expect(cd).toContain("Calibrage v2 (issue #120");
+    expect(cd).toContain("Calibrage v3 (it.87");
+    expect(cd).toContain('name: "Contrôle de livraison PULL après CD (SLE 40 min — issue #109, calibré #120, it.87)"');
   });
 
   it("la référence du SLE est la publication de la release (meta.json), pas l'horloge du runner", () => {
@@ -526,12 +530,13 @@ describe("Reprise de téléchargement du poller (pull-deploy.sh v4 — issue #12
     expect(poller).toContain('rm -f "$PARTIAL_MARK"   # tar complet et intègre');
   });
 
-  it("le SLE du contrôle de livraison est calibré sur le pire cas du canal pull (1200 s ≥ 14 min)", () => {
+  it("le SLE du contrôle de livraison est calibré sur le pire cas du canal pull (2400 s ≥ 40 min)", () => {
     const cd = read(".github/workflows/deploy-vps.yml");
-    expect(cd).toContain("SLE_SECONDES=1200");
-    // La justification du calibrage (poll 2 min + curl -m 600 + finisher)
-    // doit rester encodée : sans elle, un futur retour à 600 s redonnerait
-    // les faux rouges de l'issue #120.
-    expect(cd).toContain("poller PM2 (≤ 2 min) + téléchargement 200 Mo (curl -m 600");
+    expect(cd).toContain("SLE_SECONDES=2400");
+    // La justification du calibrage (backoff poller + curl -m 600 +
+    // finisher, livraisons réelles mesurées 27 min puis ~52 min) doit
+    // rester encodée : sans elle, un futur retour à 600 s/1200 s
+    // redonnerait les faux rouges de l'issue #120 et du run af4a4b9.
+    expect(cd).toContain("Calibrage v3 (it.87, 2026-11-03)");
   });
 });
