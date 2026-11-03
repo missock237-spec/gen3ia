@@ -43,11 +43,18 @@ import {
   echantillonCouleurs,
 } from "../lib/gen3/couleurs-it89";
 
-const SNAPSHOT_SOURCE = existsSync("public/neural/cortex-couleurs-it90.bin")
-  ? "public/neural/cortex-couleurs-it90.bin"
-  : existsSync("public/neural/cortex-couleurs-it89.bin")
-    ? "public/neural/cortex-couleurs-it89.bin"
-    : "public/neural/cortex-interrogation-it86.bin";
+// CHAÎNE CUMULATIVE (correctif it.93) : on repart du snapshot it92 s'il
+// existe (état consolidé par les runs précédents — bande 1 à 29/30 sur jeu
+// frais), SINON it90, sinon it89, sinon interrogation-it86. Le défaut
+// it.92 (source fixée sur it90) écrasait la consolidation du commit
+// précédent à chaque relance — le cumul n'était pas conservé.
+const SNAPSHOT_SOURCE = existsSync("public/neural/cortex-couleurs-it92.bin")
+  ? "public/neural/cortex-couleurs-it92.bin"
+  : existsSync("public/neural/cortex-couleurs-it90.bin")
+    ? "public/neural/cortex-couleurs-it90.bin"
+    : existsSync("public/neural/cortex-couleurs-it89.bin")
+      ? "public/neural/cortex-couleurs-it89.bin"
+      : "public/neural/cortex-interrogation-it86.bin";
 const SNAPSHOT_SORTIE = "public/neural/cortex-couleurs-it92.bin";
 const DIR_OUT = "var/entrainement-couleurs-it92";
 

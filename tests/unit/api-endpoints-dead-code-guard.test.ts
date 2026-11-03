@@ -581,7 +581,10 @@ describe("garde anti-code-mort — endpoints vs surface utilisateur (it.29)", ()
     ).toEqual([]);
   });
 
-  it("baseline sans entrée obsolète — une route désormais référencée sort du registre", () => {
+  // délai explicite 15 s (flocon mesuré au tick 21:10 : 5157 ms sous
+  // contention CPU du balayage milliard en fond — le scan de références
+  // traverse tout le dépôt ; même signature que le flocon it.88).
+  it("baseline sans entrée obsolète — une route désormais référencée sort du registre", { timeout: 15_000 }, () => {
     const obsoletes = baselineUnion.filter(
       (ep) => endpoints.includes(ep) && references(ep).length > 0,
     );

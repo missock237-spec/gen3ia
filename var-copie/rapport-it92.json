@@ -1,19 +1,19 @@
 {
-  "date": "2026-11-03T11:29:16.071Z",
-  "dureeMs": 2189,
+  "date": "2026-11-03T13:17:12.782Z",
+  "dureeMs": 33663,
   "couleurs": {
-    "paires": 31034,
+    "paires": 101104,
     "capacite": 117441064,
     "bande": 1
   },
   "multimodales": 34,
   "snn": {
-    "source": "public/neural/cortex-couleurs-it90.bin",
+    "source": "public/neural/cortex-couleurs-it92.bin",
     "octetsSource": 12582960,
     "bandePorteuse": 1,
     "label": "couleurs-it92-b11",
-    "ondesGravees": 32091,
-    "avant": 13,
+    "ondesGravees": 101138,
+    "avant": 12,
     "apres": 29,
     "total": 30,
     "graine": 20261105,
