@@ -167,7 +167,11 @@ describe("CRUD des déclencheurs", () => {
 describe("évaluation après ingestion", () => {
   const DOCUMENT = { id: "doc-1", name: "facture_avril.png", mimeType: "image/png", excerpt: "Total 1 200 EUR" };
 
-  it("mission enfilée réellement quand la file est configurée", async () => {
+  // it.88 : délai explicite 15 s — le test mesure une file complète (eval
+  // déclencheur + enfilement + publish) et dépassait 5 s sur les runners CI
+  // (flocon mesuré au run f41e9f2 : « Test timed out in 5000ms ») ; 3,4 s en
+  // local, ~5 s+ en CI partagé.
+  it("mission enfilée réellement quand la file est configurée", { timeout: 15_000 }, async () => {
     queryGet.mockResolvedValue({ docs: [{ data: () => triggerDoc() }] });
     missionQueueConfiguredMock.mockReturnValue(true);
     createQueuedMissionMock.mockResolvedValue(undefined);
