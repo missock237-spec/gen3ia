@@ -123,6 +123,10 @@ marquer_echec() {
   # v6 — la phase d'échec est visible de l'extérieur : note="echec-backoff"
   # fraîche + cible ≠ servi = le téléchargement échoue répétitivement
   # (diagnostic sans SSH, complément des phases dl-/finisher-).
+  # v6.1 — $1 = "sans-note" : ne pas écrire le battement ici (l'appelant
+  # de la branche finisher écrit lui-même la note finale — la note
+  # détaillée finisher-echec:<etape> du finisher v7 doit survivre).
+  [ "${1:-}" = "sans-note" ] && return 0
   battement "$TARGET_SHA" "echec-backoff"
 }
 
@@ -276,7 +280,15 @@ if [ "$CODE" -eq 0 ]; then
   battement "$TARGET_SHA" "deploie"
 else
   log "PULL: cd-finisher.sh a retourné $CODE (blacklist/rollback éventuel)."
-  marquer_echec
-  battement "$TARGET_SHA" "finisher-echec"
+  # v6.1 — le finisher v7 documente sa phase précise dans le battement
+  # (finisher-echec:<etape>) : marquer l'échec SANS note, puis ne PAS
+  # écraser cette note par le générique "finisher-echec" — c'est elle
+  # qui rend l'échec lisible SANS SSH.
+  marquer_echec sans-note
+  NOTE_ACTUELLE=$(grep -o '"note":"[^"]*"' "$HEARTBEAT" 2>/dev/null | head -1 | cut -d'"' -f4)
+  case "$NOTE_ACTUELLE" in
+    finisher-echec:*) : ;;   # note détaillée du finisher — préservée
+    *) battement "$TARGET_SHA" "finisher-echec" ;;
+  esac
 fi
 exit "$CODE"
