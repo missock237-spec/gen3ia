@@ -1,6 +1,6 @@
 {
-  "total_octets": 9366692,
-  "n": 54,
+  "total_octets": 12185356,
+  "n": 66,
   "assets": [
     {
       "id": "kext90_image_001",
@@ -541,6 +541,126 @@
       "bytes": 752698,
       "sha256": "411ab087ec962f99",
       "legende_reelle": "Les femmes doivent réaliser que certaines différences culturelles peuvent entraîner des comportements qu'elles considèrent comme du harcèlement. Il est en effet courant qu'elles soient suivies, attrapées par le bras, etc."
+    },
+    {
+      "id": "kext97_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "295420",
+      "file": "public/multimodal-it90/images/image_036.jpg",
+      "bytes": 46889,
+      "sha256": "85abec500a78572c",
+      "legende_reelle": "scène contenant : camion, personne, voiture (5 objets annotés)"
+    },
+    {
+      "id": "kext97_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "289659",
+      "file": "public/multimodal-it90/images/image_037.jpg",
+      "bytes": 114202,
+      "sha256": "d4aad2c4d2e43d9b",
+      "legende_reelle": "scène contenant : girafe (1 objets annotés)"
+    },
+    {
+      "id": "kext97_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "529528",
+      "file": "public/multimodal-it90/images/image_038.jpg",
+      "bytes": 22528,
+      "sha256": "c29bb399feb153fe",
+      "legende_reelle": "scène contenant : bol, gâteau (3 objets annotés)"
+    },
+    {
+      "id": "kext97_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "360951",
+      "file": "public/multimodal-it90/images/image_039.jpg",
+      "bytes": 57461,
+      "sha256": "0da974ffcd5d9443",
+      "legende_reelle": "scène contenant : clavier, ordinateur portable, souris, téléviseur (7 objets annotés)"
+    },
+    {
+      "id": "kext97_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "885",
+      "file": "public/multimodal-it90/images/image_040.jpg",
+      "bytes": 26334,
+      "sha256": "a90b60cf465d373b",
+      "legende_reelle": "scène contenant : personne, raquette de tennis (9 objets annotés)"
+    },
+    {
+      "id": "kext97_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "552842",
+      "file": "public/multimodal-it90/images/image_041.jpg",
+      "bytes": 31253,
+      "sha256": "54908fdd3ea6d5ed",
+      "legende_reelle": "scène contenant : gant de baseball, personne (2 objets annotés)"
+    },
+    {
+      "id": "kext97_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "466156",
+      "file": "public/multimodal-it90/images/image_042.jpg",
+      "bytes": 55526,
+      "sha256": "f5aa869c75a2a082",
+      "legende_reelle": "scène contenant : chat, voiture (5 objets annotés)"
+    },
+    {
+      "id": "kext97_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "309452",
+      "file": "public/multimodal-it90/images/image_043.jpg",
+      "bytes": 45039,
+      "sha256": "039a1ab53e53539b",
+      "legende_reelle": "scène contenant : oiseau (1 objets annotés)"
+    },
+    {
+      "id": "kext97_audio_001",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1543",
+      "file": "public/multimodal-it90/audio/audio_016.wav",
+      "bytes": 606778,
+      "sha256": "ad466dd7fd11af3a",
+      "legende_reelle": "Le patient s'était rendu au Nigeria, où certains cas de virus Ebola se sont produits."
+    },
+    {
+      "id": "kext97_audio_002",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1596",
+      "file": "public/multimodal-it90/audio/audio_017.wav",
+      "bytes": 506938,
+      "sha256": "39502025f6dfcb30",
+      "legende_reelle": "Les naturalistes et les philosophes se sont concentrés sur les textes anciens, et en particulier sur la Bible en latin."
+    },
+    {
+      "id": "kext97_audio_003",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1579",
+      "file": "public/multimodal-it90/audio/audio_018.wav",
+      "bytes": 572218,
+      "sha256": "a66043dc5b948d59",
+      "legende_reelle": "Il avertit que personne ne peut garantir que toute action en Irak à ce stade mettra fin à la guerre sectaire, à la violence croissante ou au glissement vers le chaos."
+    },
+    {
+      "id": "kext97_audio_004",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1529",
+      "file": "public/multimodal-it90/audio/audio_019.wav",
+      "bytes": 733498,
+      "sha256": "fa47c611a0b2bba6",
+      "legende_reelle": "Auparavant, le PDG de Ring, Jamie Siminoff, a fait remarquer qu'il a lancé l'entreprise lorsque la sonnette de sa porte d'entrée n'était pas audible depuis son magasin dans son garage."
     }
   ]
 }

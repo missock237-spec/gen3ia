@@ -82,7 +82,7 @@ export default function MultimodalPage() {
             Images réelles — COCO-2017 (annotations officielles)
           </h2>
           <p className="mt-2 text-sm leading-7 text-[var(--g3-muted)]">
-            20 images photoréalistes du dataset de référence COCO-2017 (split validation). Les
+            {IMAGES.length} images photoréalistes du dataset de référence COCO-2017 (split validation). Les
             légendes sont reconstruites depuis les annotations d&apos;objets réelles du dataset —
             aucun label inventé.
           </p>
@@ -115,7 +115,7 @@ export default function MultimodalPage() {
             Parole française naturelle — Google FLEURS (transcriptions officielles)
           </h2>
           <p className="mt-2 text-sm leading-7 text-[var(--g3-muted)]">
-            8 clips réels de parole française (split validation, fr_fr) avec leurs transcriptions
+            {AUDIOS.length} clips réels de parole française (split validation, fr_fr) avec leurs transcriptions
             officielles — la base d&apos;entraînement à la compréhension vocale.
           </p>
           <div className="mt-5 space-y-3">
@@ -159,7 +159,7 @@ export default function MultimodalPage() {
             Voix naturelles générées (TTS local)
           </h2>
           <p className="mt-2 text-sm leading-7 text-[var(--g3-muted)]">
-            4 clips générés à voix naturelle sur des contenus du cerveau (couleurs, propriétés,
+            {TTS.length} clips générés à voix naturelle sur des contenus du cerveau (couleurs, propriétés,
             mélanges) — le canal de génération vocale de Gen3ia.
           </p>
           <div className="mt-5 space-y-3">

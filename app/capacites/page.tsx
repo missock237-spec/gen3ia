@@ -3,7 +3,14 @@ import Link from "next/link";
 
 import { VitrineHeader } from "@/components/home/vitrine-header";
 import { SITE_URL } from "@/lib/geo/content";
+import { ASSETS_MULTIMODAL_IT90 } from "@/lib/neural/generation/multimodal-it90";
 import { getNeuralRuntime } from "@/lib/neural/runtime";
+
+const COMPTES_MM = ASSETS_MULTIMODAL_IT90.reduce<Record<string, number>>((acc, a) => {
+  acc[a.modality] = (acc[a.modality] ?? 0) + 1;
+  return acc;
+}, {});
+const TOTAL_MO_MM = ASSETS_MULTIMODAL_IT90.reduce((s, a) => s + a.bytes, 0) / 1e6;
 
 /**
  * CAPACITÉS ET LIMITES — page de transparence générée depuis l'état RÉEL
@@ -211,8 +218,9 @@ export default function CapacitesPage() {
               Échantillons multimodaux réels intégrés au cerveau
             </h2>
             <p className="mt-2 text-sm leading-7 text-[var(--g3-muted)]">
-              34 assets professionnels mesurés (4,50 Mo) : 20 images COCO-2017 annotées, 8 clips de
-              parole française Google FLEURS, 2 vidéos UCF101 et 4 voix naturelles TTS. Ils sont
+              {ASSETS_MULTIMODAL_IT90.length} assets professionnels mesurés ({TOTAL_MO_MM.toFixed(2).replace(".", ",")} Mo) :{" "}
+              {COMPTES_MM.image} images COCO-2017 annotées, {COMPTES_MM.audio} clips de
+              parole française Google FLEURS, {COMPTES_MM.video} vidéos UCF101 et {COMPTES_MM["audio-généré"]} voix naturelles TTS. Ils sont
               visibles et jouables sur la page{" "}
               <Link href="/multimodal" className="underline decoration-dotted transition hover:text-[var(--g3-primary-strong)]">
                 /multimodal
