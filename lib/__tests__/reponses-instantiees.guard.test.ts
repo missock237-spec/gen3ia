@@ -175,6 +175,22 @@ describe("Réponses instanciées it.87 (familles épuisables + gabarits généra
     expect(rep).toContain("10 h 15");
   });
 
+  it("it.88 : le syntagme démonstratif complet est préservé (sujet + complément)", () => {
+    const rep = reponseInstantiee(
+      "Tous les pins sont des arbres. Ce conifère du jardin est un pin. Que déduis-tu ?",
+    );
+    expect(rep).not.toBeNull();
+    // la prémisse reprend le sujet ENTIER, jamais tronqué (« jardin » seul)
+    expect(rep).toContain("Ce conifère du jardin est un pin");
+    // la conclusion instancie le sujet complet
+    expect(rep).toContain("Donc : Ce conifère du jardin fait partie des arbres");
+    // garde anti-régression sur le sujet sans complément
+    const simple = reponseInstantiee(
+      "Tous les pins sont des arbres. Cet arbre est un pin. Que déduis-tu ?",
+    );
+    expect(simple).toContain("Donc : Cet arbre fait partie des arbres");
+  });
+
   it("COHÉRENCE GÉNÉRATEUR ↔ CHAT : les questions stratifiées des 7 familles de diversité reçoivent leur extrait vérifiable", () => {
     // Le plan stratifié pose les 7 familles de diversité DÈS LES PREMIERS
     // indices (math_verbal absorbe la fin) — on vérifie le chat sur les

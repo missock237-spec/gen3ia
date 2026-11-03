@@ -160,10 +160,13 @@ function syllogismeInstantie(message: string): string | null {
   if (!regle) return null;
   const [_, a, b] = regle;
   // l'assertion « X est un/une a » (a au singulier ou au pluriel)
+  // it.88 : le sujet est capturé en SYNTAGME COMPLET — déterminant + nom +
+  // complément éventuel (« Ce conifère du jardin ») — plus de reformulation
+  // approximative du sujet dans la prémisse et la conclusion.
   const aSingulier = singulier(a);
   const assertion = message.match(
     new RegExp(
-      `((?:cette|ce|cet|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|leur|leurs|notre|nos|votre|vos)?\\s*[\\wÀ-ÿ'-]{2,30})\\s+est\\s+((?:un|une|le|la|l'))\\s+${aSingulier}\\b`,
+      `((?:cette|ce|cet|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|leur|leurs|notre|nos|votre|vos)?\\s*[\\wÀ-ÿ'-]{2,30}(?:\\s+(?:du|des|de la|de l'|d')\\s*[\\wÀ-ÿ'-]{1,30})?)\\s+est\\s+((?:un|une|le|la|l'))\\s+${aSingulier}\\b`,
       "i",
     ),
   );
