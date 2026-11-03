@@ -2,10 +2,10 @@
 /**
  * GÉNÉRATEUR DU MODULE MULTIMODAL it.90 (npx tsx scripts/genere-module-multimodal-it90.ts)
  *
- * Lit var/entrainement-multimodal-it90/assets.json (30 assets RÉELS HF :
- * 20 images COCO-2017 + 8 audios FLEURS fr_fr + 2 vidéos UCF101) et y ajoute
- * les 4 clips TTS voix naturelle générés localement — émet
- * lib/neural/generation/multimodal-it90.ts :
+ * Lit var/entrainement-multimodal-it90/assets.json (inventaire HF cumulé —
+ * 42 assets RÉELS depuis it.95 : 28 images COCO-2017 + 12 audios FLEURS
+ * fr_fr + 2 vidéos UCF101) et y ajoute les 4 clips TTS voix naturelle
+ * générés localement — émet lib/neural/generation/multimodal-it90.ts :
  *   - ASSETS_MULTIMODAL_IT90 : métadonnées mesurées (octets, sha256, source) ;
  *   - PAIRES_MULTIMODAL_IT90 : paires question/réponse servies par le chat.
  */
@@ -71,6 +71,14 @@ for (const t of TTS) {
 
 const total = assets.reduce((s, a) => s + a.bytes, 0);
 
+// Comptes par modalité — en-tête TOUJOURS fidèle à l'inventaire réel
+// (« audio » = clips FLEURS réels ; les 4 TTS « audio-généré » sont comptés à part)
+const comptes = assets.reduce<Record<string, number>>((acc, a) => {
+  const cle = a.modality === "video" || a.modality === "audio-généré" ? a.modality : a.modality.startsWith("audio") ? "audio" : "image";
+  acc[cle] = (acc[cle] ?? 0) + 1;
+  return acc;
+}, {});
+
 // ─── Paires de chat (question → réponse vérifiable depuis les métadonnées) ──
 function paireImage(a: Asset): { motif: string; reponse: string; theme: string } {
   return {
@@ -106,12 +114,12 @@ const entete = `/**
  * scripts/genere-module-multimodal-it90.ts — ${new Date().toISOString()}).
  *
  * ${assets.length} assets réels mesurés (${(total / 1e6).toFixed(2)} Mo au total) :
- *   - 20 images COCO-2017 (rafaelpadilla/coco2017, validation) avec
+ *   - ${comptes.image} images COCO-2017 (rafaelpadilla/coco2017, validation) avec
  *     annotations d'objets officielles — légendes reconstruites depuis les
  *     labels RÉELS (liste « 90 things », vérifiée sur pièce) ;
- *   - 8 audios de parole française naturelle Google FLEURS (fr_fr,
+ *   - ${comptes.audio} audios de parole française naturelle Google FLEURS (fr_fr,
  *     validation) avec transcriptions officielles ;
- *   - 2 vidéos UCF101 (sayakpaul/ucf101-subset) converties MP4 H.264 ;
+ *   - ${comptes.video} vidéos UCF101 (sayakpaul/ucf101-subset) converties MP4 H.264 ;
  *   - 4 clips TTS à voix naturelle générés localement.
  * Fichiers servis depuis public/multimodal-it90/. Les paires sont assimilées
  * par le cortex langagier (corpus.ts) — mêmes fonctions que la production.

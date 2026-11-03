@@ -1,6 +1,6 @@
 {
-  "total_octets": 3875559,
-  "n": 30,
+  "total_octets": 6366075,
+  "n": 42,
   "assets": [
     {
       "id": "kext90_image_001",
@@ -301,6 +301,126 @@
       "bytes": 136696,
       "sha256": "843346808bd57b08",
       "legende_reelle": "Vidéo réelle du sous-ensemble UCF101 (dataset professionnel d'analyse d'actions humaines)"
+    },
+    {
+      "id": "kext95_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "433980",
+      "file": "public/multimodal-it90/images/image_020.jpg",
+      "bytes": 44130,
+      "sha256": "9999417649cbdcd0",
+      "legende_reelle": "scène contenant : personne, téléphone portable (2 objets annotés)"
+    },
+    {
+      "id": "kext95_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "228144",
+      "file": "public/multimodal-it90/images/image_021.jpg",
+      "bytes": 31837,
+      "sha256": "4fc5dc44e63ff702",
+      "legende_reelle": "scène contenant : chaise, table (4 objets annotés)"
+    },
+    {
+      "id": "kext95_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "41872",
+      "file": "public/multimodal-it90/images/image_022.jpg",
+      "bytes": 35215,
+      "sha256": "39918469c703cdb8",
+      "legende_reelle": "scène contenant : chaise, horloge, lit, téléviseur (5 objets annotés)"
+    },
+    {
+      "id": "kext95_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "117492",
+      "file": "public/multimodal-it90/images/image_023.jpg",
+      "bytes": 70483,
+      "sha256": "fd527cedae8dadfa",
+      "legende_reelle": "scène contenant : chaise, ours en peluche, parapluie, personne (24 objets annotés)"
+    },
+    {
+      "id": "kext95_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "368900",
+      "file": "public/multimodal-it90/images/image_024.jpg",
+      "bytes": 33511,
+      "sha256": "534bf9287938928c",
+      "legende_reelle": "scène contenant : chaise, oiseau, parapluie, réfrigérateur, sac à dos, téléviseur (6 objets annotés)"
+    },
+    {
+      "id": "kext95_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "376900",
+      "file": "public/multimodal-it90/images/image_025.jpg",
+      "bytes": 56768,
+      "sha256": "ca058cb2247eb084",
+      "legende_reelle": "scène contenant : personne, raquette de tennis (15 objets annotés)"
+    },
+    {
+      "id": "kext95_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "352491",
+      "file": "public/multimodal-it90/images/image_026.jpg",
+      "bytes": 43065,
+      "sha256": "98399d9504b3b21e",
+      "legende_reelle": "scène contenant : personne, train (6 objets annotés)"
+    },
+    {
+      "id": "kext95_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "330790",
+      "file": "public/multimodal-it90/images/image_027.jpg",
+      "bytes": 67115,
+      "sha256": "964f4f3229bdf0b9",
+      "legende_reelle": "scène contenant : éléphant (3 objets annotés)"
+    },
+    {
+      "id": "kext95_audio_001",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1523",
+      "file": "public/multimodal-it90/audio/audio_008.wav",
+      "bytes": 672058,
+      "sha256": "d2c9a9184315037a",
+      "legende_reelle": "Le match s'est joué à un point, 21 à 20, mettant fin à la série de 15 victoires des All Blacks."
+    },
+    {
+      "id": "kext95_audio_002",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1558",
+      "file": "public/multimodal-it90/audio/audio_009.wav",
+      "bytes": 537658,
+      "sha256": "a7bb871cae23ad1c",
+      "legende_reelle": "Avant qu'une organisation ne soit innovante, sa direction doit créer une culture de l'innovation, des connaissances partagées et sa propre culture de l'apprentissage."
+    },
+    {
+      "id": "kext95_audio_003",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1656",
+      "file": "public/multimodal-it90/audio/audio_010.wav",
+      "bytes": 476218,
+      "sha256": "c3f25fd72ffa7d8b",
+      "legende_reelle": "La police a déclaré qu’il semblerait que le corps se trouvait là depuis un jour environ."
+    },
+    {
+      "id": "kext95_audio_004",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1636",
+      "file": "public/multimodal-it90/audio/audio_011.wav",
+      "bytes": 422458,
+      "sha256": "509017baa276fccb",
+      "legende_reelle": "Les Espagnols ont inauguré la période de la colonisation, laquelle a duré trois siècles."
     }
   ]
 }

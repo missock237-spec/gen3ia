@@ -13,13 +13,13 @@ import { CORPUS_GEN3 } from "../neural/generation/corpus";
  * et que les paires sont assimilées par le corpus de production.
  */
 describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90.ts)", () => {
-  it("34 assets réels sont présents (20 images + 8 audios FLEURS + 2 vidéos UCF101 + 4 TTS)", () => {
-    expect(ASSETS_MULTIMODAL_IT90).toHaveLength(34);
+  it("46 assets réels sont présents (28 images + 12 audios FLEURS + 2 vidéos UCF101 + 4 TTS)", () => {
+    expect(ASSETS_MULTIMODAL_IT90).toHaveLength(46);
     const comptes = ASSETS_MULTIMODAL_IT90.reduce<Record<string, number>>((acc, a) => {
       acc[a.modality] = (acc[a.modality] ?? 0) + 1;
       return acc;
     }, {});
-    expect(comptes).toEqual({ image: 20, audio: 8, video: 2, "audio-généré": 4 });
+    expect(comptes).toEqual({ image: 28, audio: 12, video: 2, "audio-généré": 4 });
   });
 
   it("chaque fichier existe physiquement et son octetage mesuré correspond au module", () => {
@@ -35,16 +35,16 @@ describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90
     }
   });
 
-  it("les identifiants sont uniques et le total est mesuré < 5 Mo (budget bundle)", () => {
+  it("les identifiants sont uniques et le total est mesuré < 12 Mo (fichiers publics servis statiquement, hors bundle JS)", () => {
     const ids = ASSETS_MULTIMODAL_IT90.map((a) => a.id);
     expect(new Set(ids).size).toBe(ids.length);
     const total = ASSETS_MULTIMODAL_IT90.reduce((s, a) => s + a.bytes, 0);
-    expect(total).toBeLessThan(5_000_000);
+    expect(total).toBeLessThan(12_000_000);
     expect(total).toBeGreaterThan(3_000_000);
   });
 
-  it("les 34 paires multimodales sont assimilées par le corpus de production", () => {
-    expect(PAIRES_MULTIMODAL_IT90).toHaveLength(34);
+  it("les 46 paires multimodales sont assimilées par le corpus de production", () => {
+    expect(PAIRES_MULTIMODAL_IT90).toHaveLength(46);
     const motifs = new Set(PAIRES_MULTIMODAL_IT90.map((p) => p.motif));
     for (const p of PAIRES_MULTIMODAL_IT90) {
       expect(motifs.has(p.motif)).toBe(true);
@@ -62,8 +62,8 @@ describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90
     const coco = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("rafaelpadilla/coco2017"));
     const fleurs = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("google/fleurs"));
     const ucf = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("sayakpaul/ucf101-subset"));
-    expect(coco).toHaveLength(20);
-    expect(fleurs).toHaveLength(8);
+    expect(coco).toHaveLength(28);
+    expect(fleurs).toHaveLength(12);
     expect(ucf).toHaveLength(2);
     // transcription FLEURS réelle (française, ponctuée) — pas une légende fabriquée
     for (const f of fleurs) {
