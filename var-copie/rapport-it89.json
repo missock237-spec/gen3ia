@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-03T03:36:32.627Z",
+  "dureeMs": 23363,
+  "sourcesV4": {
+    "domaines": 19,
+    "paires": 3785,
+    "totalLignes": 781000,
+    "octets": 585686195
+  },
+  "couleurs": {
+    "paires": 31023,
+    "capacite": 117441064,
+    "exemplesPropres": 60
+  },
+  "mesureLangagiere": {
+    "apprisesServies": 108,
+    "apprisesTotal": 200,
+    "reserveesServies": 14,
+    "reserveesTotal": 200
+  },
+  "snn": {
+    "source": "public/neural/cortex-interrogation-it86.bin",
+    "octetsSource": 12582960,
+    "bandePorteuse": 3,
+    "label": "couleurs-it89-b39",
+    "ondesGravees": 5393,
+    "avant": 2,
+    "apres": 2,
+    "total": 30,
+    "snapshot": "public/neural/cortex-couleurs-it89.bin",
+    "octets": 12582960
+  },
+  "module": "lib/neural/generation/corpus-couleurs-it89.ts"
+}

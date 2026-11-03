@@ -22,6 +22,7 @@ import { CORPUS_DOMAINES_IT84 } from "./corpus-domaines-it84";
 // 999 935 paires assimilées par ondes, bande 0 « raisonnement-humain-fr »)
 import { CORPUS_RAISONNEMENT_IT85 } from "./corpus-raisonnement-it85";
 import { CORPUS_INTERROGATION_IT86 } from "./corpus-interrogation-it86";
+import { CORPUS_COULEURS_IT89 } from "./corpus-couleurs-it89";
 
 /** Paire conversationnelle apprise par le cortex langagier. */
 export interface PaireLangage {
@@ -870,12 +871,14 @@ const CORPUS_GEN3_BASE: readonly PaireLangage[] = [
 // interrogation-milliard-it86.ts) : chaque question interrogée reçoit ici
 // sa réponse exacte pensée pas à pas.
 /** Corpus complet : base rédigée + savoir multi-domaines it.84 + raisonnement
- *  humain it.85 + corrections d'interrogation it.86 (immuable). */
+ *  humain it.85 + corrections d'interrogation it.86 + couleurs/multimodal
+ *  it.89 (immuable). */
 export const CORPUS_GEN3: readonly PaireLangage[] = [
   ...CORPUS_GEN3_BASE,
   ...CORPUS_DOMAINES_IT84,
   ...CORPUS_RAISONNEMENT_IT85,
   ...CORPUS_INTERROGATION_IT86,
+  ...CORPUS_COULEURS_IT89,
 ];
 
 export const TAILLE_CORPUS_GEN3 = CORPUS_GEN3.length;

@@ -191,6 +191,49 @@ describe("Réponses instanciées it.87 (familles épuisables + gabarits généra
     expect(simple).toContain("Donc : Cet arbre fait partie des arbres");
   });
 
+  it("it.89 couleurs : reconnaissance, propriétés, mélange, complémentaire — calculés depuis la question", () => {
+    // reconnaissance : couleur canonique — nom exact Kaggle + repli palette
+    const rec = reponseInstantiee("Quelle couleur porte le code hexa #FF0000 ?");
+    expect(rec).not.toBeNull();
+    expect(rec).toContain("« Red »");
+    expect(rec).toContain("une couleur chaude");
+    // couleur non canonique : plus proche voisin + nom exact
+    const proche = reponseInstantiee("À quelle couleur de la palette correspond #00FFFF ?");
+    expect(proche).toContain("cyan");
+    // propriétés
+    const prop = reponseInstantiee("La couleur #0000FF est-elle chaude ou froide, et claire, sombre ou moyenne ?");
+    expect(prop).toContain("froide");
+    expect(prop).toContain("sombre");
+    // mélange lumière (additif)
+    const mel = reponseInstantiee(
+      "On mélange de la lumière rouge (#FF0000) et de la lumière vert (#00FF00). Quelle couleur obtient-on ?",
+    );
+    expect(mel).toContain("#FFFF00");
+    expect(mel).toContain("jaune");
+    // complémentaire
+    const comp = reponseInstantiee("Quelle est la couleur complémentaire de #FF0000 ?");
+    expect(comp).toContain("#00FFFF");
+    expect(comp).toContain("cyan");
+    // décomposition
+    const dec = reponseInstantiee("Décompose le code hexa #4B0082 en valeurs de rouge, vert et bleu.");
+    expect(dec).toContain("rouge = 75");
+    expect(dec).toContain("bleu = 130");
+    // hors gabarit couleur : null (conversation normale)
+    expect(reponseInstantiee("Peux-tu me parler de l'histoire de l'art ?")).toBeNull();
+  });
+
+  it("it.89 : le nom EXACT du dataset réel Kaggle color-names est servi (1 156 couleurs intégrées)", () => {
+    // #0048BA « Absolute zero » — une couleur RÉELLE de la base Kaggle,
+    // impossible à deviner par la seule palette (24 couleurs)
+    const kaggle = reponseInstantiee("Quelle couleur porte le code hexa #0048BA ?");
+    expect(kaggle).toContain("« Absolute zero »");
+    expect(kaggle).toContain("bleu");
+    // couleur non canonique hors base Kaggle : repli palette propre
+    const horsBase = reponseInstantiee("Quelle couleur porte le code hexa #0F1E2D ?");
+    expect(horsBase).not.toBeNull();
+    expect(horsBase).toContain("couleur");
+  });
+
   it("COHÉRENCE GÉNÉRATEUR ↔ CHAT : les questions stratifiées des 7 familles de diversité reçoivent leur extrait vérifiable", () => {
     // Le plan stratifié pose les 7 familles de diversité DÈS LES PREMIERS
     // indices (math_verbal absorbe la fin) — on vérifie le chat sur les

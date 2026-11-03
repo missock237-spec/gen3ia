@@ -28,6 +28,17 @@ import {
   PLANIFICATIONS,
   REGLES_CONDITIONNELLES,
 } from "./interrogation-milliard";
+import {
+  complementaire,
+  depuisHex,
+  melangeLumiere,
+  melangePigment,
+  parNom,
+  qualifieLuminosite,
+  versHex,
+  voisine,
+} from "./couleurs-it89";
+import { NOMS_KAGGLE } from "../neural/generation/couleurs-kaggle-it89";
 
 /** Extraction robuste des entiers d'un texte (espaces fines/milliers absorbées). */
 export function nombresDe(texte: string): number[] {
@@ -265,6 +276,7 @@ export function reponseInstantiee(message: string): string | null {
     analogieInstantiee,
     causaliteInstantiee,
     planificationInstantiee,
+    couleurInstantiee,
   ];
   for (const cas of essais) {
     const reponse = cas(message);
@@ -273,7 +285,75 @@ export function reponseInstantiee(message: string): string | null {
   return null;
 }
 
-// ─── it.87 : familles épuisables (modus ponens/tollens, analogie, ───────────
+// ─── it.89 : couleurs (reconnaissance, propriétés, mélanges, complémentaire)
+//      — mêmes fonctions pures que le générateur (couleurs-it89.ts,
+//      source de vérité unique) : 16 777 216 couleurs reconnues par calcul.
+
+function couleurInstantiee(message: string): string | null {
+  // mélanges : « On mélange de la lumière X (…) et de la lumière Y (…). »
+  //            « On mélange des pigments X (…) et Y (…). »
+  const segments = message.match(
+    /^[Oo]n mélange (?:de la lumière|des pigments) ([\wéèàûôî\s]+?) \(#[0-9a-fA-F]{6}\) et (?:de la lumière|des pigments) ([\wéèàûôî\s]+?) \(#[0-9a-fA-F]{6}\)\./,
+  );
+  if (segments) {
+    const isLumiere = /lumière/i.test(message);
+    const a = parNom(segments[1]);
+    const b = parNom(segments[2]);
+    if (a && b) {
+      const res = isLumiere ? melangeLumiere(a.rgb, b.rgb) : melangePigment(a.rgb, b.rgb);
+      const nom = voisine(res).nom;
+      const hx = versHex(res);
+      return [
+        `1) On mélange ${isLumiere ? "de la lumière (additif : somme des canaux bornée à 255)" : "des pigments (soustractif : on moyenne les complémentaires)"}.`,
+        `2) ${a.nom} ${versHex(a.rgb)} + ${b.nom} ${versHex(b.rgb)} → ${hx}.`,
+        `3) La couleur de la palette la plus proche est le ${nom}.`,
+        `Donc : ${a.nom} + ${b.nom} donnent le ${nom} (${hx}).`,
+      ].join(" ");
+    }
+  }
+  // complémentaire
+  const comp = message.match(/complémentaire de (#[0-9a-fA-F]{6})/i);
+  if (comp) {
+    const c = depuisHex(comp[1]);
+    if (c) {
+      const res = complementaire(c);
+      const nom = voisine(res).nom;
+      return [
+        `1) Le complémentaire inverse chaque canal : 255-${c[0]}, 255-${c[1]}, 255-${c[2]}.`,
+        `2) Le code obtenu est ${versHex(res)}, le plus proche de la palette est le ${nom}.`,
+        `Donc : le complémentaire de ${comp[1]} est ${versHex(res)} (${nom}).`,
+      ].join(" ");
+    }
+  }
+  // décomposition RGB explicite demandée
+  const decompose = message.match(/#([0-9a-fA-F]{6})/);
+  if (decompose && /décompose|décomposer/i.test(message)) {
+    const c = depuisHex(decompose[0]);
+    if (c) {
+      return [
+        `1) Je découpe ${decompose[0]} en trois octets : ${decompose[0].slice(1, 3)}, ${decompose[0].slice(3, 5)}, ${decompose[0].slice(5, 7)}.`,
+        `Donc : rouge = ${c[0]}, vert = ${c[1]}, bleu = ${c[2]}.`,
+      ].join(" ");
+    }
+  }
+  // reconnaissance / propriétés : tout code hexa dans une question couleur
+  if (decompose && /(couleur|palette|chaude|froide|claire|sombre)/i.test(message)) {
+    const c = depuisHex(decompose[0]);
+    if (c) {
+      const proch = voisine(c);
+      const temp = proch.temperature;
+      const lum = qualifieLuminosite(c);
+      const nomExact = NOMS_KAGGLE[decompose[0].toUpperCase()];
+      const nomLigne = nomExact
+        ? `1) Canaux de ${decompose[0]} : R=${c[0]}, V=${c[1]}, B=${c[2]}. 2) Nom exact (base de noms réels Kaggle color-names) : « ${nomExact} ». 3) Couleur de palette la plus proche : le ${proch.nom} (${temp}), luminosité ${lum}. Donc : ${decompose[0]} est « ${nomExact} » — une couleur ${temp} et ${lum}.`
+        : `1) Canaux de ${decompose[0]} : R=${c[0]}, V=${c[1]}, B=${c[2]}. 2) Luminosité : 0,299×${c[0]} + 0,587×${c[1]} + 0,114×${c[2]} = ${Math.round(0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2])} → ${lum}. 3) La couleur de la palette la plus proche est le ${proch.nom}, classé ${temp}. Donc : ${decompose[0]} est le code du ${proch.nom} — une couleur ${temp} et ${lum}.`;
+      return nomLigne;
+    }
+  }
+  return null;
+}
+
+// ─── it.87 : familles épuisables (modus ponens/tollens, analogie,
 //      causalité, planification) — mêmes tables que le générateur
 //      d'interrogation (lib/gen3/interrogation-milliard.ts, source de
 //      vérité unique : zéro divergence possible entre balayage et chat).
