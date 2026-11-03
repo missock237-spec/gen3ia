@@ -282,6 +282,40 @@ describe("Guérisseur production (.github/workflows/guerisseur-production.yml)",
     expect(posV9).toBeGreaterThan(posOui);
     expect(posV8).toBeGreaterThan(posV9);
   });
+
+  it("v10 relais auto-réarmé : le guérisseur se re-dispatche en incident, avec trois gardes anti-tempête", () => {
+    // Constat 03 nov. (it.93) : les crons planifiés sont morts à ~93 %
+    // (1 tick schedule sur 14 runs, les DEUX workflows) — pendant la
+    // fenêtre morte du 7e blocage, ni la sonde SSH ni l'escalade
+    // battement n'ont tourné. La détection ne doit plus dépendre d'un
+    // cron vivant : en incident actif, le guérisseur se re-dispatche
+    // lui-même (événement = fiable à 100 %).
+    // Entrées de chaîne déclarées sur le dispatch :
+    expect(guerisseur).toContain("inputs:");
+    expect(guerisseur).toContain("relais:");
+    expect(guerisseur).toContain("chaine:");
+    // Garde 1 — terminaison naturelle : situation saine → PAS de relais.
+    const relais = guerisseur.split("Relais v10 — auto-réarmement")[1] ?? "";
+    expect(relais).toContain('[ "$BESOIN" != "true" ] && [ "$BATTEMENT_ETAT" != "silencieux" ]');
+    expect(relais).toContain("chaîne terminée, pas de relais");
+    // Garde 2 — cadence : le run relais dort 10 min AVANT de mesurer
+    // (cycle ~11 min, pas une boucle serrée) ; les runs non-relais dorment.
+    const sommeil = guerisseur.split("Relais v10 — attente de cadence")[1] ?? "";
+    expect(sommeil).toContain("github.event.inputs.relais == '1'");
+    expect(sommeil).toContain("sleep 600");
+    // Garde 3 — plafond : 12 relais par chaîne (~2 h), l'escalade est
+    // déjà ouverte au-delà ; le prochain événement réel rouvre.
+    expect(relais).toContain('[ "$CHAINE" -ge 12 ]');
+    // C'est bien un AUTO-dispatch du guérisseur, avec chaîne+1 :
+    expect(relais).toContain("gh workflow run guerisseur-production.yml");
+    expect(relais).toContain("-f relais=1 -f chaine=\"$SUIVANT\"");
+    // Les états qui arment le relais incluent le battement silencieux :
+    expect(relais).toContain('"$BATTEMENT_ETAT" != "silencieux"');
+    // Le job verifier attend le sommeil : timeout porté à 15 min.
+    expect(guerisseur).toContain("# 15 min (v10) : le tick relais s'endort 10 min avant de mesurer.");
+    // Le relais existant (surveillance) reste en place — pas de régression.
+    expect(guerisseur).toContain("gh workflow run surveillance-production.yml");
+  });
 });
 
 describe("CD VPS (.github/workflows/deploy-vps.yml) — refermeture à la source", () => {

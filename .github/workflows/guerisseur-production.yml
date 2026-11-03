@@ -59,6 +59,22 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    # v10 (it.94) — RELAIS AUTO-RÉARMÉ : en incident actif, le guérisseur
+    # se re-dispatche lui-même (les crons sont morts à ~93 % — 1 tick sur
+    # 14 mesuré sur les deux workflows le 03 nov.). Deux entrées gouvernent
+    # la chaîne : relais=1 → le run s'endort 10 min AVANT de mesurer
+    # (cadence ≈ 11 min) ; chaine → compteur de profondeur, plafond 12.
+    inputs:
+      relais:
+        description: "1 = tick du relais (sommeil de cadence avant mesure)"
+        required: false
+        default: "0"
+        type: string
+      chaine:
+        description: "Profondeur de chaîne du relais (0-12)"
+        required: false
+        default: "0"
+        type: string
 
 permissions:
   contents: read
@@ -73,7 +89,8 @@ jobs:
   verifier:
     name: Mesurer l'écart production ↔ main
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 15 min (v10) : le tick relais s'endort 10 min avant de mesurer.
+    timeout-minutes: 15
     outputs:
       besoin: ${{ steps.ecart.outputs.besoin }}
       sha_main: ${{ steps.ecart.outputs.sha_main }}
@@ -83,6 +100,16 @@ jobs:
       battement_target: ${{ steps.battement.outputs.target_sha }}
       battement_served: ${{ steps.battement.outputs.served_sha }}
     steps:
+      # v10 — SOMMEIL DE CADENCE du relais : le run auto-dispatché attend
+      # 10 min AVANT de mesurer, pour que la chaîne d'incident tourne à
+      # ~11 min de cycle au lieu de reboucler en < 1 min (anti-tempête).
+      # Les runs push/cron/manuels ne dorment pas (mesure immédiate).
+      - name: "Relais v10 — attente de cadence (tick auto-dispatché)"
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.relais == '1'
+        run: |
+          echo "Tick relais (chaîne ${{ github.event.inputs.chaine }}) — sommeil de cadence 10 min avant mesure."
+          sleep 600
+
       - name: Comparer les empreintes
         id: ecart
         run: |
@@ -671,3 +698,42 @@ jobs:
           gh workflow run surveillance-production.yml -R "$REPO" --ref main \
             && echo "Sonde HTTP dispatchée (exécution asynchrone)." \
             || echo "Dispatch impossible (transitoire) — le cron 7,37 reste le filet."
+
+      # v10 (it.94) — RELAIS AUTO-RÉARMÉ DU GUÉRISSEUR : les crons sont
+      # morts à ~93 % (mesure du 03 nov. : 1 tick schedule sur 14 runs,
+      # les deux workflows). En incident ACTIF (prod en retard OU battement
+      # silencieux), le guérisseur se re-dispatche lui-même pour
+      # réévaluer dans ~10 min — la détection d'une mort du poller ne
+      # dépend plus d'un cron vivant. Trois gardes anti-tempête :
+      # (1) terminaison naturelle : situation saine → PAS de re-dispatch ;
+      # (2) cadence : le run relais dort 10 min AVANT de mesurer (le
+      #     cycle réel est ~11 min, pas une boucle serrée) ;
+      # (3) plafond : 12 relais par chaîne (~2 h) — au-delà, l'escalade
+      #     est déjà ouverte ; le prochain événement réel (push, cron,
+      #     dispatch manuel) rouvre une chaîne neuve.
+      - name: "Relais v10 — auto-réarmement en période d'incident"
+        id: relais
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BESOIN: ${{ needs.verifier.outputs.besoin }}
+          BATTEMENT_ETAT: ${{ needs.verifier.outputs.battement_etat }}
+          CHAINE: ${{ github.event.inputs.chaine }}
+        run: |
+          case "$CHAINE" in ''|*[!0-9]*) CHAINE=0 ;; esac
+          if [ "$BESOIN" != "true" ] && [ "$BATTEMENT_ETAT" != "silencieux" ]; then
+            echo "Situation saine (besoin=$BESOIN, battement=$BATTEMENT_ETAT) — chaîne terminée, pas de relais."
+            exit 0
+          fi
+          if [ "$CHAINE" -ge 12 ]; then
+            echo "Plafond de chaîne atteint (12 relais ≈ 2 h) — l'escalade est ouverte ; le prochain événement réel rouvrira une chaîne."
+            exit 0
+          fi
+          SUIVANT=$((CHAINE + 1))
+          if gh workflow run guerisseur-production.yml -R "$REPO" --ref main \
+               -f relais=1 -f chaine="$SUIVANT"; then
+            echo "Relais armé : réévaluation dans ~10 min (chaîne $SUIVANT/12) — incident actif (besoin=$BESOIN, battement=$BATTEMENT_ETAT)."
+          else
+            echo "Dispatch relais impossible (transitoire) — crons et push restent les filets."
+          fi
