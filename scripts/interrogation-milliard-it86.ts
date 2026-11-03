@@ -45,6 +45,7 @@
 
 import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 import { CortexColumnnaire } from "../lib/neural/core/v2/cortex-columnnaire";
 import {
@@ -256,6 +257,68 @@ function main(): void {
 
   const budgetEpuise = (): boolean => (Date.now() - t0) / 1000 > MAX_SECONDES;
 
+  // ── it.91 — CHECKPOINT PÉRIODIQUE ANTI-RECYCLAGE ─────────────────────────
+  // Leçon mesurée (ticks 15:10 et 17:10) : le checkpoint n'était écrit qu'en
+  // FIN de run — un recyclage du sandbox (processus tués) perdait la tranche
+  // entière (2× ~100-300 k questions perdues). Désormais : écriture
+  // périodique toutes les 100 000 questions (var/ ET var-copie/), et PUSH
+  // git best-effort toutes les 300 000 (~15 min) — seul le pushé survit au
+  // recyclage. Le push est doc-only (json var-copie), limité en cadence pour
+  // ne pas saturer CI/CD.
+  const CHEMIN_COPIE = "var-copie/progression.json";
+  let sauvegardes = 0;
+  const sauvegardePartielle = (
+    interrogeesLocales: number,
+    agg: {
+      exact: number; methode: number; echec: number; corriges: number;
+      correctionsHorsMemoire: number; retests: number; reparees: number;
+      parFamille: Record<string, { exact: number; methode: number; echec: number; corriges: number }>;
+    },
+  ): void => {
+    try {
+      const cpPartiel: Checkpoint = {
+        date: new Date().toISOString(),
+        totalInterroge: jDebut + interrogeesLocales,
+        exact: cp.exact + agg.exact,
+        methode: cp.methode + agg.methode,
+        echec: cp.echec + agg.echec,
+        corriges: cp.corriges + agg.corriges,
+        correctionsHorsMemoire: cp.correctionsHorsMemoire + agg.correctionsHorsMemoire,
+        retests: cp.retests + agg.retests,
+        reparees: cp.reparees + agg.reparees,
+        parFamille: Object.fromEntries(
+          FAMILLES_MILLIARD.map((f) => [
+            f,
+            {
+              exact: (cp.parFamille[f]?.exact ?? 0) + (agg.parFamille[f]?.exact ?? 0),
+              methode: (cp.parFamille[f]?.methode ?? 0) + (agg.parFamille[f]?.methode ?? 0),
+              echec: (cp.parFamille[f]?.echec ?? 0) + (agg.parFamille[f]?.echec ?? 0),
+              corriges: (cp.parFamille[f]?.corriges ?? 0) + (agg.parFamille[f]?.corriges ?? 0),
+            },
+          ]),
+        ),
+        runs: cp.runs,
+        dureeMsCumulee: cp.dureeMsCumulee + (Date.now() - t0),
+      };
+      const contenu = JSON.stringify(cpPartiel, null, 2);
+      writeFileSync(CHEMIN_CHECKPOINT, contenu, "utf8");
+      writeFileSync(CHEMIN_COPIE, contenu, "utf8");
+      sauvegardes += 1;
+      if (process.env.PUSH_CHECKPOINT === "1" && sauvegardes % 3 === 0) {
+        try {
+          execFileSync("git", ["add", "var-copie/progression.json"], { timeout: 20_000 });
+          execFileSync("git", ["commit", "-m", `chore(it.91): checkpoint balayage périodique — cumul ${cpPartiel.totalInterroge.toLocaleString("fr-FR")}/1 000 000 000 (push anti-recyclage)`], { timeout: 30_000 });
+          execFileSync("git", ["push", "origin", "main"], { timeout: 60_000 });
+          progression(`checkpoint PUSHÉ (anti-recyclage) : cumul ${cpPartiel.totalInterroge.toLocaleString("fr-FR")}`);
+        } catch {
+          progression("push du checkpoint périodique impossible (best-effort) — checkpoint local à jour");
+        }
+      }
+    } catch {
+      progression("sauvegarde partielle impossible ce cycle (best-effort)");
+    }
+  };
+
   for (let j = jDebut; j < jFin; j++) {
     if ((j - jDebut) % 10_000 === 0 && budgetEpuise()) {
       progression(`budget de temps atteint (${MAX_SECONDES}s) — arrêt propre à j=${j} (reprise au prochain tick)`);
@@ -302,6 +365,7 @@ function main(): void {
       progression(
         `… ${interrogees} questions interrogées — exact ${exact} · methode ${methode} · echec ${echec} · corrigées ${corriges} (RAM ${enMemoire}) — réparation en ligne ${reparees}/${retests}`,
       );
+      sauvegardePartielle(interrogees, { exact, methode, echec, corriges, correctionsHorsMemoire, retests, reparees, parFamille });
     }
   }
 

@@ -184,21 +184,42 @@ describe("Guérisseur production (.github/workflows/guerisseur-production.yml)",
     expect(guerisseur).toContain("gh workflow run deploy-vps.yml");
   });
 
-  it("v6.2 secours SANS SSH : renouvellement d'IP runner quand release à jour + âge ≥ 10 min + SSH muet", () => {
+  it("v8 secours SANS SSH : renouvellement d'IP runner quand release à jour + âge ≥ 21 min + SSH PROUVÉ muet", () => {
     // Constat 07:26→08:10Z (itération 26) : release cd-latest à jour,
     // poller silencieux, SSH muet → prod gelée ~45 min ; la livraison
     // n'a été rétablie que par un dispatch CD MANUEL (IP runner neuve).
     // Le guérisseur doit savoir faire ce que l'opérateur a fait à la main.
+    // v8 (tick 18:10, 6e blocage) : les sondes ssh-keyscan répétées ont
+    // probablement auto-banni les plages IP des runners (fail2ban) — le
+    // secours exige désormais une sonde réellement FAITE et muette
+    // (« fraiche » = sonde évitée sur build frais → pas de secours), et
+    // un âge ≥ 21 min (~10 cycles poller).
     expect(guerisseur).toContain("Secours sans SSH — redéclencher le CD (renouvellement d'IP runner)");
     const secours = guerisseur.split("id: secours-ip")[1]?.split("- name: Rapport du tick")[0] ?? "";
     // Conditions conjonctives strictes (anti-spam) — les trois doivent coexister :
-    expect(secours).toContain("steps.sonde.outputs.joignable != 'oui'");
+    expect(secours).toContain("steps.sonde.outputs.joignable == 'non'");
     expect(secours).toContain("steps.release.outputs.release_sha == needs.verifier.outputs.sha_main");
-    expect(secours).toContain(">= 10");
+    expect(secours).toContain(">= 21");
     // C'est bien un dispatch CD (canal à IP renouvelée), pas un appel SSH direct.
     expect(secours).toContain("gh workflow run deploy-vps.yml");
     // Observabilité : le rapport du tick trace le secours.
     expect(guerisseur).toContain("secours-ip =");
+  });
+
+  it("v8 sonde SSH anti auto-bannissement : 1 essai max, évitée sur build frais (< 21 min)", () => {
+    // Constat 6e blocage (04:34→10:05Z) : sondes répétées (3 essais ×
+    // 2 ticks/h + chaque push) → auto-bannissement probable des plages IP
+    // runners par fail2ban/PerSourcePenalties, rendant l'armement
+    // impossible précisément quand il était nécessaire.
+    const sonde = guerisseur.split("id: sonde")[1]?.split("- name: Armer le canal pull")[0] ?? "";
+    expect(sonde).toContain("ssh-keyscan");
+    expect(sonde).not.toContain("for i in 1 2 3"); // plus de triple rafale
+    // un build frais n'est pas une panne : pas de sonde, pas d'escalade
+    expect(sonde).toContain("joignable=fraiche");
+    expect(sonde).toContain("-lt 21");
+    // l'escalade ne braille pas pendant la fenêtre fraîche
+    const escalade = guerisseur.split("Escalade — issue visible quand prod en retard")[1] ?? "";
+    expect(escalade).toContain('"$JOIGNABLE" = "fraiche"');
   });
 
   it("v6.2 garde d'escalade : pas d'issue si le secours vient de s'armer ce tick (anti-race API)", () => {

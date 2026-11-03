@@ -261,21 +261,34 @@ jobs:
           echo "Release cd-latest : ${RS:-absent} (publiée il y a ${AGE:-?} min)"
           echo "main              : ${{ needs.verifier.outputs.sha_main }}"
 
-      - name: Sondage SSH léger (3 essais espacés)
+      - name: Sondage SSH léger (1 essai, cadence maîtrisée)
         id: sonde
         if: steps.garde.outputs.libre == 'oui'
         run: |
-          ok=0
-          for i in 1 2 3; do
-            if timeout 12 ssh-keyscan -T 8 -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" 2>/dev/null | grep -q "ssh-"; then
-              ok=1
-              echo "Sondage $i/3 : sshd répond — armement du canal pull possible."
-              break
-            fi
-            echo "Sondage $i/3 : SSH muet (fail2ban / PerSourcePenalties ?) — production rattrapée au prochain tick ou par le poller pull."
-            [ "$i" = "3" ] || sleep 30
-          done
-          echo "joignable=$([ $ok = 1 ] && echo oui || echo non)" >> "$GITHUB_OUTPUT"
+          # v8 (Job 478451, tick 18:10) — ANTI AUTO-BANNISSEMENT : fait
+          # mesuré au 6e blocage (04:34→10:05Z) — les sondes ssh-keyscan
+          # répétées (3 essais × 2 ticks/h + chaque push) ont probablement
+          # déclenché fail2ban/PerSourcePenalties côté VPS : les plages IP
+          # des runners GitHub se sont retrouvées bannies, rendant
+          # l'armement IMPOSSIBLE précisément quand il était nécessaire.
+          # Correctif : (1) ne pas sonder quand le build publié est FRAIS
+          # (< 21 min = ~10 cycles poller) — un poller vivant tire en
+          # 2-15 min, un build frais n'est pas une panne ; (2) UN seul
+          # essai au lieu de trois. L'escalade et le secours IP gardent
+          # leur rôle pour les builds réellement périmés.
+          AGE="${{ steps.release.outputs.release_age_min }}"
+          if [ -z "$AGE" ] || [ "$AGE" -lt 21 ]; then
+            echo "Release fraîche (âge ${AGE:-inconnue} min < 21) — sondage SSH évité (anti auto-bannissement v8) ; le poller peut encore tirer."
+            echo "joignable=fraiche" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if timeout 12 ssh-keyscan -T 8 -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" 2>/dev/null | grep -q "ssh-"; then
+            echo "sshd répond — armement du canal pull possible."
+            echo "joignable=oui" >> "$GITHUB_OUTPUT"
+          else
+            echo "SSH muet (fail2ban / PerSourcePenalties ?) — production rattrapée au prochain tick ou par le poller pull."
+            echo "joignable=non" >> "$GITHUB_OUTPUT"
+          fi
 
       # ARMEMENT DU CANAL PULL (le cœur du correctif structurel) :
       # install-pull-mode.sh est idempotent, non interactif, sans entrée
@@ -316,14 +329,14 @@ jobs:
       # CD dispatched prend une fenêtre SSH neuve (livraison e5279375
       # prouvée 08:10Z par ce mécanisme, exécuté manuellement). Conditions
       # conjonctives strictes (anti-spam) : release PUBLIÉE et à jour
-      # (release_sha == main), âge ≥ 10 min (le poller a eu ses 5 cycles
-      # — même seuil du watchdog v6.1), sonde SSH muette. Le CD référencé
-      # est sérialisé par sa concurrency (deploy-vps) ; l'escalade v6.1
-      # voit ce CD « in_progress » via son garde existant → pas de faux
-      # positif pendant qu'il livre.
+      # (release_sha == main), âge ≥ 21 min (v8 — le poller a eu ses ~10
+      # cycles et la sonde a PROUVÉ le SSH muet), sonde SSH muette. Le CD
+      # référencé est sérialisé par sa concurrency (deploy-vps) ;
+      # l'escalade v6.1 voit ce CD « in_progress » via son garde existant
+      # → pas de faux positif pendant qu'il livre.
       - name: "Secours sans SSH — redéclencher le CD (renouvellement d'IP runner)"
         id: secours-ip
-        if: steps.sonde.outputs.joignable != 'oui' && steps.release.outputs.release_sha == needs.verifier.outputs.sha_main && (steps.release.outputs.release_age_min || 0) >= 10
+        if: steps.sonde.outputs.joignable == 'non' && steps.release.outputs.release_sha == needs.verifier.outputs.sha_main && (steps.release.outputs.release_age_min || 0) >= 21
         run: |
           gh workflow run deploy-vps.yml --ref main -R "${{ github.repository }}"
           echo "✅ CD déclenché SANS SSH (renouvellement d'IP runner) : release cd-latest ${RELEASE_SHA:0:8} publiée depuis ${RELEASE_AGE} min, poller silencieux, prod = ${SHA_PROD:0:8} → main = ${SHA_MAIN:0:8}."
@@ -382,6 +395,13 @@ jobs:
           # guérisseur/CD gèrent le rattrapage sans bruit).
           if [ "$JOIGNABLE" = "oui" ]; then
             echo "SSH joignable — rattrapage en cours par les canaux normaux, pas d'escalade."
+            exit 0
+          fi
+          # v8 — build FRAIS (sonde évitée, anti auto-bannissement) : le
+          # poller peut encore livrer dans ses ~10 premiers cycles — pas
+          # d'escalade bruyante pendant cette fenêtre.
+          if [ "$JOIGNABLE" = "fraiche" ]; then
+            echo "Build frais (âge ${RELEASE_AGE_MIN:-?} min < 21) — sonde SSH évitée, pas d'escalade ce tick."
             exit 0
           fi
 

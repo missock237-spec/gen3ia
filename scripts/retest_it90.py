@@ -59,13 +59,17 @@ QUESTIONS_COULEURS = [
 QUESTIONS_MM = [
     {
         "id": "M1-image-analyse",
-        "q": "Que sais-tu sur l'image photoréaliste kext90_aube_001 ? Décris-la.",
-        "attendus": ["aube"],
+        # id RÉEL du module multimodal-it90 (kext90_image_014 → image_013.jpg
+        # : chien + lit + livres — vérifié visuellement au téléchargement)
+        "q": "Que contient l'image kext90_image_014 ? Décris-la.",
+        "attendus": ["chien", "lit"],
     },
     {
         "id": "M2-audio-voix",
-        "q": "Que contient l'enregistrement audio kext90_voix_001 ?",
-        "attendus": ["voix"],
+        # id RÉEL : kext90_audio_002 → audio_001.wav — transcription FLEURS
+        # officielle attendue (vérifiée dans var-copie/assets.json)
+        "q": "Que contient l'enregistrement audio kext90_audio_002 ?",
+        "attendus": ["déroger aux lois fiscales"],
     },
 ]
 
