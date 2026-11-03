@@ -56,7 +56,7 @@ export const MAX_CORRECTIONS_MEMOIRE = 120_000;
 
 // ─── Vocabulaires compacts (réels, français) ─────────────────────────────────
 
-const NOMS = [
+export const NOMS = [
   "Léa", "Théo", "Amine", "Sofia", "Karim", "Nina", "Marc", "Ida",
   "Youssef", "Lina", "Paul", "Rania", "Hugo", "Fatou", "Adam", "Mia",
   "Noé", "Sarah", "Luc", "Aïcha", "Bruno", "Yasmine", "Victor", "Clara",
@@ -91,7 +91,7 @@ const REGISTRES_DEDUCTION: ReadonlyArray<readonly [string, string]> = [
 ];
 
 /** Règles conditionnelles : [si, alors, sansSi, sansAlors]. */
-const REGLES_CONDITIONNELLES: ReadonlyArray<{
+export const REGLES_CONDITIONNELLES: ReadonlyArray<{
   si: string;
   alors: string;
   sansSi: string;
@@ -115,7 +115,7 @@ const DIRECTIONS = ["nord", "est", "sud", "ouest"] as const;
 const MOUVEMENTS = ["gauche", "droite", "demi-tour"] as const;
 
 /** Modèles d'analogie : [A, B, C, D] — « A est à B ce que C est à D ». */
-const ANALOGIES: ReadonlyArray<readonly [string, string, string, string]> = [
+export const ANALOGIES: ReadonlyArray<readonly [string, string, string, string]> = [
   ["le chat", "le chaton", "la chienne", "le chiot"],
   ["la vache", "le veau", "la jument", "le poulain"],
   ["la poule", "le poussin", "l'ours", "l'ourson"],
@@ -159,7 +159,7 @@ const ANALOGIES: ReadonlyArray<readonly [string, string, string, string]> = [
 ];
 
 /** Chaînes causales : [cause, intermédiaire, effet final]. */
-const CHAINES_CAUSALES: ReadonlyArray<readonly [string, string, string]> = [
+export const CHAINES_CAUSALES: ReadonlyArray<readonly [string, string, string]> = [
   ["un nouveau barrage a été construit", "les sédiments se sont accumulés en amont", "les champs en aval sont plus verts mais les pêcheurs attrapent moins de poissons"],
   ["une gelée précoce est tombée en avril", "les fleurs des vergers ont gelé", "la récolte de pommes sera bien plus petite"],
   ["une nouvelle ligne de bus a ouvert", "les commerces du quartier sont mieux desservis", "le marché du samedi attire deux fois plus de monde"],
@@ -202,7 +202,7 @@ const CHAINES_CAUSALES: ReadonlyArray<readonly [string, string, string]> = [
 ];
 
 /** Objectifs de planification : [objectif, étapes numérotées]. */
-const PLANIFICATIONS: ReadonlyArray<readonly [string, string]> = [
+export const PLANIFICATIONS: ReadonlyArray<readonly [string, string]> = [
   ["organiser un pique-nique", "1) Choisir le lieu et la date. 2) Lister les provisions. 3) Faire les courses la veille. 4) Préparer la glacière le matin. Donc : le pique-nique est prêt sans course de dernière minute."],
   ["apprendre un morceau de piano", "1) Découper le morceau en phrases musicales. 2) Travailler main droite puis main gauche. 3) Assembler à vitesse réduite. 4) Monter le tempo jour après jour. Donc : le morceau arrive propre au bon tempo."],
   ["préparer un examen de deux semaines", "1) Lister les chapitres. 2) Planifier deux chapitres par jour. 3) Réviser les fiches chaque soir. 4) S'entraîner sur les anciens sujets le dernier week-end. Donc : l'examen se prépare sans surcharge."],

@@ -22,6 +22,13 @@
  * chat s'applique sans changement.
  */
 
+import {
+  ANALOGIES,
+  CHAINES_CAUSALES,
+  PLANIFICATIONS,
+  REGLES_CONDITIONNELLES,
+} from "./interrogation-milliard";
+
 /** Extraction robuste des entiers d'un texte (espaces fines/milliers absorbées). */
 export function nombresDe(texte: string): number[] {
   const sansSeparateurs = texte.replace(/[\u202f\u00a0 ]/g, "");
@@ -57,6 +64,38 @@ function heureInstantiee(message: string): string | null {
   ].join(" ");
 }
 
+// ─── Cas 1b : durée en minutes (« Il est 9 h 30. Une tâche dure 45 minutes. ») ──
+
+type Horloge = { hh: number; mm: number };
+
+function horlogeFin(hDebut: number, mDebut: number, minutes: number): Horloge {
+  const total = hDebut * 60 + mDebut + minutes;
+  return { hh: Math.floor(total / 60) % 24, mm: total % 60 };
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+function dureeMinutesInstantiee(message: string): string | null {
+  if (!/quelle heure|termin[ée]e/i.test(message)) return null;
+  if (!/minutes/i.test(message)) return null; // les durées en heures passent par le cas 1
+  const depart = message.match(/il est\s+(\d{1,2})\s*h(?:\s*(\d{1,2}))?/i);
+  const duree = message.match(/(?:dure|dur[ée]e de|attends|dans)\s+(\d{1,4})\s*minutes/i);
+  if (!depart || !duree) return null;
+  const h = Number(depart[1]);
+  const m = depart[2] !== undefined ? Number(depart[2]) : 0;
+  const d = Number(duree[1]);
+  if (h > 23 || m > 59 || d > 1440) return null;
+  const fin = horlogeFin(h, m, d);
+  return [
+    `1) Départ : ${h} h ${pad2(m)} = ${h * 60 + m} minutes.`,
+    `2) Durée : ${d} minutes.`,
+    `3) Fin : ${h * 60 + m} + ${d} = ${h * 60 + m + d} minutes = ${fin.hh} h ${pad2(fin.mm)}.`,
+    `Donc : la tâche se termine à ${fin.hh} h ${pad2(fin.mm)}.`,
+  ].join(" ");
+}
+
 // ─── Cas 2 : chaîne spatiale (« A à gauche de B, B à gauche de C ») ─────────
 
 function milieuInstantie(message: string): string | null {
@@ -88,6 +127,33 @@ function milieuInstantie(message: string): string | null {
 // ─── Cas 3 : syllogisme simple (« Tous les A sont des B. X est un A. ») ─────
 
 function syllogismeInstantie(message: string): string | null {
+  // Gabarit it.87 « fait partie des » (générateur d'interrogation, déduction)
+  // : « Tous les A sont des B. N fait partie des A. Qu'est-ce qu'on peut en déduire sur N ? »
+  const gabGen = message.match(
+    /^[Tt]ous les ([\wÀ-ÿ-]+) sont des ([\wÀ-ÿ-]+)\. ([\wÀ-ÿ-]+) fait partie des \1\. Qu'est-ce qu'on peut en déduire sur \3 \?$/,
+  );
+  if (gabGen) {
+    const [, membre, categorie, nom] = gabGen;
+    return [
+      "1) On raisonne par déduction : si les prémisses sont vraies, la conclusion est certaine.",
+      `2) Première prémisse : tous les ${membre} sont des ${categorie}.`,
+      `3) Deuxième prémisse : ${nom} fait partie des ${membre}.`,
+      `4) Ce qui vaut pour tous les ${membre} vaut donc aussi pour ${nom}.`,
+      `Donc : ${nom}, comme tous les ${membre}, appartient aussi aux ${categorie}.`,
+    ].join(" ");
+  }
+  // Garde de la converse (gabarit générateur) : « Tous les A sont des B. N fait partie des B. Peut-on conclure que N fait partie des A ? »
+  const gabConverse = message.match(
+    /^[Tt]ous les ([\wÀ-ÿ-]+) sont des ([\wÀ-ÿ-]+)\. ([\wÀ-ÿ-]+) fait partie des \2\. Peut-on conclure que \3 fait partie des \1 \?$/,
+  );
+  if (gabConverse) {
+    const [, membre, , nom] = gabConverse;
+    return [
+      "1) Attention au piège de la converse : de « tous les " + membre + " » on ne peut PAS déduire le groupe inverse.",
+      `2) ${nom} appartient au groupe large, mais peut appartenir à d'autres groupes sans être un ${membre}.`,
+      `Donc : la conclusion n'est pas valide — on ne peut pas conclure que ${nom} fait partie des ${membre}.`,
+    ].join(" ");
+  }
   const regle = message.match(
     /tous\s+les\s+([\wÀ-ÿ-]+)\s+sont\s+des\s+([\wÀ-ÿ-]+)/i,
   );
@@ -145,6 +211,41 @@ function additionInstantiee(message: string): string | null {
   return [...etapes, `Donc : il y a ${total} en tout.`].join(" ");
 }
 
+// ─── Cas 2b : boussole (« N fait face au nord. Il tourne à droite, puis gauche. ») ──
+
+function boussoleInstantiee(message: string): string | null {
+  if (!/fait face au/i.test(message) || !/direction/i.test(message)) return null;
+  const m = message.match(
+    /^([\wÀ-ÿ-]{2,20}) fait face au (nord|est|sud|ouest)\. (?:Il|Elle) tourne à ([\wÀ-ÿ ,-]+?)\. Vers quelle direction fait (?:il|elle) face maintenant \?$/i,
+  );
+  if (!m) return null;
+  const [, nom, initialeTxt, sequenceTxt] = m;
+  const dir = ["nord", "est", "sud", "ouest"].indexOf(initialeTxt.toLowerCase());
+  if (dir < 0) return null;
+  const mouvements = sequenceTxt
+    .split(/,\s*pui?s?\s*,?\s*/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (mouvements.length === 0 || mouvements.length > 8) return null;
+  if (!mouvements.every((g) => ["gauche", "droite", "demi-tour"].includes(g))) return null;
+  let cap = dir;
+  const etapes: string[] = [];
+  for (const g of mouvements) {
+    const avant = cap;
+    if (g === "droite") cap = (cap + 1) % 4;
+    else if (g === "gauche") cap = (cap + 3) % 4;
+    else cap = (cap + 2) % 4;
+    etapes.push(`${g} : ${["nord", "est", "sud", "ouest"][avant]} → ${["nord", "est", "sud", "ouest"][cap]}`);
+  }
+  const capTxt = ["nord", "est", "sud", "ouest"][cap];
+  return [
+    "1) On suit la boussole : nord, est, sud, ouest dans le sens des aiguilles d'une montre.",
+    `2) Départ : ${initialeTxt}.`,
+    `3) On applique chaque mouvement : ${etapes.join(" ; ")}.`,
+    `Donc : ${nom} fait face au ${capTxt}.`,
+  ].join(" ");
+}
+
 /**
  * Point d'entrée : la réponse INSTANCIÉE pour cette question, ou null
  * (la question n'est pas d'un gabarit calculable — chemin normal du chat).
@@ -152,13 +253,148 @@ function additionInstantiee(message: string): string | null {
 export function reponseInstantiee(message: string): string | null {
   const essais = [
     heureInstantiee,
+    dureeMinutesInstantiee,
     milieuInstantie,
+    boussoleInstantiee,
     syllogismeInstantie,
     additionInstantiee,
+    conditionnelInstantie,
+    analogieInstantiee,
+    causaliteInstantiee,
+    planificationInstantiee,
   ];
   for (const cas of essais) {
     const reponse = cas(message);
     if (reponse) return reponse;
+  }
+  return null;
+}
+
+// ─── it.87 : familles épuisables (modus ponens/tollens, analogie, ───────────
+//      causalité, planification) — mêmes tables que le générateur
+//      d'interrogation (lib/gen3/interrogation-milliard.ts, source de
+//      vérité unique : zéro divergence possible entre balayage et chat).
+
+function echappe(texte: string): string {
+  return texte.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Cas 5 : conditionnel — modus ponens (générique, toute règle) + modus tollens (table). */
+function conditionnelInstantie(message: string): string | null {
+  // modus ponens : « On sait que si S, alors A. Or pour N, S. Que peut-on conclure ? »
+  // valide pour TOUTE règle (antécédent observé = antécédent de la règle, backreference).
+  const ponens = message.match(
+    /^On sait que si (.+), alors (.+)\. Or pour (.+), \1\. Que peut-on conclure \?$/i,
+  );
+  if (ponens) {
+    const [, si, alors, nom] = ponens;
+    return [
+      "1) On raisonne par modus ponens : règle vraie + antécédent vrai → conséquent vrai.",
+      `2) Règle : si ${si}, alors ${alors}.`,
+      `3) Cas de ${nom} : ${si}.`,
+      `Donc : ${alors}.`,
+    ].join(" ");
+  }
+  // modus tollens : l'observation nie le conséquent — la formulation exacte
+  // de la négation vient de la table (source de vérité du générateur).
+  const tollens = message.match(
+    /^On sait que si (.+), alors (.+)\. Or pour (.+), (.+)\. Que peut-on conclure sur « (.+) » \?$/i,
+  );
+  if (tollens) {
+    const [, si, alors, _nom, observation, siDemande] = tollens;
+    if (si.toLowerCase() !== siDemande.toLowerCase()) return null;
+    const regle = REGLES_CONDITIONNELLES.find(
+      (r) => r.si === si && r.alors === alors && r.sansSi === observation,
+    );
+    if (!regle) return null;
+    return [
+      "1) On raisonne par modus tollens : conséquent faux → antécédent faux.",
+      `2) Règle : si ${regle.si}, alors ${regle.alors}.`,
+      `3) On observe : ${observation}.`,
+      `Donc : ${regle.sansAlors}.`,
+    ].join(" ");
+  }
+  return null;
+}
+
+/** Cas 6 : analogie — « A est à B ce que C est à quoi ? » (tables du générateur). */
+function analogieInstantiee(message: string): string | null {
+  for (const [a, b, c, d] of ANALOGIES) {
+    const gab1 = new RegExp(
+      `^Complète l'analogie : ${echappe(a)} est à ${echappe(b)} ce que ${echappe(c)} est à quoi \\?$`,
+      "i",
+    ).test(message);
+    if (gab1) {
+      return [
+        `1) On identifie la relation entre ${a} et ${b}.`,
+        `2) On applique la MÊME relation entre ${c} et la réponse cherchée.`,
+        `Donc : ${a} est à ${b} ce que ${c} est à ${d}.`,
+      ].join(" ");
+    }
+    const gab2 = new RegExp(
+      `^Si ${echappe(a)} correspond à ${echappe(b)}, à quoi correspond ${echappe(c)} \\?$`,
+      "i",
+    ).test(message);
+    if (gab2) {
+      return [
+        `1) La relation ${a} → ${b} est repérée.`,
+        `2) Transposition : ${c} → même type de lien.`,
+        `Donc : ${c} correspond à ${d}.`,
+      ].join(" ");
+    }
+  }
+  return null;
+}
+
+/** Cas 7 : causalité — chaîne de cause à effet (tables du générateur). */
+function causaliteInstantiee(message: string): string | null {
+  for (const [cause, milieu, effet] of CHAINES_CAUSALES) {
+    const gab1 = new RegExp(
+      `^Explique la chaîne de cause à effet : ${echappe(cause)}\\. Que s'est-il passé ensuite \\?$`,
+      "i",
+    ).test(message);
+    if (gab1) {
+      return [
+        `1) Cause initiale : ${cause}.`,
+        `2) Premier effet : ${milieu}.`,
+        `3) Effet final : ${effet}.`,
+        `Donc : ${milieu}, puis ${effet}.`,
+      ].join(" ");
+    }
+    const gab2 = new RegExp(
+      `^${echappe(cause)}\\. Quelle est la conséquence finale de cet événement \\?$`,
+      "i",
+    ).test(message);
+    if (gab2) {
+      return [
+        `1) Événement déclencheur : ${cause}.`,
+        `2) Mécanisme intermédiaire : ${milieu}.`,
+        `3) Conséquence : ${effet}.`,
+        `Donc : au bout de la chaîne, ${effet}.`,
+      ].join(" ");
+    }
+  }
+  return null;
+}
+
+/** Cas 8 : planification — plan d'action ordonné (tables du générateur). */
+function planificationInstantiee(message: string): string | null {
+  for (const [objectif, plan] of PLANIFICATIONS) {
+    const gab1 = new RegExp(
+      `^Comment faire pour ${echappe(objectif)} \\? Donne les étapes dans l'ordre\\.$`,
+      "i",
+    ).test(message);
+    const gab2 = new RegExp(
+      `^${echappe(objectif)} : quel plan d'action propose-t-on, étape par étape \\?$`,
+      "i",
+    ).test(message);
+    if (gab1 || gab2) {
+      return [
+        `1) On décompose l'objectif « ${objectif} » en étapes ordonnées.`,
+        "2) Chaque étape prépare la suivante.",
+        plan,
+      ].join(" ");
+    }
   }
   return null;
 }
