@@ -401,6 +401,17 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/developer/simulation",
     "/files/workspaces",
     "/workspace/tasks/clarify",
+    /* it.101 : génération multimodale PAR ONDES (Phase 4 du plan
+     * d'intégration au cœur W-DNN) — la porte accepte une intention
+     * textuelle et renvoie le FLUX D'ONDES (tenseur quantifié ~4 o/état)
+     * + les instructions de rendu LOCAL (shaders-manifold.ts : image
+     * wavelet, audio piloté par phase, vidéo dérive de phase) — le rendu
+     * lourd se déroule sur le GPU de l'utilisateur en zéro-copie. Chaîne
+     * lib VIVANTE et testée (manifold, micro-decodeurs, optimisation,
+     * performance — 76 tests) ; surface naturelle = atelier multimodal
+     * du laboratoire d'ondes (components/ondes), UI pas encore échue —
+     * l'API est aussi consommable hors dépôt (clients SDK public). */
+    "/ondes/generer",
   ],
   /** VIDÉE à l'it.45 (audit 4 canaux du 6e lot) : les 10 dernières
    *  « vrais orphelins connus » ont été reclassées avec motif — voir les
