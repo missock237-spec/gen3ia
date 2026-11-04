@@ -1,6 +1,6 @@
 {
-  "total_octets": 4727320,
-  "n": 102,
+  "total_octets": 5268878,
+  "n": 114,
   "assets": [
     {
       "id": "kext90_image_001",
@@ -1021,6 +1021,126 @@
       "bytes": 25256,
       "sha256": "73c9b942054f9d44",
       "legende_reelle": "Il devait être abattu mardi, mais il a été sauvé suite à une décision d'urgence du tribunal."
+    },
+    {
+      "id": "kext103_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "146825",
+      "file": "public/multimodal-it90/images/image_068.jpg",
+      "bytes": 49486,
+      "sha256": "b5b5a17580e79657",
+      "legende_reelle": "scène contenant : horloge, personne, sac à main, train (10 objets annotés)"
+    },
+    {
+      "id": "kext103_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "459757",
+      "file": "public/multimodal-it90/images/image_069.jpg",
+      "bytes": 60641,
+      "sha256": "f931abce779c62cd",
+      "legende_reelle": "scène contenant : girafe (1 objets annotés)"
+    },
+    {
+      "id": "kext103_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "229311",
+      "file": "public/multimodal-it90/images/image_070.jpg",
+      "bytes": 33430,
+      "sha256": "9484b7daca3543ce",
+      "legende_reelle": "scène contenant : bol, bouteille, tasse, vase, évier (6 objets annotés)"
+    },
+    {
+      "id": "kext103_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "164115",
+      "file": "public/multimodal-it90/images/image_071.jpg",
+      "bytes": 72013,
+      "sha256": "e0f75d3a5bb2ee2f",
+      "legende_reelle": "scène contenant : planche de surf, vélo (2 objets annotés)"
+    },
+    {
+      "id": "kext103_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "323799",
+      "file": "public/multimodal-it90/images/image_072.jpg",
+      "bytes": 75911,
+      "sha256": "7e52c7908191a63b",
+      "legende_reelle": "scène contenant : frisbee, personne (16 objets annotés)"
+    },
+    {
+      "id": "kext103_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "534041",
+      "file": "public/multimodal-it90/images/image_073.jpg",
+      "bytes": 35483,
+      "sha256": "94d3eb41940d685c",
+      "legende_reelle": "scène contenant : banc, bouteille, chaise, hot-dog, personne, sac à dos, sac à main, table (15 objets annotés)"
+    },
+    {
+      "id": "kext103_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "341094",
+      "file": "public/multimodal-it90/images/image_074.jpg",
+      "bytes": 54117,
+      "sha256": "3504300c535d37ab",
+      "legende_reelle": "scène contenant : ours, personne (2 objets annotés)"
+    },
+    {
+      "id": "kext103_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "485480",
+      "file": "public/multimodal-it90/images/image_075.jpg",
+      "bytes": 34356,
+      "sha256": "22e0a3400d141f51",
+      "legende_reelle": "scène contenant : batte de baseball, gant de baseball, personne (5 objets annotés)"
+    },
+    {
+      "id": "kext103_audio_001",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1520",
+      "file": "public/multimodal-it90/audio/audio_032.opus",
+      "bytes": 35928,
+      "sha256": "0ae2ddace47518e8",
+      "legende_reelle": "Un sondage effectué auprès de 1 400 personnes avant les élections fédérales de 2010 a révélé que le nombre d'opposants à la transformation de l'Australie en république avait augmenté de 8 % depuis 2008."
+    },
+    {
+      "id": "kext103_audio_002",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1575",
+      "file": "public/multimodal-it90/audio/audio_033.opus",
+      "bytes": 40481,
+      "sha256": "8d8334fc7c857ba8",
+      "legende_reelle": "Israël exige une présence militaire permanente dans la vallée pour une durée de dix années à compter de la signature d'un accord, tandis que l'Autorité palestinienne ne consent qu'à une durée de cinq ans."
+    },
+    {
+      "id": "kext103_audio_003",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1607",
+      "file": "public/multimodal-it90/audio/audio_034.opus",
+      "bytes": 24394,
+      "sha256": "7eb7291154691bba",
+      "legende_reelle": "Cela vaut la peine de se promener pendant une demi-heure dans ce village fascinant."
+    },
+    {
+      "id": "kext103_audio_004",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1510",
+      "file": "public/multimodal-it90/audio/audio_035.opus",
+      "bytes": 25318,
+      "sha256": "f3b7af38f3c75d57",
+      "legende_reelle": "L'ONU espère également finaliser un fonds pour aider les pays touchés par le réchauffement climatique à faire face aux impacts."
     }
   ]
 }
