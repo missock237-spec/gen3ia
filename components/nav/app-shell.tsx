@@ -55,14 +55,24 @@ const NotificationCenter = dynamic(
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isVitrine = pathname === "/";
+  // Vitrine marketing : déplacée de / vers /vitrine (repositionnement
+  // « plateforme IA » 2026-11-05 — la racine est le chat, comme Gemini).
+  const isVitrine = pathname === "/vitrine";
   const isAuth = pathname === "/login" || pathname === "/signup";
   const isApproval = pathname.startsWith("/approvals");
   const isClient = pathname === "/client" || pathname.startsWith("/client/");
-  // Chat IA (/chat) : interface de conversation AUTONOME (brand, historique
-  // et composer intégrés à l'écran) — même traitement que la vitrine : aucune
-  // navigation projet autour, l'écran occupe 100 % de la surface.
-  const isStandaloneChat = pathname === "/chat" || pathname.startsWith("/chat/");
+  // SURFACES DE CHAT AUTONOMES : l'interface de conversation (NovaChat)
+  // embarque sa propre barre latérale Gemini (Récents + Capacités) —
+  // AUCUNE navigation projet autour, sinon deux sidebars s'empilent :
+  //  - / : l'accueil EST le chat (repositionnement plateforme IA) ;
+  //  - /chat : alias historique de la surface canonique ;
+  //  - /dashboard : alias conservé pour les liens existants (le
+  //    « dashboard EST le chat IA ») — AppNav retiré ici aussi.
+  const isStandaloneChat =
+    pathname === "/" ||
+    pathname === "/dashboard" ||
+    pathname === "/chat" ||
+    pathname.startsWith("/chat/");
   const chrome = isVitrine || isAuth || isApproval || isClient || isStandaloneChat;
   // Surfaces de chat immersives (conversation + chat d'agent IA) : l'interface
   // de discussion prend toute la hauteur de l'appareil — pas de fil d'Ariane,

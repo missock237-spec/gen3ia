@@ -1628,3 +1628,75 @@ html[data-theme="light"] .nova-telemetrie .ligne code { color: #1e2430; }
   .nova-live-panneau { border-radius: 14px; max-height: 94vh; }
   .nova-live-corps { max-height: calc(94vh - 84px); }
 }
+
+/* ---- REPOSITIONNEMENT « PLATEFORME IA » (style Gemini, 2026-11-05) ----
+   La racine est le chat : la barre latérale embarque les sections
+   « Récents » (historique groupé) et « Capacités » (espaces majeurs de la
+   plateforme — comme les Gems), et la barre haute porte l'entrée compte
+   (Paramètres connecté / « Se connecter » invité). Titres de sections :
+   la classe .nova-groupe existante est réutilisée. */
+
+.nova-capacites {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+
+.nova-cap-lien {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  color: var(--g3-text-secondary);
+  font-size: 13px;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.nova-cap-lien:hover {
+  background: var(--g3-hover);
+  color: var(--g3-text);
+}
+
+.nova-cap-ico {
+  width: 20px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.nova-cap-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Entrée « Se connecter » (invité, haut à droite) : pill sobre réutilisant
+   les tokens du thème (aucune couleur brute — contraste garanti par le
+   système bithème). */
+.nova-connexion {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--g3-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--g3-primary-border);
+  color: var(--g3-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.nova-connexion:hover {
+  background: var(--g3-hover);
+}
+
+@media (max-width: 640px) {
+  .nova-connexion { height: 40px; }
+}

@@ -9,14 +9,17 @@
  * d'une application de messagerie native.
  *
  * Concerne les chats transverses du projet :
- *  - le chat direct (/chat — interface canonique Nova) ;
+ *  - l'ACCUEIL / (repositionnement « plateforme IA » style Gemini 2026-11-05 :
+ *    la racine ouvre directement la conversation) ;
+ *  - le chat direct (/chat — surface canonique Nova) ;
+ *  - le dashboard (alias historique du chat — « le dashboard EST le chat ») ;
  *  - le copilote (/copilot).
  *
  * (Les anciennes surfaces ont été supprimées : le chat Aurora et /chat-v4
  * (Task C), la conversation /workspace/conversations (Task D) — les anciennes
- * URL sont couvertes par les redirections de next.config. Le dashboard —
- * chat IA — gère sa propre mise en page.)
+ * URL sont couvertes par les redirections de next.config. La vitrine
+ * marketing vit sur /vitrine, hors de ce registre.)
  */
 export function isImmersiveChatRoute(pathname: string): boolean {
-  return pathname === "/chat" || pathname === "/copilot";
+  return pathname === "/" || pathname === "/chat" || pathname === "/dashboard" || pathname === "/copilot";
 }

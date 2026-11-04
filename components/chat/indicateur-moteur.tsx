@@ -106,7 +106,10 @@ export default function IndicateurMoteur() {
       href="/status"
       className="nova-moteur-punaise"
       title={`${rendu.titre} Temps de réponse annoncé : ${TEMPS_ANNONCE_S} s au plus — au-delà, une réponse de repli honnête est envoyée dans le fil et votre message reste renvoyable. Détail des services : page État du service.`}
-      aria-label={`État du moteur : ${rendu.libelle}. Temps de réponse annoncé : ${TEMPS_ANNONCE_S} secondes au plus, avec repli honnête garanti. Voir l'état du service.`}
+      /* a11y (axe label-content-name-mismatch) : le nom accessible DOIT
+       * contenir le texte visible de la punaise (« {libelle} » + « X s max ·
+       * repli garanti ») — les détails vivent dans title, pas dans le nom. */
+      aria-label={`${rendu.libelle} ${TEMPS_ANNONCE_S} s max · repli garanti — voir l'état du service.`}
     >
       <span
         className="nova-moteur-point"

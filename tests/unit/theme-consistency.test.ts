@@ -109,7 +109,10 @@ describe("Artéfact « carré parasite » (étape 12 + exigence utilisateur)", (
     // interfaces de prompt. Chaque textarea de saisie IA porte désormais la
     // neutralisation explicite (spécificité > textarea:focus-visible global).
     const surfaces: Array<[string, RegExp]> = [
-      ["app/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
+      // Vitrine déplacée de / vers /vitrine (repositionnement « plateforme
+      // IA » 2026-11-05 : la racine est le chat) — le textarea du héros vit
+      // dans la page vitrine.
+      ["app/vitrine/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
       ["app/client/[agentId]/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
       ["app/client/c/[slug]/page.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],
       ["components/ui/chatgpt-prompt-input.tsx", /outline-none focus-visible:outline-none focus-visible:ring-0/],

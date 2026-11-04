@@ -24,13 +24,14 @@ import AxeBuilder from "@axe-core/playwright";
 const BASE_URL = (process.env.BASE_URL || "https://gen3ia.online").replace(/\/$/, "");
 
 /**
- * Pages publiques scannées — alignées sur app/sitemap.ts (les 11 surfaces
+ * Pages publiques scannées — alignées sur app/sitemap.ts (les surfaces
  * déclarées aux moteurs). La parité sitemap ↔ sonde est verrouillée par
  * tests/unit/a11y-couverture-publique.test.ts : toute nouvelle page
  * publique ajoutée au sitemap DOIT être couverte ici (et inversement).
  */
 const PAGES = [
   "/",
+  "/vitrine",
   "/en",
   "/capacites",
   "/faq",

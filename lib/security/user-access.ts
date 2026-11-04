@@ -266,6 +266,11 @@ const RESTRICTED_API_PREFIXES: ReadonlyArray<readonly [string, RouteFamily]> = [
 
 const PUBLIC_PAGE_EXACT: Readonly<Record<string, RouteFamily>> = {
   "/": "public",
+  // VITRINE MARKETING (repositionnement « plateforme IA » 2026-11-05) :
+  // la vitrine SaaS historique a quitté la racine (qui est désormais le
+  // chat, comme Gemini) et vit sur /vitrine — elle reste PUBLIQUE pour
+  // tout le monde (SEO/GEO, liens entrants).
+  "/vitrine": "public",
   "/login": "public",
   "/signup": "public",
   "/faq": "public",

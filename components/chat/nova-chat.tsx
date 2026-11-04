@@ -1,7 +1,21 @@
 "use client";
 
 /**
- * NOVA CHAT — le dashboard EST le chat IA Gen3ia (/dashboard).
+ * NOVA CHAT — LA surface de l'IA Gen3ia (accueil /, /chat, /dashboard).
+ *
+ * REPOSITIONNEMENT « PLATEFORME IA » (demande propriétaire 2026-11-05,
+ * architecture Gemini) : la racine du site EST la conversation (comme
+ * gemini.google.com) — plus de vitrine SaaS en accueil (elle vit sur
+ * /vitrine). Le positionnement des fonctionnalités suit le même schéma :
+ *  - la BARRE LATÉRALE embarque l'HISTORIQUE « Récents » (groupé par
+ *    date, recherche globale, renommage, suppression) ET la section
+ *    « Capacités » — les espaces majeurs de la plateforme (Cerveau IA,
+ *    Laboratoire, Données, Automatisations…) rejoignables en un clic,
+ *    comme les Gems de Gemini ;
+ *  - l'accueil vide est centré (salutation → composer → cartes de
+ *    capacités) puis le composer s'ancre en bas dès le 1er message ;
+ *  - le compte est accessible en haut à droite (Paramètres, ou
+ *    « Se connecter » en mode invité).
  *
  * Toutes nouvelles UI demandée par l'utilisateur, avec les 5 commandes du
  * composer :
@@ -41,6 +55,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import CarteAutoApprentissage from "@/components/chat/auto-apprentissage-carte";
@@ -178,6 +193,25 @@ const ICONES_APPS: Record<string, string> = {
 const APPS_SUGGEREES = ["gmail", "googledrive", "googlecalendar", "slack", "notion", "github"] as const;
 
 const iconeApp = (slug: string) => ICONES_APPS[slug] ?? "⧉";
+
+/**
+ * CAPACITÉS DE LA PLATEFORME (repositionnement style Gemini — les espaces
+ * majeurs rejoignables DEPUIS la conversation, comme les Gems). Chaque
+ * destination est une page utilisateur de la liste blanche
+ * (lib/security/user-access.ts) : le lien s'ouvre dans la même app, la
+ * navigation de retour vers le chat reste naturelle.
+ */
+const CAPACITES_PLATEFORME = [
+  { href: "/neural", label: "Cerveau IA", ico: "🧠" },
+  { href: "/lab", label: "Laboratoire", ico: "⚗️" },
+  { href: "/data", label: "Données", ico: "🗃️" },
+  { href: "/automations", label: "Automatisations", ico: "⏱️" },
+  { href: "/integrations", label: "Intégrations", ico: "🔌" },
+  { href: "/knowledge", label: "Connaissances", ico: "📚" },
+  { href: "/memory", label: "Mémoire", ico: "★" },
+  { href: "/storage", label: "Stockage", ico: "📦" },
+  { href: "/business", label: "Business", ico: "💼" },
+] as const;
 
 const CARTES_ACCUEIL = [
   {
@@ -670,6 +704,11 @@ export default function NovaChat() {
   const [liveOuvert, setLiveOuvert] = React.useState(false);
   /* Chat voix : indicateur « lecture vocale en cours » de la réponse IA. */
   const [lectureVocale, setLectureVocale] = React.useState(false);
+  /* COMPTE (style Gemini : avatar/entrée compte en haut à droite) :
+   * null = identité en cours de résolution (rien d'affiché — aucun
+   * clignotement), true = connecté (lien Paramètres), false = invité
+   * (bouton « Se connecter »). */
+  const [authentifie, setAuthentifie] = React.useState<boolean | null>(null);
 
   /* MÉDIA WEBGPU — le GPU de l'utilisateur génère (photoréalisme, voix
    * humaine, vidéo). Le hook consomme les événements `webgpu_media` du
@@ -848,6 +887,8 @@ export default function NovaChat() {
         uid = null;
       }
       if (annule) return;
+      // Compte (haut à droite) : reflète l'identité résolue ci-dessus.
+      setAuthentifie(Boolean(uid));
       // Migration à sens unique : l'ancienne clé partagée est supprimée —
       // aucune conversation ne doit survivre à un changement de compte.
       try { localStorage.removeItem(CFG.cle); } catch { /* stockage indisponible */ }
@@ -1870,7 +1911,7 @@ export default function NovaChat() {
           <div className="nova-logo" aria-hidden="true">G</div>
           <div className="nova-brand-nom">
             Gen3ia
-            <small>Dashboard · Chat IA</small>
+            <small>Votre IA souveraine</small>
           </div>
         </div>
         <button type="button" className="nova-nouveau" onClick={boutonNouveau} title="Nouvelle conversation (Ctrl+K)">
@@ -1928,6 +1969,10 @@ export default function NovaChat() {
               )}
             </section>
           ) : null}
+          {/* TITRE « RÉCENTS » (style Gemini) : l'historique de conversations
+           * est la première chose visible sous la recherche — masqué pendant
+           * une recherche (les résultats globaux prennent le relais). */}
+          {recherche.trim().length < 2 ? <div className="nova-groupe">Récents</div> : null}
           {charge && groupes.length === 0 ? (
             <div className="nova-vide">{convs.length ? "Aucun résultat" : "Aucune conversation pour le moment"}</div>
           ) : null}
@@ -1972,11 +2017,33 @@ export default function NovaChat() {
               ))}
             </React.Fragment>
           ))}
+          {/* SECTION « CAPACITÉS » (style Gemini — les Gems) : les espaces
+           * majeurs de la plateforme rejoignables DEPUIS la conversation —
+           * le chat est la surface principale, les consoles en sont les
+           * capacités. Masquée pendant une recherche globale. */}
+          {recherche.trim().length < 2 ? (
+            <section className="nova-capacites" aria-label="Capacités de la plateforme">
+              <div className="nova-groupe">Capacités</div>
+              {CAPACITES_PLATEFORME.map((capacite) => (
+                <Link
+                  key={capacite.href}
+                  href={capacite.href}
+                  className="nova-cap-lien"
+                  onClick={() => setSidebarOuverte(false)}
+                >
+                  <span className="nova-cap-ico" aria-hidden="true">{capacite.ico}</span>
+                  <span className="nova-cap-label">{capacite.label}</span>
+                </Link>
+              ))}
+            </section>
+          ) : null}
         </nav>
         <CarteAutoApprentissage />
         <div className="nova-sidebar-pied">
-          <a href="/workspace">Conversations serveur</a>
-          <a href="/settings">Paramètres</a>
+          {/* (Le lien mort /workspace « Conversations serveur » est retiré —
+           * l'historique serveur vit déjà dans « Récents » ci-dessus.) */}
+          <Link href="/settings">Paramètres</Link>
+          <Link href="/status">État du service</Link>
         </div>
       </aside>
 
@@ -2059,6 +2126,17 @@ export default function NovaChat() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
             </button>
             <ThemeToggle compact />
+            {/* COMPTE (style Gemini, haut à droite) : connecté → Paramètres ;
+             * invité → « Se connecter » (l'identité est déjà résolue au
+             * montage pour le scoping du cache). null = rien (aucun
+             * clignotement pendant la résolution). */}
+            {authentifie === true ? (
+              <Link href="/settings" className="nova-bouton-ico" aria-label="Compte et paramètres" title="Compte et paramètres">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" /></svg>
+              </Link>
+            ) : authentifie === false ? (
+              <Link href="/login" className="nova-connexion">Se connecter</Link>
+            ) : null}
           </div>
         </header>
 
@@ -2220,14 +2298,18 @@ export default function NovaChat() {
 
               <div className="nova-barre">
                 <div className="nova-barre-gauche">
-                  {/* 2) IMPORT DE FICHIERS */}
-                  <label className="nova-pill" title="Joindre des fichiers" aria-label="Joindre des fichiers">
+                  {/* 2) IMPORT DE FICHIERS — a11y (axe aria-prohibited-attr) :
+                   * un <label> ne peut PAS porter aria-label ; le nom
+                   * accessible est porté par l'input lui-même (la sonde
+                   * a11y_prod scanne désormais la racine, qui est le chat). */}
+                  <label className="nova-pill" title="Joindre des fichiers">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
                     <input
                       type="file"
                       hidden
                       multiple
                       accept={ACCEPT_ATTRIBUTE}
+                      aria-label="Joindre des fichiers"
                       onChange={(e) => {
                         ajouterFichiers(e.target.files ?? []);
                         e.target.value = "";

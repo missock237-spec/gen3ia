@@ -6,13 +6,16 @@ import { classifyPagePath } from "@/lib/security/user-access";
 /**
  * RESTRUCTURATION DES PARCOURS (demande propriétaire) — non-régression.
  *
- * Chaque fonctionnalité présentée sur la page d'accueil doit conduire vers
+ * Chaque fonctionnalité présentée sur la page de VITRINE (/vitrine —
+ * l'ancienne page d'accueil, déplacée lors du repositionnement
+ * « plateforme IA » style Gemini 2026-11-05) doit conduire vers
  * un espace réellement adapté à son objectif. Ce test fige la table de
  * correspondance fonctionnalité → destination pour éviter toute régression
  * vers « tous les liens vers le même chat ».
  */
 
-const PAGE = "app/page.tsx";
+const PAGE = "app/vitrine/page.tsx";
+const HOME_CHAT = "app/page.tsx";
 const REGISTRY = "components/shells/nav-registry.ts";
 const USER_ACCESS = "lib/security/user-access.ts";
 
@@ -21,7 +24,7 @@ import { join } from "node:path";
 
 const lire = (relatif: string): string => readFileSync(join(process.cwd(), relatif), "utf8");
 
-describe("Restructuration des parcours — page d'accueil", () => {
+describe("Restructuration des parcours — page vitrine", () => {
   const home = lire(PAGE);
 
   it("chaque capabilité pointe vers SA destination (plus de lot vers /dashboard)", () => {
@@ -113,5 +116,66 @@ describe("Restructuration des parcours — accès (middleware deny-by-default)",
   it("le commentaire historique de suppression est remplacé par la restauration", () => {
     expect(acces).toContain("/automations");
     expect(lire(REGISTRY)).toContain("RESTRUCTURATION DES PARCOURS");
+  });
+
+  it("la vitrine déplacée reste une page publique (utilisateur identifié comme anonyme)", () => {
+    expect(classifyPagePath("/vitrine")).toMatchObject({ access: "public" });
+  });
+});
+
+/* ============================================================
+   REPOSITIONNEMENT « PLATEFORME IA » (demande propriétaire
+   2026-11-05 — architecture Gemini) : la RACINE est le chat.
+   Avant : / était une vitrine SaaS (hero, features, pricing) —
+   le produit se présentait comme un SaaS, pas comme une IA.
+   Après : / ouvre directement la conversation (NovaChat), la
+   vitrine vit sur /vitrine, la barre latérale du chat embarque
+   « Récents » (historique groupé) + « Capacités » (les espaces
+   majeurs, comme les Gems), et il n'y a qu'UNE barre latérale
+   sur toutes les surfaces de chat (plus de double sidebar).
+   ============================================================ */
+describe("Repositionnement plateforme IA — la racine est le chat (style Gemini)", () => {
+  it("app/page.tsx rend NovaChat (plus aucune vitrine marketing en racine)", () => {
+    const accueil = lire(HOME_CHAT);
+    expect(accueil).toContain('import NovaChat from "@/components/chat/nova-chat"');
+    expect(accueil).toContain("<NovaChat />");
+    expect(accueil).not.toContain("VitrineHeader");
+    expect(accueil).not.toContain("CAPABILITIES");
+  });
+
+  it("la vitrine marketing vit sur /vitrine (SEO/GEO conservé)", () => {
+    const vitrine = lire(PAGE);
+    expect(vitrine).toContain('href: "/dashboard", label: "Chat IA"');
+    expect(vitrine).toContain("buildStructuredData");
+  });
+
+  it("toutes les surfaces de chat ont UNE SEULE barre latérale (celle de NovaChat)", () => {
+    // / et /dashboard sont des surfaces autonomes : AppNav ne s'empile plus
+    // au-dessus de la sidebar de NovaChat (le « double sidebar » SaaS).
+    const shell = lire("components/nav/app-shell.tsx");
+    expect(shell).toContain('pathname === "/" ||');
+    expect(shell).toContain('pathname === "/dashboard" ||');
+    expect(shell).toContain('pathname === "/chat" ||');
+    const surface = lire("lib/ui/chat-surface.ts");
+    expect(surface).toContain('pathname === "/" ||');
+    expect(surface).toContain('pathname === "/dashboard" ||');
+  });
+
+  it("la sidebar du chat embarque « Récents » (historique) et « Capacités » (plateforme)", () => {
+    const nova = lire("components/chat/nova-chat.tsx");
+    expect(nova).toContain(">Récents</div>");
+    expect(nova).toContain(">Capacités</div>");
+    // Les capacités majeures rejoignables depuis la conversation :
+    for (const href of ["/neural", "/lab", "/data", "/automations", "/integrations", "/memory", "/storage", "/business"]) {
+      expect(nova, `capacité ${href} absente de la sidebar`).toContain(`href: "${href}"`);
+    }
+    // Le lien mort /workspace est retiré du pied de sidebar.
+    expect(nova).not.toContain('href="/workspace"');
+  });
+
+  it("l'entrée compte est présente en haut à droite du chat (style Gemini)", () => {
+    const nova = lire("components/chat/nova-chat.tsx");
+    expect(nova).toContain('className="nova-connexion"');
+    expect(nova).toContain('href="/settings" className="nova-bouton-ico"');
   });
 });

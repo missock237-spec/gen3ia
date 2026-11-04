@@ -22,6 +22,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
       alternates: { languages: { fr: `${BASE}/`, en: `${BASE}/en` } },
     },
+    // VITRINE (repositionnement « plateforme IA » : la racine est le chat) —
+    // la présentation détaillée reste indexable sur /vitrine.
+    {
+      url: `${BASE}/vitrine`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
     {
       url: `${BASE}/en`,
       lastModified: now,
