@@ -116,8 +116,17 @@ export async function deciderMutationApi(
 
   // 3. API publique v1 : la clé `g3a_` est vérifiée par franchirPorteV1
   //    dans la route (HMAC + projet lié + rôle développeur).
+  //    AGENTS-OS (Job 478451, modules dispatch/artefacts/daemon) : la clé
+  //    est aussi acceptée au canal Bearer STANDARD (`Authorization: Bearer
+  //    g3a_…`) — le pré-contrôle reconnaît le PRÉFIXE uniquement, la VÉRIFICATION
+  //    complète reste dans la route (défense en profondeur conservée) : une
+  //    clé fausse franchit ce pont puis se heurte à authenticateDeveloper (401).
   if (pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
     if (requete.headers.get("x-api-key")) {
+      return { verdict: "passer", uid: null, voie: "cle-api-v1" };
+    }
+    const authorization = requete.headers.get("authorization") ?? "";
+    if (authorization.toLowerCase().startsWith("bearer g3a_")) {
       return { verdict: "passer", uid: null, voie: "cle-api-v1" };
     }
   }

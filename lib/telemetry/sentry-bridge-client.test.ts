@@ -85,7 +85,10 @@ describe("pont Sentry client (file synchrone + SDK asynchrone)", () => {
 
     await sdkLoaded();
     expect(initMock).toHaveBeenCalledTimes(1);
-    expect(initMock.mock.calls[0]![0]).toMatchObject({ tunnel: "/monitoring", sendDefaultPii: false });
+    // Sentry 11 : l'option sendDefaultPii a été RETIRÉE du SDK (la PII
+    // n'est plus envoyée par défaut — cf. instrumentation.ts, commentaire
+    // Job 478451). Le pont ne la transmet plus.
+    expect(initMock.mock.calls[0]![0]).toMatchObject({ tunnel: "/monitoring" });
     expect(captureExceptionMock).toHaveBeenCalledWith(
       err,
       expect.objectContaining({ tags: expect.objectContaining({ surface: "client-preinit" }) }),

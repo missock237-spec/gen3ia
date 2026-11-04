@@ -198,6 +198,10 @@ const nextConfig: NextConfig = {
     "pdf-lib",
     "archiver",
     "yauzl",
+    // AGENTS-OS (Module 3) : le compilateur TypeScript est requis au RUNTIME
+    // serveur (validation d'artefacts .ts via import dynamique paresseux) —
+    // jamais bundlé (trop lourd) : chargé depuis node_modules à la demande.
+    "typescript",
     // OpenTelemetry (Task 59) : SDK chargé dynamiquement UNIQUEMENT quand
     // OTEL_EXPORTER_OTLP_ENDPOINT est défini — reste externe au bundle pour
     // préserver les hooks de contexte Node (async_hooks) et la taille serverless.

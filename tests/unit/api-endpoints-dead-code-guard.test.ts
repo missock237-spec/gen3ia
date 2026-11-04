@@ -322,7 +322,7 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/storage/permanent/session",
   ],
   /** Consommés par des clients hors dépôt app : SDK public, extension
-   *  navigateur, bridge d'entraînement. */
+   *  navigateur, bridge d'entraînement, scripts d'exploitation souverains. */
   "api-publique-sdk": [
     "/capabilities",
     "/public/sdk/download",
@@ -330,6 +330,23 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/v1/chat",
     "/v1/essaim/manifeste",
     "/v1/wallet",
+    /* Job 478451 — AGENTS-OS (3 modules souverains) : API v1 destinées aux
+     * clients HORS dépôt — clé développeur `g3a_` (Bearer ou x-api-key) :
+     *  - /v1/dispatch : hub webhook→sandbox (POST tâche native ou script
+     *    JavaScript isolé — processus enfant plafonné + cleanup ; GET =
+     *    découverte des capacités). Appelants : scripts locaux, cron PM2,
+     *    automatisations souveraines — AUCUNE UI prévue (contrat CLI).
+     *  - /v1/artefacts/audit : drop-and-fix des artefacts de config
+     *    (json/yaml/docker-compose/nginx/js/ts) — validation native +
+     *    réparation structurelle déterministe + revalidation honnête.
+     *    Appelant naturel : scripts d'exploitation / postman / SDK.
+     *  - /v1/agents-os/daemon : sonde HTTPS du daemon d'auto-guérison
+     *    (journal JSONL des remédiations — même philosophie que
+     *    /poller-heartbeat.json, observable sans SSH). Le CONSOMMATEUR
+     *    naturel est un humain en exploitation ou un moniteur externe. */
+    "/v1/agents-os/daemon",
+    "/v1/artefacts/audit",
+    "/v1/dispatch",
   ],
   /** Endpoints PRÉ-UI (roadmap LOT 6 du plan plateforme) : la LIB et la
    *  porte HTTP sont DÉJÀ construites et vivantes côté agent (tool
