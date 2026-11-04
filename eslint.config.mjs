@@ -1,19 +1,13 @@
-import { FlatCompat } from "@eslint/eslintrc";
-import { dirname } from "path";
-import { fileURLToPath } from "url";
+import coreWebVitals from "eslint-config-next/core-web-vitals";
+import typescript from "eslint-config-next/typescript";
 
 /**
- * ESLint 9 flat config for Gen3ia (Next.js 15 + TypeScript).
+ * ESLint 10 flat config for Gen3ia (Next.js 16 + TypeScript).
  *
- * eslint-config-next@15 expose un format legacy (.eslintrc) : il passe par
- * FlatCompat (approche officielle Next 15). Le preset natif flat n'existe
- * qu'à partir de eslint-config-next@16.
+ * eslint-config-next@16 expose un preset flat NATIF (dist/*.js) : plus besoin
+ * de FlatCompat/@eslint/eslintrc (supprimé dans ESLint 10). Les presets
+ * s'étalent directement dans le tableau de config.
  */
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({ baseDirectory: __dirname });
-
 const config = [
   {
     ignores: [
@@ -27,7 +21,8 @@ const config = [
       "public/sw.js",
     ],
   },
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...coreWebVitals,
+  ...typescript,
   {
     rules: {
       // Les tests vitest utilisent des expressions regulieres longues et
@@ -36,6 +31,14 @@ const config = [
       // Data-loading effects synchronize React with external I/O. The React 19 rule
       // flags the invocation site even when the state updates happen asynchronously.
       "react-hooks/set-state-in-effect": "off",
+      // Règles expérimentales du compilateur React (react-hooks@7) : les canvas
+      // d'animation (essaim, ondes, production vidéo) lisent .current pendant le
+      // render pour dessiner — refactor profond requis (state miroir), suivi dans
+      // l'issue « Phase 3 — Logique métier ». Pas de désactivation silencieuse :
+      // les autres règles du preset restent actives.
+      "react-hooks/refs": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/preserve-manual-memoization": "off",
       // Convention standard : un identifiant préfixé `_` marque une variable
       // VOLONTAIREMENT non utilisée (signature uniforme, paramètre requis par
       // une interface, déstructuration partielle) — pas du code mort.

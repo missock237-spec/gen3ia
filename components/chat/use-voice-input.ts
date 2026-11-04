@@ -199,7 +199,7 @@ export function useVoiceInput(options: OptionsEntreeVocale): EntreeVocale {
   const annuleRef = useRef(false);
   const [etat, setEtat] = useState<EtatVoix>("inactif");
   const [texteInterim, setTexteInterim] = useState("");
-  const supported = useMemo(detecterSupportReconnaissance, []);
+  const supported = useMemo(() => detecterSupportReconnaissance(), []);
 
   const nettoyer = useCallback(() => {
     const reconnaissance = reconnaissanceRef.current;

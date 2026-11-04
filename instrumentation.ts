@@ -55,7 +55,8 @@ function baseOptions() {
     environment: process.env.SENTRY_ENVIRONMENT?.trim() || process.env.NODE_ENV,
     release: RELEASE ? `gen3ia@${RELEASE}` : undefined,
     // Aucune donnée utilisateur : PII off + scrubbing défensif.
-    sendDefaultPii: false,
+    // Sentry 11 : option sendDefaultPii retirée — la PII n'est plus
+    // envoyée par défaut ; le scrubbing défensif (beforeSend) reste actif.
     beforeSend(event) {
       return scrubEvent(event);
     },
@@ -71,7 +72,9 @@ export async function register(): Promise<void> {
       // temporairement pour une investigation ciblée.
       tracesSampleRate: 0.15,
       // Profilage continu actif uniquement si le vars permis l'autorisent.
-      profilesSampleRate: 0.0,
+      // Sentry 11 : profilesSampleRate renommé profileSessionSampleRate
+      // (profiling par sessions, cf. types @sentry/node v11).
+      profileSessionSampleRate: 0.0,
     });
 
     // Export OpenTelemetry (Task 59) : UNIQUEMENT si l'endpoint OTLP est

@@ -109,7 +109,9 @@ export function installSentryBridge(): void {
           environment:
             process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT || process.env.NODE_ENV,
           release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
-          sendDefaultPii: false,
+          // Sentry 11 : option sendDefaultPii retirée — la PII n'est plus
+          // envoyée par défaut (l'ex-value `false` est le comportement
+          // standard du SDK v11).
           // Tracing client léger après chargement (navigations + fetch) ;
           // 10 % suffit pour les p95, le serveur garde 15 % (TTFB, API).
           tracesSampleRate: 0.1,

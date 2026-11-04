@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import bundleAnalyzer from "@next/bundle-analyzer";
-import { withSentryConfig } from "@sentry/nextjs";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 // Analyse du poids des bundles : ANALYZE=true npm run analyze
 const withBundleAnalyzer =
@@ -238,7 +238,9 @@ export default withSentryConfig(withBundleAnalyzer(nextConfig), {
     deleteSourcemapsAfterUpload: true,
   },
   widenClientFileUpload: true,
-  disableLogger: true,
+  // Sentry 11 : disableLogger remplacé par bundleSizeOptimizations.
+  // excludeDebugStatements élimine les logs internes du SDK du bundle.
+  bundleSizeOptimizations: { excludeDebugStatements: true },
   silent: !process.env.CI,
   telemetry: false,
 });
