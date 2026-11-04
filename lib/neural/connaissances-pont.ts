@@ -67,37 +67,74 @@ export interface FragmentConnaissance {
   chunkIndex: number;
   score: number;
   texte: string;
+  /** "knowledge" = base de connaissances projet ; "fichier-importe" = pièce
+   *  jointe réelle du tour (loadImportedFilesContext). */
+  origine?: "knowledge" | "fichier-importe";
 }
 
 /**
  * Relit les fragments du contexte knowledge (format produit par
  * buildKnowledgeContext) : `- [document X, fragment Y, score Z]\n<texte>`.
+ * RÉPARATION ARTEFACT (Job 478451) : le contexte peut AUSSI contenir les
+ * blocs du contenu RÉEL des fichiers importés (loadImportedFilesContext,
+ * uni au canal knowledge par le chat) — en-tête `Fichier importé « nom »
+ * (...) :` suivi du texte converti. Chaque fichier est un fragment du tour
+ * (score 1 : l'utilisateur l'a joint DANS ce message — pertinence maximale).
  * Tolérant : un bloc mal formé est ignoré (jamais de crash pour un
  * contexte inattendu).
  */
 export function parserFragmentsConnaissances(knowledgeContext: string): FragmentConnaissance[] {
   const fragments: FragmentConnaissance[] = [];
   const lignes = knowledgeContext.split("\n");
+  const commenceBlocKnowledge = (ligne: string) => ligne.startsWith("- [document ");
+  const enTeteFichier = (ligne: string) =>
+    /^(?:Fichier importé|Fichier importe) « (.+?) » \([^)]*\) :\s*$/.exec(ligne);
+  const estDebutBloc = (ligne: string) => commenceBlocKnowledge(ligne) || enTeteFichier(ligne) !== null;
   for (let index = 0; index < lignes.length; index += 1) {
     const ligne = lignes[index];
-    if (!ligne.startsWith("- [document ")) continue;
-    const match = /^- \[document ([^\],]+), fragment (\d+)(?:, score ([\d.]+))?\]\s*$/.exec(ligne);
-    if (!match) continue;
-    // Le texte du fragment : les lignes suivantes jusqu'au prochain bloc.
-    const texte: string[] = [];
-    let suite = index + 1;
-    while (suite < lignes.length && !lignes[suite].startsWith("- [document ")) {
-      texte.push(lignes[suite]);
-      suite += 1;
+    if (commenceBlocKnowledge(ligne)) {
+      const match = /^- \[document ([^\],]+), fragment (\d+)(?:, score ([\d.]+))?\]\s*$/.exec(ligne);
+      if (!match) continue;
+      // Le texte du fragment : les lignes suivantes jusqu'au prochain bloc.
+      const texte: string[] = [];
+      let suite = index + 1;
+      while (suite < lignes.length && !estDebutBloc(lignes[suite])) {
+        texte.push(lignes[suite]);
+        suite += 1;
+      }
+      const contenu = texte.join("\n").trim();
+      if (contenu.length < 20) continue; // fragment vide/étron : inutilisable
+      fragments.push({
+        documentId: match[1],
+        chunkIndex: Number.parseInt(match[2], 10) || 0,
+        score: match[3] ? Number.parseFloat(match[3]) : 0,
+        texte: contenu,
+        origine: "knowledge",
+      });
+      index = suite - 1; // la boucle externe reprend au prochain bloc
+    } else {
+      const match = enTeteFichier(ligne);
+      if (!match) continue;
+      const texte: string[] = [];
+      let suite = index + 1;
+      while (suite < lignes.length && !estDebutBloc(lignes[suite])) {
+        texte.push(lignes[suite]);
+        suite += 1;
+      }
+      const contenu = texte.join("\n").replace(/\n*---\s*$/, "").trim();
+      if (contenu.length < 20) continue; // fragment vide/étron : inutilisable
+      // Note de NON-charge (métadonnées seules) : jamais citée comme contenu
+      // — le pont n'invente pas, il ignore et laisse le repli parler.
+      if (/^(contenu non chargé|contenu non charge|\(aucun contenu texte\))/.test(contenu)) continue;
+      fragments.push({
+        documentId: match[1],
+        chunkIndex: 0,
+        score: 1, // fichier joint DANS ce message : pertinence maximale
+        texte: contenu,
+        origine: "fichier-importe",
+      });
+      index = suite - 1;
     }
-    const contenu = texte.join("\n").trim();
-    if (contenu.length < 20) continue; // fragment vide/étron : inutilisable
-    fragments.push({
-      documentId: match[1],
-      chunkIndex: Number.parseInt(match[2], 10) || 0,
-      score: match[3] ? Number.parseFloat(match[3]) : 0,
-      texte: contenu,
-    });
   }
   return fragments;
 }
@@ -158,13 +195,23 @@ export function composerDepuisConnaissances(
   }
 
   const blocs = [...parDocument.values()].map(({ fragment }) =>
-    `« ${citer(fragment.texte)} »\n— Source : document ${fragment.documentId}, fragment ${fragment.chunkIndex}`,
+    fragment.origine === "fichier-importe"
+      ? `« ${citer(fragment.texte)} »\n— Source : votre fichier importé « ${fragment.documentId} »`
+      : `« ${citer(fragment.texte)} »\n— Source : document ${fragment.documentId}, fragment ${fragment.chunkIndex}`,
   );
+
+  const avecFichier = [...parDocument.values()].some(({ fragment }) => fragment.origine === "fichier-importe");
+  const avecKnowledge = [...parDocument.values()].some(({ fragment }) => fragment.origine !== "fichier-importe");
+  const titre = avecFichier && avecKnowledge
+    ? "D'après vos documents et vos fichiers joints :"
+    : avecFichier
+      ? "D'après le contenu RÉEL de votre fichier joint :"
+      : "D'après vos documents (base de connaissances) :";
 
   const texte =
     blocs.length === 1
-      ? `D'après vos documents (base de connaissances) :\n\n${blocs[0]}`
-      : `D'après vos documents (base de connaissances) :\n\n${blocs.join("\n\n")}`;
+      ? `${titre}\n\n${blocs[0]}`
+      : `${titre}\n\n${blocs.join("\n\n")}`;
 
   const meilleur = classes[0];
   return {

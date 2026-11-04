@@ -87,11 +87,45 @@ const GLOBALS = [
 ];
 
 /**
+ * Garde « fichier joint à analyser » (réparation artefact — Job 478451) :
+ * « lis le fichier joint », « analyse ce document », « résume la pièce
+ * jointe » NE SONT PAS du pilotage — ce sont des demandes d'action sur le
+ * CONTENU d'un fichier joint au tour. Sans cette garde, le simple mot
+ * « fichier » déclenchait le template de statistiques (« Fichiers : N
+ * importés… ») qui court-circuitait la composition AVANT toute lecture du
+ * contenu : l'import réussissait (« Réussi ») mais Gen3 ne voyait jamais
+ * la teneur du fichier. Normalisation déjà appliquée par l'appelant
+ * (minuscules, accents retirés).
+ */
+const MARQUEURS_FICHIER_JOINT = [
+  "fichier joint", "fichiers joints", "piece jointe", "pieces jointes",
+  "document joint", "documents joints", "joint au message", "jointe au message",
+  "joints au message", "fichier attache", "fichier uploade", "fichier televerse",
+];
+const VERBES_ANALYSE = [
+  "lis", "lire", "lit", "relis", "analyse", "analyser", "resume", "resumer",
+  "extrais", "extraire", "traduis", "traduire", "verifie", "verifier",
+  "compare", "comparer", "regarde", "regarder",
+];
+
+export function demandeAnalyseDeFichierJoint(messageNormalise: string): boolean {
+  if (MARQUEURS_FICHIER_JOINT.some((marqueur) => messageNormalise.includes(marqueur))) return true;
+  // Frontière de mot : « liste mes fichiers » ne doit pas matcher « lis ».
+  const verbePresent = VERBES_ANALYSE.some((verbe) =>
+    new RegExp(`\\b${verbe}\\b`).test(messageNormalise),
+  );
+  return verbePresent && (messageNormalise.includes("fichier") || messageNormalise.includes("document"));
+}
+
+/**
  * Détecte l'intention de pilotage d'un message. Retourne null quand le
  * message n'est pas une commande de pilotage (la conversation continue
  * normalement). Les intentions SPÉCIFIQUES priment sur la vue d'ensemble :
  * « état de mes automatisations » pilote les automatisations, pas la vue
  * globale.
+ * GARDE : une demande d'analyse d'un fichier joint (« lis le fichier
+ * joint… ») n'est JAMAIS du pilotage — la conversation suit son cours
+ * normal et le moteur compose depuis le contenu réel du fichier.
  */
 export function detecterIntentionPilotage(message: string): IntentionPilotage | null {
   const m = normaliser(message);
@@ -100,7 +134,11 @@ export function detecterIntentionPilotage(message: string): IntentionPilotage | 
   for (const [intention, mots] of Object.entries(MOTS_CLES) as Array<
     [Exclude<IntentionPilotage, "vue_ensemble">, string[]]
   >) {
-    if (mots.some((mot) => m.includes(mot))) return intention;
+    if (!mots.some((mot) => m.includes(mot))) continue;
+    // GARDE : une demande d'analyse du CONTENU d'un fichier joint n'est pas
+    // une statistique de pilotage — la conversation suit avec le contenu réel.
+    if (intention === "fichiers" && demandeAnalyseDeFichierJoint(m)) return null;
+    return intention;
   }
 
   if (GLOBALS.some((mot) => m.includes(mot))) return "vue_ensemble";

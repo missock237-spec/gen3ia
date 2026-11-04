@@ -123,3 +123,42 @@ describe("exécution du pilotage", () => {
     expect(resultat?.texte).toContain("Refonte site"); // projets lus normalement
   });
 });
+
+/* ==================================================================== */
+/* GARDE « FICHIER JOINT À ANALYSER » (réparation artefact — Job 478451) */
+/* Le mot « fichier » ne doit PLUS déclencher le template de statistiques*/
+/* quand le message demande une action sur le contenu d'un fichier joint */
+/* : l'import réussissait (« Réussi ») mais Gen3 ne lisait jamais la     */
+/* teneur — le court-circuit pilotage passait AVANT la composition.      */
+/* ==================================================================== */
+describe("garde « analyse d'un fichier joint » — pas du pilotage", () => {
+  it("« lis le fichier joint… » retourne null (la conversation suit avec le contenu réel)", () => {
+    expect(
+      detecterIntentionPilotage("Lis le fichier joint et réponds avec la phrase exacte qui commence par « le mot de passe du trésor est »"),
+    ).toBeNull();
+  });
+
+  it("les formulations d'analyse usuelles ne sont pas du pilotage", () => {
+    expect(detecterIntentionPilotage("analyse ce fichier")).toBeNull();
+    expect(detecterIntentionPilotage("résume le document joint")).toBeNull();
+    expect(detecterIntentionPilotage("que contient la pièce jointe ?")).toBeNull();
+    expect(detecterIntentionPilotage("extrais les données du fichier téléversé")).toBeNull();
+  });
+
+  it("les questions de STATISTIQUES restent du pilotage (aucune régression)", () => {
+    expect(detecterIntentionPilotage("quels sont mes fichiers importés")).toBe("fichiers");
+    expect(detecterIntentionPilotage("liste mes fichiers")).toBe("fichiers");
+    expect(detecterIntentionPilotage("quels sont mes documents importés")).toBe("fichiers");
+    expect(detecterIntentionPilotage("état de mes projets")).toBe("projets");
+    expect(detecterIntentionPilotage("où en sont mes automatisations ?")).toBe("automatisations");
+  });
+
+  it("l'exécution de pilotage suit la garde (null pour une analyse de fichier joint)", async () => {
+    const resultat = await executerPilotage(
+      chargeursDeTest(),
+      "lis le fichier joint et cite le marqueur secret",
+      { userId: "u1" },
+    );
+    expect(resultat).toBeNull();
+  });
+});

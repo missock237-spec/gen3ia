@@ -92,3 +92,79 @@ Les congés se posent sur l'outil RH ; validation du manager sous 5 jours ouvré
     expect(composition!.texte).toContain("télétravail");
   });
 });
+
+/* ==================================================================== */
+/* RÉPARATION ARTEFACT (Job 478451) — les fichiers importés du TOUR      */
+/* (loadImportedFilesContext, uni au canal knowledge par le chat) sont   */
+/* lus par le pont : « lis ce fichier joint » cite la teneur RÉELLE.     */
+/* ==================================================================== */
+
+const CONTEXTE_FICHIER = `Contenu RÉEL des fichiers importés (stockés en base de données) :
+Fichier importé « rapport-test-a9bd.txt » (text, 134 caractères convertis) :
+Rapport de test interne — ligne 1 : le mot de passe du trésor est PONG-0B34AA4D — ligne 2 : quatre-vingt-douze pommes — ligne 3 : fin.`;
+
+describe("parserFragmentsConnaissances — blocs « Fichier importé » (réparation artefact)", () => {
+  it("relit chaque fichier importé comme un fragment de pertinence maximale", () => {
+    const fragments = parserFragmentsConnaissances(CONTEXTE_FICHIER);
+    expect(fragments).toHaveLength(1);
+    expect(fragments[0]).toMatchObject({
+      documentId: "rapport-test-a9bd.txt",
+      chunkIndex: 0,
+      score: 1,
+      origine: "fichier-importe",
+    });
+    expect(fragments[0].texte).toContain("PONG-0B34AA4D");
+  });
+
+  it("lit un contexte MIXTE (knowledge + fichiers importés) sans confusion de blocs", () => {
+    const mixte = `${CONTEXTE_FICHIER}
+
+---
+
+- [document doc_charte, fragment 3, score 0.62]
+La charte impose 25 jours de congés payés annuels et un télétravail maximum de 3 jours par semaine.`;
+    const fragments = parserFragmentsConnaissances(mixte);
+    expect(fragments).toHaveLength(2);
+    expect(fragments[0].origine).toBe("fichier-importe");
+    expect(fragments[0].texte).toContain("PONG-0B34AA4D");
+    expect(fragments[0].texte).not.toContain("---");
+    expect(fragments[1]).toMatchObject({ documentId: "doc_charte", origine: "knowledge" });
+  });
+
+  it("ignore honnêtement un bloc de fichier sans contenu réel (métadonnées seules)", () => {
+    const vide = `Contenu RÉEL des fichiers importés (stockés en base de données) :
+Fichier importé « photo.png » (image, métadonnées seulement) :
+contenu non chargé (binaire non textuel)`;
+    const fragments = parserFragmentsConnaissances(vide);
+    expect(fragments).toEqual([]);
+  });
+});
+
+describe("composerDepuisConnaissances — citation du fichier joint (réparation artefact)", () => {
+  it("« le mot de passe du trésor » est cité MOT POUR MOT depuis le fichier importé", () => {
+    const composition = composerDepuisConnaissances(
+      "lis le fichier joint et réponds avec la phrase qui commence par « le mot de passe du trésor est »",
+      CONTEXTE_FICHIER,
+    );
+    expect(composition).not.toBeNull();
+    expect(composition!.texte).toContain("PONG-0B34AA4D");
+    expect(composition!.texte).toContain("votre fichier importé");
+    expect(composition!.texte).not.toContain("base de connaissances");
+  });
+
+  it("un contexte mixte cite le fichier joint avec le titre honnête", () => {
+    const mixte = `${CONTEXTE_FICHIER}
+
+---
+
+- [document doc_charte, fragment 3, score 0.62]
+La charte impose 25 jours de congés payés annuels et un télétravail maximum de 3 jours par semaine.`;
+    const composition = composerDepuisConnaissances(
+      "que dit le fichier joint sur le trésor et le mot de passe, et la charte sur les congés payés ?",
+      mixte,
+    );
+    expect(composition).not.toBeNull();
+    expect(composition!.texte).toContain("D'après vos documents et vos fichiers joints :");
+    expect(composition!.texte).toContain("PONG-0B34AA4D");
+  });
+});

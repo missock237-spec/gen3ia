@@ -204,6 +204,16 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     { role: "user" as const, content: ctx.message, ...(visionImages ? { images: visionImages } : {}) },
   ];
 
+  // CANAL DU CONTENU RÉEL AU MOTEUR NEURONAL (réparation artefact) : le
+  // moteur Gen3 (SNN interne, unique moteur du projet) ne compose pas depuis
+  // le system prompt des messages — il compose depuis le CANAL
+  // knowledgeContext (pont connaissances). Le contenu RÉEL des fichiers
+  // importés (loadImportedFilesContext) y est désormais UNI à celui de la
+  // base de connaissances : « lis ce fichier joint » reçoit la teneur du
+  // fichier dans le TEXTE de la réponse, pas seulement dans l'encodage.
+  const knowledgeContextUnifie =
+    [ctx.filesContext, ctx.knowledgeContext].filter(Boolean).join("\n\n---\n\n") || undefined;
+
   let content: string;
   let provider: string | undefined;
   let model: string | undefined;
@@ -227,7 +237,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
             provider: ctx.provider as never,
             model: ctx.model,
             preferFree: preferFreeForVisibleAnswers(),
-            knowledgeContext: ctx.knowledgeContext,
+            knowledgeContext: knowledgeContextUnifie,
             metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
           },
           {
@@ -268,7 +278,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
               provider: ctx.provider as never,
               model: ctx.model,
               preferFree: preferFreeForVisibleAnswers(),
-              knowledgeContext: ctx.knowledgeContext,
+              knowledgeContext: knowledgeContextUnifie,
               metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
             }),
             CHAT_BUDGET_MS,
@@ -300,7 +310,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
           provider: ctx.provider as never,
           model: ctx.model,
           preferFree: preferFreeForVisibleAnswers(),
-          knowledgeContext: ctx.knowledgeContext,
+          knowledgeContext: knowledgeContextUnifie,
           metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
         }),
         CHAT_BUDGET_MS,
