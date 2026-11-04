@@ -1,6 +1,6 @@
 {
-  "total_octets": 4039201,
-  "n": 90,
+  "total_octets": 4727320,
+  "n": 102,
   "assets": [
     {
       "id": "kext90_image_001",
@@ -901,6 +901,126 @@
       "bytes": 36043,
       "sha256": "5e300db2fcc237df",
       "legende_reelle": "Nous pouvons commencer par vivre en meilleure harmonie avec l'environnement, nous pouvons rejoindre le mouvement environnemental, et nous pouvons même militer dans le but d'atténuer les souffrances à venir."
+    },
+    {
+      "id": "kext102_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "509656",
+      "file": "public/multimodal-it90/images/image_060.jpg",
+      "bytes": 99327,
+      "sha256": "a282aa0fcad2f448",
+      "legende_reelle": "scène contenant : zèbre (2 objets annotés)"
+    },
+    {
+      "id": "kext102_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "308753",
+      "file": "public/multimodal-it90/images/image_061.jpg",
+      "bytes": 66752,
+      "sha256": "f22f9504f6fc2a27",
+      "legende_reelle": "scène contenant : ours (1 objets annotés)"
+    },
+    {
+      "id": "kext102_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "315492",
+      "file": "public/multimodal-it90/images/image_062.jpg",
+      "bytes": 53606,
+      "sha256": "b20417956f5dc283",
+      "legende_reelle": "scène contenant : ours en peluche, personne, toilettes (4 objets annotés)"
+    },
+    {
+      "id": "kext102_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "359855",
+      "file": "public/multimodal-it90/images/image_063.jpg",
+      "bytes": 81162,
+      "sha256": "270033b4d90fc70a",
+      "legende_reelle": "scène contenant : valise (1 objets annotés)"
+    },
+    {
+      "id": "kext102_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "161820",
+      "file": "public/multimodal-it90/images/image_064.jpg",
+      "bytes": 53284,
+      "sha256": "dd69fd3e82fc5da3",
+      "legende_reelle": "scène contenant : banane (1 objets annotés)"
+    },
+    {
+      "id": "kext102_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "90208",
+      "file": "public/multimodal-it90/images/image_065.jpg",
+      "bytes": 87080,
+      "sha256": "d87f592dec4db176",
+      "legende_reelle": "scène contenant : bus (3 objets annotés)"
+    },
+    {
+      "id": "kext102_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "233567",
+      "file": "public/multimodal-it90/images/image_066.jpg",
+      "bytes": 76175,
+      "sha256": "f33b4e1038af165e",
+      "legende_reelle": "scène contenant : mouton, vache (7 objets annotés)"
+    },
+    {
+      "id": "kext102_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "182441",
+      "file": "public/multimodal-it90/images/image_067.jpg",
+      "bytes": 61071,
+      "sha256": "ecd38e0a09d144c2",
+      "legende_reelle": "scène contenant : oiseau, personne (27 objets annotés)"
+    },
+    {
+      "id": "kext102_audio_001",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1583",
+      "file": "public/multimodal-it90/audio/audio_028.opus",
+      "bytes": 39774,
+      "sha256": "513fc3ddcc18a40e",
+      "legende_reelle": "Elle est arrivée à cette conclusion grâce aux multiples commentaires positifs et encouragements qu’elle a reçus aussi bien des femmes que des hommes sur l’importance de considérer la contraception comme une nécessité."
+    },
+    {
+      "id": "kext102_audio_002",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1609",
+      "file": "public/multimodal-it90/audio/audio_029.opus",
+      "bytes": 29249,
+      "sha256": "140ec537c7176b4a",
+      "legende_reelle": "Robin Uthappa a obtenu le score le plus élevé des manches, 70 points en seulement 41 balles en frappant 11 fois quatre runs et 2 fois six runs."
+    },
+    {
+      "id": "kext102_audio_003",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1521",
+      "file": "public/multimodal-it90/audio/audio_030.opus",
+      "bytes": 15383,
+      "sha256": "b33a916f6c19af64",
+      "legende_reelle": "Le satellite reçoit l'appel dans l'espace puis le renvoie sur Terre, presque instantanément."
+    },
+    {
+      "id": "kext102_audio_004",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1530",
+      "file": "public/multimodal-it90/audio/audio_031.opus",
+      "bytes": 25256,
+      "sha256": "73c9b942054f9d44",
+      "legende_reelle": "Il devait être abattu mardi, mais il a été sauvé suite à une décision d'urgence du tribunal."
     }
   ]
 }
