@@ -65,16 +65,35 @@
 #   "echec-backoff" à chaque échec transient (backoff v3 visible).
 #   Lire /poller-heartbeat.json suffit désormais à distinguer un
 #   téléchargement lent d'un finisher bloqué — sans SSH.
+#
+# v7 (2026-11-04 — blocage CD n°9 : prod gelée 13:08→20:30Z, six builds
+#   publiés sans bascule, diagnostic par les phases du battement) :
+#   1. PRÉSERVATION DES NOTES D'ÉCHEC au battement de début de cycle :
+#      en v6, le battement systématique (note="") écrasait la note
+#      finisher-echec:<etape> du finisher en ≤ 2 min — l'angle mort qui a
+#      rendu le blocage n°9 indiagnostiquable de l'extérieur. Désormais
+#      une note finisher-echec:* survit jusqu'à la RÉUSSITE suivante.
+#   2. TAR DÉJÀ INTÈGRE = TÉLÉCHARGEMENT SAUTÉ : en v6, chaque nouvelle
+#      tentative supprimait un tar pourtant complet et intègre (marqueur
+#      de reprise absent après un cycle finisher) puis le re-téléchargeait
+#      — 208 Mo de churn par essai sur un disque déjà saturé.
+#   3. FILET ANTI-DISQUE-PLEIN : si l'écriture de pull-fail.txt échoue
+#      (ENOSPC — signature du blocage n°9 : le backoff disparaissait et
+#      le poller bouclait serré), repli /tmp/pull-fail.txt + note
+#      "echec-fs-plein" visible de l'extérieur.
+#   4. ROTATION deploy.log (cap 5 Mo) : le journal ne doit jamais devenir
+#      lui-même une menace ENOSPC sur un petit disque.
 # =====================================================================
 set -u
 
 REPO=missock237-spec/gen3ia
-UPDATER_DIR=/opt/gen3ia-updater
+# v7 — overrides de test (le VPS ne les définit jamais : zéro effet en prod)
+UPDATER_DIR="${GEN3IA_UPDATER_DIR:-/opt/gen3ia-updater}"
 STATE_DIR=$UPDATER_DIR/state
 LAST_DEPLOYED=$STATE_DIR/last-deployed.txt
 FAILED_COMMITS=$STATE_DIR/failed_commits.txt
 FAIL_FILE=$STATE_DIR/pull-fail.txt     # « <sha> <epoch> <compteur> » du dernier échec TRANSIENT
-PROD_DIR=/opt/gen3ia
+PROD_DIR="${GEN3IA_PROD_DIR:-/opt/gen3ia}"
 # v5 — heartbeat sortant : servi par l'app à https://gen3ia.online/poller-heartbeat.json
 HEARTBEAT=$PROD_DIR/public/poller-heartbeat.json
 # v3 — backoff progressif : retry rapide (un échec transient réseau se
@@ -85,13 +104,22 @@ PALIERS_S=(60 120 300)                 # retry rapide 60 s, puis 2 min, 5 min
 DL_TAR=/tmp/next-build.tar.gz
 DL_SHA=/tmp/next-build.tar.gz.sha256
 
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$STATE_DIR/deploy.log"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+# v7 — rotation : cap 5 Mo sur le journal (il croissait sans borne et,
+# sur un disque saturé, devenait lui-même une menace ENOSPC).
+log() {
+  if [ -f "$STATE_DIR/deploy.log" ] && [ "$(stat -c%s "$STATE_DIR/deploy.log" 2>/dev/null || echo 0)" -gt 5000000 ]; then
+    tail -n 4000 "$STATE_DIR/deploy.log" > "$STATE_DIR/deploy.log.rot" 2>/dev/null \
+      && mv "$STATE_DIR/deploy.log.rot" "$STATE_DIR/deploy.log" 2>/dev/null || true
+  fi
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$STATE_DIR/deploy.log" 2>/dev/null || true
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
 
 # v5 — battement : écrit le heartbeat. Ne JAMAIS laisser un échec
 # d'écriture tuer le déploiement (|| true). Les notes sont des chaînes
 # ASCII fixes maîtrisées ici — pas d'injection JSON possible.
 battement() { # $1 = sha cible lu du meta.json ("" si release absente), $2 = note courte (= PHASE en v6)
-  printf '{"ok":true,"ts":"%s","epoch":%s,"poller":"pull-deploy v6","targetSha":"%s","servedSha":"%s","note":"%s"}\n' \
+  printf '{"ok":true,"ts":"%s","epoch":%s,"poller":"pull-deploy v7","targetSha":"%s","servedSha":"%s","note":"%s"}\n' \
     "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$(date +%s)" "$1" \
     "$(cat "$LAST_DEPLOYED" 2>/dev/null || echo '')" "$2" \
     > "$HEARTBEAT" 2>/dev/null || true
@@ -117,7 +145,17 @@ marquer_echec() {
   ancien_n=$(cut -d' ' -f3 "$FAIL_FILE" 2>/dev/null || true)
   case "$ancien_n" in ''|*[!0-9]*) ancien_n=0 ;; esac
   if [ "$ancien_sha" = "$TARGET_SHA" ]; then nouveau_n=$((ancien_n + 1)); else nouveau_n=1; fi
-  printf '%s %s %s\n' "$TARGET_SHA" "$(date +%s)" "$nouveau_n" > "$FAIL_FILE" 2>/dev/null || true
+  # v7 — filet anti-disque-plein : si l'écriture échoue (ENOSPC — c'est
+  # exactement la signature du blocage n°9 : plus de backoff écrit =
+  # boucle serrée), repli sur /tmp (autre montage possible) + note
+  # "echec-fs-plein" visible de l'extérieur — jamais de boucle muette.
+  if ! printf '%s %s %s\n' "$TARGET_SHA" "$(date +%s)" "$nouveau_n" > "$FAIL_FILE" 2>/dev/null; then
+    printf '%s %s %s\n' "$TARGET_SHA" "$(date +%s)" "$nouveau_n" > /tmp/pull-fail.txt 2>/dev/null || true
+    log "PULL: échec #$nouveau_n sur $TARGET_SHA — ETAT DE BACKOFF ILLISIBLE (fs plein ?) — repli /tmp + note echec-fs-plein."
+    [ "${1:-}" = "sans-note" ] && return 0
+    battement "$TARGET_SHA" "echec-fs-plein"
+    return 0
+  fi
   palier=$(palier_pour "$nouveau_n")
   log "PULL: échec #$nouveau_n sur $TARGET_SHA — prochaine tentative dans ${palier}s (backoff progressif)."
   # v6 — la phase d'échec est visible de l'extérieur : note="echec-backoff"
@@ -148,7 +186,15 @@ TARGET_SHA=$(printf '%s' "$META" | grep -o '"sha":"[0-9a-f]*"' | head -1 | sed '
 #        (finisher, updater suspendu) peuvent porter l'écart entre deux
 #        battements à ~17 min : le guérisseur v9 ne conclut au silence
 #        qu'au-delà de 1200 s. ---
-battement "$TARGET_SHA" ""
+# v7 — PRÉSERVATION : en v6 ce battement écrasait la note
+#        finisher-echec:<etape> du finisher en ≤ 2 min — l'angle mort du
+#        blocage n°9. Une note finisher-echec:* survit désormais jusqu'à
+#        la réussite suivante (le finisher/le succès la remplacent).
+NOTE_PRECEDENTE=$(grep -o '"note":"[^"]*"' "$HEARTBEAT" 2>/dev/null | head -1 | cut -d'"' -f4)
+case "$NOTE_PRECEDENTE" in
+  finisher-echec:*) battement "$TARGET_SHA" "$NOTE_PRECEDENTE" ;;  # note d'échec préservée
+  *) battement "$TARGET_SHA" "" ;;
+esac
 
 # --- 2. AUTO-MISE À JOUR du script au SHA cible (AVANT tout le reste) :
 #        la version qui s'exécute doit toujours être celle du build qu'elle
@@ -192,10 +238,12 @@ fi
 #        livraisons à ~21 min. Un état v2 (2 champs, sans compteur) est
 #        lu avec le compteur par défaut 1 (retry rapide). Un échec NE
 #        FIGE PLUS le SHA : la reprise est garantie. ---
-if [ -f "$FAIL_FILE" ]; then
-  FSHA=$(cut -d' ' -f1 "$FAIL_FILE" 2>/dev/null)
-  FTS=$(cut -d' ' -f2 "$FAIL_FILE" 2>/dev/null)
-  FN=$(cut -d' ' -f3 "$FAIL_FILE" 2>/dev/null)
+SOURCE_FAIL="$FAIL_FILE"
+[ -f "$SOURCE_FAIL" ] || [ ! -f /tmp/pull-fail.txt ] || SOURCE_FAIL=/tmp/pull-fail.txt  # v7 : repli anti-fs-plein
+if [ -f "$SOURCE_FAIL" ]; then
+  FSHA=$(cut -d' ' -f1 "$SOURCE_FAIL" 2>/dev/null)
+  FTS=$(cut -d' ' -f2 "$SOURCE_FAIL" 2>/dev/null)
+  FN=$(cut -d' ' -f3 "$SOURCE_FAIL" 2>/dev/null)
   case "$FN" in ''|*[!0-9]*) FN=1 ;; esac
   PALIER=$(palier_pour "$FN")
   MAINTENANT=$(date +%s)
@@ -217,6 +265,15 @@ fi
 #        le verrou final : un tar corrompu ne peut JAMAIS atteindre le
 #        finisher ; après une intégrité invalide, le tar est purgé —
 #        l'essai suivant repart proprement de zéro. ---
+# v7 — TAR DÉJÀ PRÉSENT ET INTÈGRE : téléchargement sauté. En v6, chaque
+# tentative après un cycle finisher repartait de zéro (le marqueur de
+# reprise avait été purgé après l'intégrité) et re-téléchargeait 208 Mo
+# — du churn disque inutile SUR un disque déjà saturé (blocage n°9).
+if [ -s "$DL_TAR" ] && [ -s "$DL_SHA" ] \
+   && (cd /tmp && sha256sum -c next-build.tar.gz.sha256) >/dev/null 2>&1; then
+  log "PULL: tar déjà complet et intègre — téléchargement sauté."
+  battement "$TARGET_SHA" "dl-deja-complet"
+else
 log "PULL: nouveau build $TARGET_SHA — téléchargement depuis la release cd-latest…"
 # v6 — phase visible : début de téléchargement, puis batteur interne
 # (borné : 10 itérations de 60 s puis il s'arrête SEUL — jamais un
@@ -261,6 +318,7 @@ rm -f "$PARTIAL_MARK"   # tar complet et intègre : la reprise n'a plus d'objet
 # couvre les sorties précoces — échecs sha256/intégrité — avant ceci).
 kill "$BATTEUR" 2>/dev/null || true; wait "$BATTEUR" 2>/dev/null || true
 battement "$TARGET_SHA" "dl-fin"
+fi  # v7 — fin du branchement « tar déjà intègre »
 
 # --- 7. Finisher versionné AU MÊME SHA (jamais une copie obsolète) ---
 curl -fsSL -m 30 -o /tmp/cd-finisher.sh \

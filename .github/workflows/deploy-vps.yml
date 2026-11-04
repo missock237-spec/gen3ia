@@ -90,8 +90,15 @@ jobs:
           # EXACTEMENT ce build (cf. dernière étape du job).
           echo "BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
 
-      - name: Empaqueter .next (sans cache)
-        run: tar czf /tmp/next-build.tar.gz --exclude='.next/cache' -C .next .
+      - name: Empaqueter .next (sans cache) + manifests du build
+        # v8 (blocage CD n°9) : le tar embarque AUSSI package.json +
+        # package-lock.json (racine de l'archive, extraits dans
+        # staging/.next/ — le finisher les handoffe à la racine du staging
+        # AVANT sa décision npm ci). Fermeture du trou structurel du canal
+        # pull : son tar ne contenait que .next, le lockfile du staging ne
+        # suivait donc JAMAIS le build (npm ci skippé à tort ou deps
+        # désynchronisées après un merge de dépendances).
+        run: tar czf /tmp/next-build.tar.gz --exclude='.next/cache' -C .next . -C "$GITHUB_WORKSPACE" package.json package-lock.json
 
       # Durcissement 2026-10-26 (runs #79→#88 rouges : SCP reset par les
       # pénalités/fail2ban du VPS pendant ~16 h) : le build est publié en
