@@ -381,9 +381,10 @@ export function texteVersTenseur(
  * découpé en `nbNoeuds` fenêtres contiguës ; chaque fenêtre est battue
  * avec la porteuse F0 (somme des sin/cos pondérés) :
  *  · amplitude_i = RMS de la fenêtre (énergie locale, normalisée) ;
- *  · phase_i = atan2(Σ s·cos, Σ s·sin) — le déphasage LOCAL de la
- *    fenêtre par rapport à la fondamentale : exactement ce qu'un
- *    détecteur de phase réel mesure.
+ *  · phase_i = atan2(Σ s·sin, Σ s·cos) — déphasage mesuré sur une
+ *    PORTEUSE EN COSINUS (un cosinus pur en phase → 0, testé). Avec la
+ *    convention de synthèse sin(2πft + θ), c'est l'image miroir
+ *    θ ↦ π/2 − θ : contenu et énergie conservés, phase réfléchie.
  */
 export function echantillonsVersTenseur(
   pcm: ArrayLike<number>,
