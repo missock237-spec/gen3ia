@@ -1,6 +1,6 @@
 {
-  "total_octets": 3604216,
-  "n": 78,
+  "total_octets": 4039201,
+  "n": 90,
   "assets": [
     {
       "id": "kext90_image_001",
@@ -781,6 +781,126 @@
       "bytes": 28165,
       "sha256": "3e52fda92571c2ec",
       "legende_reelle": "Avec seulement dix-huit médailles disponibles par jour, un certain nombre de pays n'ont pas réussi à monter sur le podium des médaillés."
+    },
+    {
+      "id": "kext100_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "404191",
+      "file": "public/multimodal-it90/images/image_052.jpg",
+      "bytes": 33866,
+      "sha256": "f14eb77f2f62b91e",
+      "legende_reelle": "scène contenant : réfrigérateur (1 objets annotés)"
+    },
+    {
+      "id": "kext100_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "66817",
+      "file": "public/multimodal-it90/images/image_053.jpg",
+      "bytes": 48415,
+      "sha256": "33081eb5a4748d3d",
+      "legende_reelle": "scène contenant : bol, carotte, cuillère, fourchette, table (11 objets annotés)"
+    },
+    {
+      "id": "kext100_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "381360",
+      "file": "public/multimodal-it90/images/image_054.jpg",
+      "bytes": 57761,
+      "sha256": "ceaa326860c79736",
+      "legende_reelle": "scène contenant : personne, planche de surf (2 objets annotés)"
+    },
+    {
+      "id": "kext100_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "376307",
+      "file": "public/multimodal-it90/images/image_055.jpg",
+      "bytes": 53392,
+      "sha256": "63dd2c5885c8ec8d",
+      "legende_reelle": "scène contenant : banane, carotte, chaise, orange, personne, pomme, table, tasse (27 objets annotés)"
+    },
+    {
+      "id": "kext100_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "424545",
+      "file": "public/multimodal-it90/images/image_056.jpg",
+      "bytes": 34733,
+      "sha256": "78e2f28ba856fbda",
+      "legende_reelle": "scène contenant : chat (1 objets annotés)"
+    },
+    {
+      "id": "kext100_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "85576",
+      "file": "public/multimodal-it90/images/image_057.jpg",
+      "bytes": 18300,
+      "sha256": "82bbaff2785d617b",
+      "legende_reelle": "scène contenant : toilettes (1 objets annotés)"
+    },
+    {
+      "id": "kext100_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "400044",
+      "file": "public/multimodal-it90/images/image_058.jpg",
+      "bytes": 42005,
+      "sha256": "78e2f5699d13b304",
+      "legende_reelle": "scène contenant : personne, snowboard (2 objets annotés)"
+    },
+    {
+      "id": "kext100_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "66886",
+      "file": "public/multimodal-it90/images/image_059.jpg",
+      "bytes": 31716,
+      "sha256": "f9cd9c7d1cb1d4a7",
+      "legende_reelle": "scène contenant : personne (1 objets annotés)"
+    },
+    {
+      "id": "kext100_audio_001",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1537",
+      "file": "public/multimodal-it90/audio/audio_024.opus",
+      "bytes": 25019,
+      "sha256": "a9760bcbc413b55e",
+      "legende_reelle": "Vous pouvez voir les pyramides dans l'obscurité et vous pouvez les voir en silence avant le début du spectacle."
+    },
+    {
+      "id": "kext100_audio_002",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1550",
+      "file": "public/multimodal-it90/audio/audio_025.opus",
+      "bytes": 27851,
+      "sha256": "b3bb336565f84f27",
+      "legende_reelle": "Le ski est une activité de voyage majeure qui compte de nombreux aficionados, parfois appelés « ski bums », qui organisent leurs vacances entières en fonction du ski dans des endroits spécifiques."
+    },
+    {
+      "id": "kext100_audio_003",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1560",
+      "file": "public/multimodal-it90/audio/audio_026.opus",
+      "bytes": 25884,
+      "sha256": "5738969f77ac8cd7",
+      "legende_reelle": "Dès que vous sortez du courant, le retour à la nage n'est pas plus difficile que d'habitude."
+    },
+    {
+      "id": "kext100_audio_004",
+      "modality": "audio",
+      "dataset": "google/fleurs#fr_fr/validation",
+      "row_id": "1635",
+      "file": "public/multimodal-it90/audio/audio_027.opus",
+      "bytes": 36043,
+      "sha256": "5e300db2fcc237df",
+      "legende_reelle": "Nous pouvons commencer par vivre en meilleure harmonie avec l'environnement, nous pouvons rejoindre le mouvement environnemental, et nous pouvons même militer dans le but d'atténuer les souffrances à venir."
     }
   ]
 }

@@ -3,7 +3,7 @@
  * GÉNÉRATEUR DU MODULE MULTIMODAL it.90 (npx tsx scripts/genere-module-multimodal-it90.ts)
  *
  * Lit var/entrainement-multimodal-it90/assets.json (inventaire HF cumulé —
- * depuis it.99 : 78 assets RÉELS = 52 images COCO-2017 + 24 audios FLEURS
+ * depuis it.100 : 90 assets RÉELS = 60 images COCO-2017 + 28 audios FLEURS
  * (fr_fr, format Opus 24 kbps — décision it.98 appliquée it.99) + 2 vidéos UCF101) et y ajoute les 4 clips TTS voix naturelle
  * générés localement — émet lib/neural/generation/multimodal-it90.ts :
  *   - ASSETS_MULTIMODAL_IT90 : métadonnées mesurées (octets, sha256, source) ;
@@ -83,7 +83,7 @@ const comptes = assets.reduce<Record<string, number>>((acc, a) => {
 function paireImage(a: Asset): { motif: string; reponse: string; theme: string } {
   return {
     motif: `Que contient l'image ${a.id} ?`,
-    reponse: `L'image ${a.id} est un asset RÉEL de COCO-2017 (validation, ${a.dataset.split("#")[1] ?? "val"}, ${a.bytes.toLocaleString("fr-FR")} octets, empreinte ${a.sha256}). La légende exacte issue des annotations : ${a.legende_reelle}. Elle est servie publiquement à ${a.file} et fait partie des ${comptes.image} images réelles intégrées au cerveau de gen3 (accumulées aux ticks it.90, it.95, it.96, it.97 et it.99).`,
+    reponse: `L'image ${a.id} est un asset RÉEL de COCO-2017 (validation, ${a.dataset.split("#")[1] ?? "val"}, ${a.bytes.toLocaleString("fr-FR")} octets, empreinte ${a.sha256}). La légende exacte issue des annotations : ${a.legende_reelle}. Elle est servie publiquement à ${a.file} et fait partie des ${comptes.image} images réelles intégrées au cerveau de gen3 (accumulées aux ticks it.90, it.95, it.96, it.97, it.99 et it.100).`,
     theme: "multimodal-image",
   };
 }

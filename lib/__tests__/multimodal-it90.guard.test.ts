@@ -7,23 +7,22 @@ import { ASSETS_MULTIMODAL_IT90, PAIRES_MULTIMODAL_IT90 } from "../neural/genera
 import { CORPUS_GEN3 } from "../neural/generation/corpus";
 
 /**
- * GARDE it.90→it.99 — assets multimodaux RÉELS intégrés au cerveau.
+ * GARDE it.90→it.100 — assets multimodaux RÉELS intégrés au cerveau.
  * Vérifie que chaque asset existe physiquement dans public/, que les
  * métadonnées mesurées sont cohérentes (octets réels, empreinte présente)
  * et que les paires sont assimilées par le corpus de production.
- * it.99 : compression FLEURS WAV → Opus 24 kbps (décision it.98 — 9,64 Mo
- * → ~0,5 Mo, durées vérifiées ffprobe) + expansion +12 (COCO lignes 92-99,
- * FLEURS 20-23 en opus natif) → 82 assets à 4,23 Mo (plafond 15 Mo tenu
- * avec une large marge, servi statiquement, hors bundle JS).
+ * it.100 : expansion +12 (COCO lignes 100-107, FLEURS 24-27 en opus natif)
+ * → 94 assets à 4,66 Mo (plafond 15 Mo tenu avec une large marge, servi
+ * statiquement, hors bundle JS).
  */
 describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90.ts)", () => {
-  it("82 assets réels sont présents (52 images + 24 audios FLEURS opus + 2 vidéos UCF101 + 4 TTS)", () => {
-    expect(ASSETS_MULTIMODAL_IT90).toHaveLength(82);
+  it("94 assets réels sont présents (60 images + 28 audios FLEURS opus + 2 vidéos UCF101 + 4 TTS)", () => {
+    expect(ASSETS_MULTIMODAL_IT90).toHaveLength(94);
     const comptes = ASSETS_MULTIMODAL_IT90.reduce<Record<string, number>>((acc, a) => {
       acc[a.modality] = (acc[a.modality] ?? 0) + 1;
       return acc;
     }, {});
-    expect(comptes).toEqual({ image: 52, audio: 24, video: 2, "audio-généré": 4 });
+    expect(comptes).toEqual({ image: 60, audio: 28, video: 2, "audio-généré": 4 });
   });
 
   it("chaque fichier existe physiquement et son octetage mesuré correspond au module", () => {
@@ -45,25 +44,25 @@ describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90
     const total = ASSETS_MULTIMODAL_IT90.reduce((s, a) => s + a.bytes, 0);
     expect(total).toBeLessThan(15_000_000);
     expect(total).toBeGreaterThan(3_000_000);
-    // it.99 : les audios FLEURS réels sont en Opus (et le gain est mesuré :
-    // 24 audios < 1 Mo, là où les 20 WAV pesaient 9,64 Mo)
+    // it.99/it.100 : les audios FLEURS réels sont en Opus (et le gain est
+    // mesuré : 28 audios < 1 Mo, là où les 20 WAV pesaient 9,64 Mo)
     const audiosOpus = ASSETS_MULTIMODAL_IT90.filter((a) => a.modality === "audio");
-    expect(audiosOpus.length).toBe(24);
+    expect(audiosOpus.length).toBe(28);
     for (const a of audiosOpus) {
       expect(a.file.endsWith(".opus"), `${a.file} n'est pas en opus`).toBe(true);
     }
     expect(audiosOpus.reduce((s, a) => s + a.bytes, 0)).toBeLessThan(1_000_000);
   });
 
-  it("les 82 paires multimodales sont assimilées par le corpus de production", () => {
-    expect(PAIRES_MULTIMODAL_IT90).toHaveLength(82);
+  it("les 94 paires multimodales sont assimilées par le corpus de production", () => {
+    expect(PAIRES_MULTIMODAL_IT90).toHaveLength(94);
     const motifs = new Set(PAIRES_MULTIMODAL_IT90.map((p) => p.motif));
     for (const p of PAIRES_MULTIMODAL_IT90) {
       expect(motifs.has(p.motif)).toBe(true);
       expect(p.reponse.length).toBeGreaterThan(40);
       expect(p.theme.startsWith("multimodal-")).toBe(true);
     }
-    // le corpus de production contient bien les 82 paires
+    // le corpus de production contient bien les 94 paires
     const corpusSet = new Set(CORPUS_GEN3.map((p) => p.motif));
     for (const p of PAIRES_MULTIMODAL_IT90) {
       expect(corpusSet.has(p.motif), `paire absente du corpus : ${p.motif}`).toBe(true);
@@ -74,8 +73,8 @@ describe("assets multimodaux réels it.90 (lib/neural/generation/multimodal-it90
     const coco = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("rafaelpadilla/coco2017"));
     const fleurs = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("google/fleurs"));
     const ucf = ASSETS_MULTIMODAL_IT90.filter((a) => a.dataset.startsWith("sayakpaul/ucf101-subset"));
-    expect(coco).toHaveLength(52);
-    expect(fleurs).toHaveLength(24);
+    expect(coco).toHaveLength(60);
+    expect(fleurs).toHaveLength(28);
     expect(ucf).toHaveLength(2);
     // transcription FLEURS réelle (française, ponctuée) — pas une légende fabriquée
     for (const f of fleurs) {
