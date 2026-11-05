@@ -1,0 +1,183 @@
+{
+  "date": "2026-11-05T12:52:40.380Z",
+  "dureeMs": 5742,
+  "raisonnement": {
+    "familles": [
+      "deduction",
+      "conditionnel",
+      "spatial",
+      "temporel",
+      "analogie",
+      "causalite",
+      "planification"
+    ],
+    "pairesChat": 134,
+    "pairesEvalReservees": 70,
+    "pairesTrainOndes": 988,
+    "parFamille": {
+      "deduction": 300,
+      "conditionnel": 30,
+      "spatial": 300,
+      "temporel": 300,
+      "analogie": 18,
+      "causalite": 16,
+      "planification": 24
+    }
+  },
+  "multimodal": {
+    "total": 28,
+    "octets": 6495519,
+    "pairesServies": 162,
+    "pairesExactes": 142
+  },
+  "corpusProduction": 922,
+  "snn": {
+    "source": "public/neural/cortex-couleurs-it92.bin",
+    "octetsSource": 12582960,
+    "ondesGravees": 90048,
+    "bandes": {
+      "deduction": 2,
+      "conditionnel": 3,
+      "spatial": 4,
+      "temporel": 5,
+      "analogie": 6,
+      "causalite": 7,
+      "planification": 8,
+      "multimodal": 9
+    },
+    "labels": {
+      "deduction": "raisonnement-it94-deduction-2",
+      "conditionnel": "raisonnement-it94-conditionnel-55",
+      "spatial": "raisonnement-it94-spatial-25",
+      "temporel": "raisonnement-it94-temporel-33",
+      "analogie": "raisonnement-it94-analogie-1",
+      "causalite": "raisonnement-it94-causalite-34",
+      "planification": "raisonnement-it94-planification-33"
+    },
+    "typesMesure": {
+      "deduction": "généralisation",
+      "conditionnel": "rétention",
+      "spatial": "généralisation",
+      "temporel": "généralisation",
+      "analogie": "rétention",
+      "causalite": "rétention",
+      "planification": "rétention",
+      "multimodal": "rétention (assets réels, fenêtre suivante)"
+    },
+    "avant": {
+      "familles": [
+        {
+          "hits": 1,
+          "sep": 6,
+          "top3": 6,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 2,
+          "top3": 2,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 1,
+          "top3": 2,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 0,
+          "top3": 1,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 0,
+          "top3": 0,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 0,
+          "top3": 1,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 0,
+          "top3": 0,
+          "total": 10
+        }
+      ],
+      "multimodal": {
+        "hits": 0,
+        "sep": 0,
+        "top3": 0,
+        "total": 28
+      }
+    },
+    "apres": {
+      "familles": [
+        {
+          "hits": 1,
+          "sep": 10,
+          "top3": 10,
+          "total": 10
+        },
+        {
+          "hits": 3,
+          "sep": 6,
+          "top3": 8,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 4,
+          "top3": 4,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 1,
+          "top3": 3,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 3,
+          "top3": 3,
+          "total": 10
+        },
+        {
+          "hits": 1,
+          "sep": 8,
+          "top3": 9,
+          "total": 10
+        },
+        {
+          "hits": 0,
+          "sep": 0,
+          "top3": 0,
+          "total": 10
+        }
+      ],
+      "multimodal": {
+        "hits": 0,
+        "sep": 0,
+        "top3": 0,
+        "total": 28
+      }
+    },
+    "totalMesures": 98,
+    "avantTotal": 1,
+    "apresTotal": 5,
+    "avantSep": 9,
+    "apresSep": 32,
+    "avantTop3": 12,
+    "apresTop3": 37,
+    "noteMesure": "dominance stricte = bande attendue #1 de toutes (concurrence historique b0 raisonnement-humain 999 935 paires, b1 couleurs 101 138 ondes) ; séparation it.94 = bande attendue #1 parmi les 8 bandes it.94 (b2..b9) ; top-3 = bande attendue dans le podium d'activation.",
+    "snapshot": "public/neural/cortex-raisonnement-it94.bin",
+    "octets": 12582960
+  },
+  "snapshot": "public/neural/cortex-raisonnement-it94.bin"
+}

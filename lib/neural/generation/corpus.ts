@@ -24,6 +24,12 @@ import { CORPUS_RAISONNEMENT_IT85 } from "./corpus-raisonnement-it85";
 import { CORPUS_INTERROGATION_IT86 } from "./corpus-interrogation-it86";
 import { CORPUS_COULEURS_IT89 } from "./corpus-couleurs-it89";
 import { PAIRES_MULTIMODAL_IT90 } from "./multimodal-it90";
+// it.94 — 7 familles de raisonnement à couverture zéro mesurée (déduction,
+// conditionnel, spatial, temporel, analogie, causalité, planification) :
+// réponses CALCULÉES par construction + 70 questions d'éval RÉSERVÉES
+// (graine distincte — jamais servies) pour la mesure SNN honnête.
+import { CORPUS_RAISONNEMENT_IT94 } from "./corpus-raisonnement-it94";
+import { PAIRES_MULTIMODAL_IT94 } from "./multimodal-it94";
 
 /** Paire conversationnelle apprise par le cortex langagier. */
 export interface PaireLangage {
@@ -883,6 +889,11 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
   // it.90 — assets multimodaux RÉELS (COCO-2017, FLEURS fr_fr, UCF101, TTS) :
   // 34 paires id↔légende/transcription servies par le cortex langagier.
   ...PAIRES_MULTIMODAL_IT90,
+  // it.94 — raisonnement 7 familles (réponses calculées, générateur
+  // déterministe lib/gen3/raisonnement-it94) + assets multimodaux RÉELS
+  // fenêtres suivantes (COCO offset 124, FLEURS offset 36).
+  ...CORPUS_RAISONNEMENT_IT94,
+  ...PAIRES_MULTIMODAL_IT94,
 ];
 
 export const TAILLE_CORPUS_GEN3 = CORPUS_GEN3.length;
