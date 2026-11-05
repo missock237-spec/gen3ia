@@ -69,6 +69,24 @@ name: Guérisseur production
 #      n'allouera jamais) sont ANNULÉS — la file ne peut plus se
 #      boucher à nouveau ; échec d'annulation = ::warning:: visible,
 #      jamais silencieux (leçon it.31), sans casser le tick.
+#
+# v13 (2026-11-05, Job 478451 — faits des runs 354/355, « success » sans
+#   armement ni escalade pendant que la prod gelait 3 h) :
+#   1. MESURE AUTHENTIFIÉE (3 essais) : la mesure de main partait en curl
+#      ANONYME sur api.github.com — les plages IP des runners sont
+#      massivement rate-limitées (60 req/h/IP partagées) et le garde
+#      « API muette → besoin=false » rendait le tick AVEUGLE sans bruit :
+#      ni armement, ni escalade, rien. gh api porte le github.token
+#      (quota dédié au dépôt) — la garde n'abdique qu'après 3 essais
+#      espacés, avec ::warning:: visible ; le relais v10 se réarme sur
+#      le battement silencieux même si besoin=false (déjà garant v10).
+#   2. DIAGNOSTIC + REMÉDIATION SSH quand l'armement échoue sur un sshd
+#      vivant (l'angle mort B : verdict=echec → secours CD → fin sans
+#      issue ni bruit) : diagnostic SSH (df/free/pm2/états/journaux),
+#      déblayage d'urgence (tar 208 Mo de /tmp, pm2 flush, vacuum
+#      journald) puis relance install-pull-mode.sh ; échec persistant
+#      = escalade avec la preuve complète (jamais un « success » muet).
+#   3. REFERMETURE automatique de l'escalade v13 au réalignement.
 
 on:
   schedule:
@@ -159,17 +177,30 @@ jobs:
 
       - name: Comparer les empreintes
         id: ecart
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           cb=$(date +%s)
-          SHA_MAIN=$(curl -fsSL -m 20 "https://api.github.com/repos/${{ github.repository }}/commits/main" \
-            | jq -r '.sha // ""')
+          # v13 — MESURE AUTHENTIFIÉE (3 essais espacés) : le curl ANONYME
+          # d'avant était rate-limité sur les runners (60 req/h/IP partagées)
+          # et le garde « API muette → besoin=false » rendait le tick AVEUGLE
+          # sans aucun bruit (runs 354/355 du 05 nov : success sans armement
+          # ni escalade, prod gelée). gh api = github.token (quota dédié).
+          SHA_MAIN=""
+          for i in 1 2 3; do
+            SHA_MAIN=$(gh api "repos/$REPO/commits/main" --jq '.sha // ""' 2>/dev/null || true)
+            [ -n "$SHA_MAIN" ] && break
+            echo "Mesure $i/3 : API GitHub injoignable (rate limit transitoire ?) — nouvel essai dans 15 s…"
+            [ "$i" = "3" ] || sleep 15
+          done
           REPONSE=$(curl -fsSL -m 20 "https://gen3ia.online/version.json?cb=$cb" || true)
           SHA_PROD=$(echo "$REPONSE" | jq -r '.gitSha // "absent"' 2>/dev/null || echo "absent")
           echo "main  = ${SHA_MAIN:-inconnu}"
           echo "prod  = ${SHA_PROD}"
           if [ -z "$SHA_MAIN" ]; then
-            echo "besoin=false" >> "$GITHUB_OUTPUT"   # API muette : ne rien décider ce tick
-            echo "besoin=false (API GitHub injoignable)"
+            echo "::warning::Mesure de main impossible (API injoignable 3×) — tick de garde sans décision ; le relais v10 se réarme sur le battement silencieux et re-mesurera."
+            echo "besoin=false" >> "$GITHUB_OUTPUT"   # API muette 3× : ne rien décider ce tick (bruyant)
           elif [ "$SHA_PROD" = "$SHA_MAIN" ]; then
             echo "besoin=false" >> "$GITHUB_OUTPUT"   # production alignée — passif
             echo "besoin=false (production alignée)"
@@ -255,6 +286,25 @@ jobs:
             echo "Issue #$NUM refermée (poller vivant)."
           else
             echo "Aucune escalade poller ouverte — rien à refermer."
+          fi
+
+      # v13 — refermeture MIRROIR de l'escalade « armement échoué » : la
+      # production réalignée (ou le poller ressuscité) prouve que l'armement
+      # a fini par réussir — l'issue diagnostic doit mourir.
+      - name: "v13 — Refermer l'escalade armement — production réalignée"
+        if: steps.ecart.outputs.besoin != 'true' && steps.ecart.outputs.sha_main != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA_MAIN: ${{ steps.ecart.outputs.sha_main }}
+          REPO: ${{ github.repository }}
+        run: |
+          TITRE="🚨 Armement SSH du poller en échec persistant — diagnostic joint"
+          NUM=$(gh issue list -R "$REPO" --state open --search "$TITRE in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$NUM" ]; then
+            gh issue close "$NUM" -R "$REPO" -c "✅ Production réalignée sur main ($SHA_MAIN) — le canal pull est de nouveau armé, escalade v13 résolue automatiquement."
+            echo "Issue #$NUM refermée (armement rétabli)."
+          else
+            echo "Aucune escalade armement ouverte — rien à refermer."
           fi
 
       # v7 (2026-10-30, itération 34 Job 478451) — RELAIS DE CADENCE :
@@ -453,6 +503,71 @@ jobs:
           echo "✅ CD déclenché : production ${{ needs.verifier.outputs.sha_prod }} → main ${{ needs.verifier.outputs.sha_main }}."
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # v13 — DIAGNOSTIC + REMÉDIATION SSH PROFONDE (angle mort B) :
+      # sonde SSH « oui » + armement échoué finissait en silence total
+      # (secours CD inutile — le poller mort ne tire pas la release ; aucun
+      # signal humain avant le commentaire CD SLE 40 min plus tard). Ici :
+      # (1) diagnostic SSH lisible (df/free/pm2/états/déploiement.log) ;
+      # (2) remédiation bornée — déblayage d'urgence (tar 208 Mo, pm2
+      # flush, vacuum journald — signatures du blocage n°9 ENOSPC) PUIS
+      # relance install-pull-mode.sh ; (3) échec persistant = escalade
+      # avec la preuve complète — jamais un « success » muet de plus.
+      - name: "v13 — Diagnostic SSH + remédiation (déblayage + relance) si l'armement échoue"
+        id: remediation
+        if: steps.sonde.outputs.joignable == 'oui' && steps.release.outputs.release_sha == needs.verifier.outputs.sha_main && steps.pull.outputs.verdict == 'echec'
+        run: |
+          SSHC="ssh -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -p ${{ secrets.VPS_PORT }} -i ~/.ssh/vps_deploy ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          {
+            echo "=== DIAGNOSTIC SSH $(date -u +%FT%TZ) ==="
+            $SSHC "df -h / /tmp 2>/dev/null; echo ---FREE---; free -m 2>/dev/null; echo ---PM2---; pm2 ls 2>&1 | head -15; echo ---ETATS---; cat /opt/gen3ia-updater/state/last-deployed.txt 2>/dev/null; ls -la /opt/gen3ia-updater/state/ 2>/dev/null | head -12; echo ---DEPLOYLOG---; tail -n 25 /opt/gen3ia-updater/state/deploy.log 2>/dev/null" || echo "diagnostic SSH en échec (authentification ? vérifier VPS_SSH_KEY/VPS_USER/VPS_PORT)"
+          } > diag-ssh.txt 2>&1 || true
+          cat diag-ssh.txt
+          echo "=== REMÉDIATION : déblayage d'urgence + relance install-pull-mode.sh ==="
+          if $SSHC "rm -f /tmp/next-build.tar.gz /tmp/next-build.tar.gz.sha256 /tmp/cd-finisher.sh; pm2 flush 2>/dev/null || true; journalctl --vacuum-size=20M 2>/dev/null || true; df -h / | tail -1; curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash"; then
+            echo "verdict=arme-v13" >> "$GITHUB_OUTPUT"
+            echo "✅ v13 : canal pull ARMÉ après déblayage — poller relancé, premier déploiement lancé."
+          else
+            echo "verdict=echec-v13" >> "$GITHUB_OUTPUT"
+            echo "::error::v13 : armement PERSISTANT en échec malgré déblayage — escalade avec diagnostic."
+          fi
+
+      # v13 — ESCALADE BRUYANTE : l'armement a échoué malgré un sshd vivant
+      # et une remédiation automatique insuffisante — l'issue porte le
+      # diagnostic SSH complet + la commande console exacte.
+      - name: "v13 — Escalade : armement échoué malgré SSH joignable (diagnostic joint)"
+        if: always() && steps.remediation.outputs.verdict == 'echec-v13'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA_MAIN: ${{ needs.verifier.outputs.sha_main }}
+          SHA_PROD: ${{ needs.verifier.outputs.sha_prod }}
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo "## Poller mort + armement SSH en échec persistant"
+            echo
+            echo "- main : \`$SHA_MAIN\` · production : \`$SHA_PROD\`"
+            echo "- sshd répond (sonde) MAIS l'armement échoue même après déblayage — cause probable dans le diagnostic ci-dessous (disque plein ? auth ?)."
+            echo
+            echo '```'
+            cat diag-ssh.txt
+            echo '```'
+            echo
+            echo "## Action console (spaceship.com → console root) — une seule commande :"
+            echo '```'
+            echo "curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/vps-auto-deploy/install-pull-mode.sh | bash"
+            echo '```'
+            echo
+            echo "_Escalade v13 (Job 478451). Refermeture automatique au réalignement de la production._"
+          } > corps-escalade-v13.md
+          TITRE="🚨 Armement SSH du poller en échec persistant — diagnostic joint"
+          NUM=$(gh issue list -R "$REPO" --state open --search "Armement SSH du poller in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$NUM" ]; then
+            gh issue comment "$NUM" -R "$REPO" --body-file corps-escalade-v13.md
+            echo "Issue #$NUM mise à jour (escalade v13)."
+          else
+            gh issue create -R "$REPO" --title "$TITRE" --body-file corps-escalade-v13.md >/dev/null && echo "Issue d'escalade v13 créée."
+          fi
 
       # V6.2 (2026-10-29, itération 26 Job 478451) — SECOURS SANS SSH :
       # constat 07:26→08:10Z : release cd-latest à jour, poller silencieux,
