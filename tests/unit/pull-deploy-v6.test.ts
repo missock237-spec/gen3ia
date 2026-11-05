@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 /**
- * Garde-fou — TÉLÉMÉTRIE DE PHASE DU POLLER (pull-deploy v6, it.96, Job 478451).
+ * Garde-fou — TÉLÉMÉTRIE DE PHASE DU POLLER (pull-deploy v7, it.96→v7, Job 478451).
  *
  * Constat mesuré à it.95 : une livraison de 45 min (vs ~13 min habituels)
  * n'était pas diagnostiquable depuis l'extérieur — le battement v5 prouvait
@@ -33,7 +33,7 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf
 
 const PULL = "scripts/vps-auto-deploy/pull-deploy.sh";
 
-describe("pull-deploy.sh v6 — télémétrie de phase", () => {
+describe("pull-deploy.sh v7 — télémétrie de phase", () => {
   const script = read(PULL);
 
   it("syntaxe bash valide (bash -n réel)", () => {
@@ -42,9 +42,9 @@ describe("pull-deploy.sh v6 — télémétrie de phase", () => {
     ).not.toThrow();
   });
 
-  it("le heartbeat porte la version v6 (le champ poller dit quoi lire)", () => {
-    expect(script).toContain('"poller":"pull-deploy v6"');
-    expect(script).not.toContain('"poller":"pull-deploy v5"');
+  it("le heartbeat porte la version v7 (le champ poller dit quoi lire)", () => {
+    expect(script).toContain('"poller":"pull-deploy v7"');
+    expect(script).not.toContain('"poller":"pull-deploy v6"');
   });
 
   it("les 7 phases v6 sont émises (ensemble fermé, aux bons endroits)", () => {
@@ -95,15 +95,28 @@ describe("pull-deploy.sh v6 — télémétrie de phase", () => {
       "release cd-latest indisponible",
       "meta.json illisible",
       "dl-debut",
+      "dl-deja-complet",
       "dl-en-cours",
       "dl-fin",
       "finisher-debut",
       "deploie",
       "finisher-echec",
       "echec-backoff",
+      "echec-fs-plein",
+      // v7 — la ré-émission apparaît littéralement comme variable dans le
+      // source : seule la valeur capturée "$NOTE_PRECEDENTE" est admise ici,
+      // et le case ci-dessous borne son contenu à « finisher-echec:* ».
+      "$NOTE_PRECEDENTE",
     ]);
     expect(notes.length).toBeGreaterThanOrEqual(10);
     for (const n of notes) expect(LEGALES.has(n)).toBe(true);
+    // v7 — exception DOCUMENTÉE : ré-émission de la note précédente
+    // ($NOTE_PRECEDENTE, préservation d'un échec finisher à travers un
+    // cycle). Sûre par induction : cette variable ne peut contenir qu'une
+    // valeur lue dans le heartbeat, elle-même issue de cet ensemble fermé.
+    // Le case de garde doit rester borné aux notes d'échec.
+    expect(script).toContain('NOTE_PRECEDENTE=$(grep -o \'"note":"[^"]*"\' "$HEARTBEAT"');
+    expect(script).toMatch(/case "\$NOTE_PRECEDENTE" in\s*\n\s*finisher-echec:\*\)/);
   });
 
   it("l'entête documente le but : distinguer téléchargement lent vs finisher bloqué", () => {
@@ -111,10 +124,10 @@ describe("pull-deploy.sh v6 — télémétrie de phase", () => {
     expect(script).toContain("téléchargement lent d'un finisher bloqué");
   });
 
-  it("le stub committé annonce v6 et la sémantique de la note (pas de valeur périmée)", () => {
+  it("le stub committé annonce v7 et la sémantique de la note (pas de valeur périmée)", () => {
     const stub = read("public/poller-heartbeat.json");
-    expect(stub).toContain("pull-deploy v6");
-    expect(stub).not.toContain("pull-deploy v5");
+    expect(stub).toContain("pull-deploy v7");
+    expect(stub).not.toContain("pull-deploy v6");
   });
 });
 

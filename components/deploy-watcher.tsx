@@ -143,6 +143,47 @@ export function DeployWatcher() {
       }
     };
 
+    /** Purge d'urgence des couches de cache LOCALES du navigateur (correctif
+     * « aucune modification visible » 2026-11-05) : un navigateur figé sur
+     * une page périmée l'était par un SERVICE WORKER historique — parfois
+     * cache-first sur les navigations — ou par ses caches. Décharger les
+     * SW et supprimer les caches gen3ia-* AVANT le rechargement garantit
+     * que la navigation suivante passe par le RÉSEAU : la page rechargée
+     * ne peut plus être l'ancienne. Sans risque : pwa-register réenregistre
+     * le SW courant dès le chargement suivant, et la purge n'a lieu qu'au
+     * moment sûr (onglet caché), une fois par déploiement cible. */
+    const purgeStaleBrowserCaches = async (): Promise<void> => {
+      try {
+        if ("serviceWorker" in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(
+            registrations.map((reg) => reg.unregister().catch(() => undefined)),
+          );
+        }
+      } catch {
+        /* service worker indisponible : rien à purger */
+      }
+      try {
+        if (typeof caches !== "undefined") {
+          const names = await caches.keys();
+          await Promise.all(
+            names
+              .filter((name) => name.startsWith("gen3ia-"))
+              .map((name) => caches.delete(name)),
+          );
+        }
+      } catch {
+        /* Cache Storage indisponible (navigation privée) : rien à purger */
+      }
+    };
+
+    /** Rechargement de mise à jour : purge d'abord (async), reload ensuite —
+     * jamais l'inverse, sinon le reload court une course contre la purge et
+     * peut re-servir la page périmée qu'on venait d'expliquer. */
+    const reloadWithPurge = (_id: string): void => {
+      void purgeStaleBrowserCaches().finally(() => window.location.reload());
+    };
+
     /** Droit de rechargement automatique pour cette cible : gardé par
      * sessionStorage quand il est disponible (survit au reload — c'est lui
      * qui interdit la boucle), sinon par garde en mémoire de secours. */
@@ -169,7 +210,7 @@ export function DeployWatcher() {
      * premier plan, la bannière prend le relais après VISIBLE_DEFER_MS. */
     const applyDetectedDeployment = (id: string) => {
       if (document.visibilityState === "hidden") {
-        if (canTryReload(id)) window.location.reload();
+        if (canTryReload(id)) reloadWithPurge(id);
         else announceOnce(id);
         return;
       }
@@ -207,7 +248,7 @@ export function DeployWatcher() {
         window.clearTimeout(fallbackTimer);
         fallbackTimer = null;
       }
-      if (canTryReload(id)) window.location.reload();
+      if (canTryReload(id)) reloadWithPurge(id);
       else announceOnce(id);
     };
 

@@ -14,9 +14,16 @@ import { describe, expect, it } from "vitest";
  * ferait rater toutes les mises à jour PWA suivantes (le navigateur plafonne
  * sinon sa vérification à 24 h, étape 11).
  *
- * Garde-fou : le middleware ne doit JAMAIS poser de Cache-Control global —
- * deux en-têtes Cache-Control (middleware + next.config) produisent une
- * intersection imprévisible côté navigateur (même règle que la CSP).
+ * Garde-fou (révisé 2026-11-05, correctif « aucune modification visible ») :
+ * le middleware pose DÉSORMAIS un Cache-Control — mais UNIQUEMENT sur les
+ * navigations HTML (Accept: text/html) : `public, max-age=0,
+ * must-revalidate`, qui REMPLACE le défaut Next s-maxage=31536000 (un an !)
+ * sur les documents. Vérifié par build + next start + curl : la navigation
+ * reçoit UNE seule valeur d'en-tête (pas d'intersection) — les RSC
+ * payloads (Accept: text/x-component), /_next/static, /icons et /api ne
+ * sont pas touchés. Le HTML d'une page doit être revalidé à CHAQUE visite :
+ * c'est la garantie qu'un déploiement est visible immédiatement, même
+ * derrière un intermédiaire zélé ou un vieux service worker.
  */
 
 const read = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
@@ -41,8 +48,14 @@ describe("Politique de cache statique (next.config headers)", () => {
     expect(config).toContain("public, max-age=0, must-revalidate");
   });
 
-  it("le middleware ne pose PAS de Cache-Control (deux en-têtes = intersection imprévisible)", () => {
-    expect(read("middleware.ts")).not.toMatch(/cache-control/i);
+  it("middleware : navigations HTML revalidées à chaque visite (correctif 2026-11-05)", () => {
+    const middleware = read("middleware.ts");
+    // Cible STRICTE : documents HTML uniquement (Accept: text/html) — jamais
+    // les API, ni les RSC payloads, ni les assets statiques immuables.
+    expect(middleware).toContain('!isApiRoute && request.headers.get("accept")?.includes("text/html")');
+    // Valeur : revalidation conditionnelle (ETag → 304) — la page affichée
+    // est toujours celle du déploiement actif.
+    expect(middleware).toContain('"Cache-Control", "public, max-age=0, must-revalidate"');
   });
 });
 

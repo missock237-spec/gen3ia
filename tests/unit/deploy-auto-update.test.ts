@@ -172,6 +172,22 @@ describe("DeployWatcher — détection du nouveau build sans navigation", () => 
     expect(watcher).toContain("reloadedWithoutStorage");
   });
 
+  it("correctif 2026-11-05 : purge SW + caches gen3ia-* AVANT chaque rechargement (navigateur figé impossible)", () => {
+    // Un service worker historique (cache-first navigations) pouvait
+    // re-servir la page périmée APRÈS le reload — la purge précède donc
+    // TOUJOURS le rechargement (reloadWithPurge), jamais l'inverse.
+    expect(watcher).toContain("purgeStaleBrowserCaches");
+    expect(watcher).toContain('navigator.serviceWorker.getRegistrations()');
+    expect(watcher).toContain("reg.unregister()");
+    expect(watcher).toContain('name.startsWith("gen3ia-")');
+    // Ordre garanti : purge (async) puis reload dans .finally — le reload
+    // ne peut pas devancer la purge.
+    expect(watcher).toContain("purgeStaleBrowserCaches().finally(() => window.location.reload())");
+    // Les deux chemins de rechargement passent par reloadWithPurge.
+    expect(watcher.match(/reloadWithPurge\(id\)/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(watcher).not.toContain("canTryReload(id)) window.location.reload()");
+  });
+
   it("DEMANDE 2026-10-22 : onglet visible = rechargement DIFFÉRÉ à la prochaine mise en arrière-plan (invisibilité)", () => {
     expect(watcher).toContain("VISIBLE_DEFER_MS = 30_000");
     // La détection pendant que l'onglet est visible ne coupe JAMAIS la page :

@@ -430,6 +430,23 @@ export async function middleware(request: NextRequest) {
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
 
+  // Fraîcheur HTML obligatoire (correctif « aucune modification visible »
+  // 2026-11-05) : les pages prerendered sortent de Next avec le défaut
+  // s-maxage=31536000 (1 AN). Un navigateur est censé l'ignorer (s-maxage
+  // ne vaut que pour les caches partagés), mais tout intermédiaire qui
+  // l'honore — ou un ancien service worker combiné aux gardes anti-boucle
+  // du DeployWatcher — peut figer un visiteur sur une page périmée pendant
+  // des heures, même après un déploiement réussi (exact le symptôme
+  // constaté). Politique : toute NAVIGATION (document HTML, Accept:
+  // text/html) est revalidée à CHAQUE visite — ETag → 304 bon marché, la
+  // page affichée est toujours celle du déploiement actif. Le filtre ne
+  // touche QUE les documents : /_next/static et /icons (immuables),
+  // /api, les RSC payloads (Accept: text/x-component) et les sondes
+  // (version.json, sw.js — déjà max-age=0) gardent leur politique propre.
+  if (!isApiRoute && request.headers.get("accept")?.includes("text/html")) {
+    response.headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+  }
+
   if (isClientEntry) {
     response.cookies.set(CLIENT_ACCESS_COOKIE, pathname, {
       httpOnly: true,

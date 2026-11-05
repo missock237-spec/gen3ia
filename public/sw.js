@@ -1,6 +1,16 @@
 /*
  * Service worker Gen3ia — support PWA + file hors-ligne fiable.
  *
+ * REVISION 2026-11-05 (correctif « aucune modification visible ») : bump de
+ * révision volontaire — le contenu change pour que TOUT navigateur, même
+ * plafonné à 24 h entre deux vérifications de mise à jour, détecte le diff
+ * au prochain contrôle et installe CE SW (network-first sur les
+ * navigations). Un SW historique cache-first pouvait retenir les pages :
+ * désormais, à l'activation, les caches gen3ia-* hors liste blanche sont
+ * purgés et les pages héritées rechargent la nouvelle version
+ * (pwa-register + DeployWatcher — qui déchargent en plus les SW périmés
+ * avant chaque rechargement de mise à jour).
+ *
  * Stratégie volontairement conservative (le SW historique servait une page
  * hors-ligne à la place du Studio — bug corrigé) :
  * - Navigation            : réseau D'ABORD ; offline.html UNIQUEMENT si le
