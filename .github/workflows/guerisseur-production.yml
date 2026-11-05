@@ -50,6 +50,25 @@ name: Guérisseur production
 #   réessaie désormais 3× ; API injoignable = PAS d'escalade ce tick
 #   (fail-closed), et le CD referme lui-même l'escalade après avoir
 #   PROUVÉ la livraison (deploy-vps.yml v6, refermeture à la source).
+#
+# v12 (2026-11-05, Job 478451 — incident « aucune modification visible ») :
+#   Fait observé : le run #257 du 03 nov est resté « queued » SANS JAMAIS
+#   démarrer et, le concurrency group étant occupé par ce zombie
+#   (cancel-in-progress: false), TOUT déclenchement ultérieur (crons
+#   17,47, pushes, relais v10) est resté piégé en file d'attente
+#   invisible — le guérisseur n'a plus tourné pendant 2 jours. Le poller
+#   VPS est mort le 05 nov à 06:06Z (battement figé, release cd-latest
+#   b7e2d0c jamais tirée) et RIEN ne l'a détecté : les escalades v9 ne
+#   peuvent être ouvertes que par CE workflow, précisément celui qui ne
+#   tournait plus. Deux correctifs structurels :
+#   1. NOUVEAU GROUP de concurrency (« -v12 ») : les déclenchements
+#      post-patch n'héritent plus de la file empoisonnée — le tick du
+#      push correctif lui-même démarre immédiatement ;
+#   2. DÉ-ZOMBIFICATION AUTO-RÉPARANTE : à chaque tick, les runs de CE
+#      workflow restés queued/waiting > 30 min (zombies que le scheduler
+#      n'allouera jamais) sont ANNULÉS — la file ne peut plus se
+#      boucher à nouveau ; échec d'annulation = ::warning:: visible,
+#      jamais silencieux (leçon it.31), sans casser le tick.
 
 on:
   schedule:
@@ -81,8 +100,12 @@ permissions:
   actions: write
   issues: write
 
+# v12 — group renommé : la file de l'ancien group, empoisonnée par le
+# run zombie #257 (queued du 03 nov jamais alloué), n'invite plus les
+# nouveaux déclenchements. Le step de dé-zombification du job `verifier`
+# purge en outre l'ancien zombie lors du premier tick.
 concurrency:
-  group: guerisseur-production
+  group: guerisseur-production-v12
   cancel-in-progress: false
 
 jobs:
@@ -101,6 +124,29 @@ jobs:
       battement_served: ${{ steps.battement.outputs.served_sha }}
       battement_note: ${{ steps.battement.outputs.note }}
     steps:
+      # v12 — DÉ-ZOMBIFICATION : annule les runs de CE workflow restés
+      # queued/waiting > 30 min (le scheduler ne les allouera jamais —
+      # fait #257 du 03 nov, resté queued 2 jours en bloquant toute la
+      # file du group). Le run courant est in_progress : jamais ciblé.
+      - name: "Dé-zombification — annuler les runs queued > 30 min (file concurrency)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          ZOMBIES=$(gh api "repos/$REPO/actions/workflows/guerisseur-production.yml/runs?per_page=40" \
+            --jq '.workflow_runs[] | select(.status=="queued" or .status=="waiting" or .status=="pending") | select((now - (.created_at | fromdateiso8601)) > 1800) | .id' 2>/dev/null || true)
+          if [ -z "$ZOMBIES" ]; then
+            echo "Aucun run zombie (queued > 30 min) — file saine."
+            exit 0
+          fi
+          for RID in $ZOMBIES; do
+            if gh api -X POST "repos/$REPO/actions/runs/$RID/cancel" >/dev/null 2>&1; then
+              echo "Zombie $RID annulé — file de concurrency débloquée."
+            else
+              echo "::warning::Run zombie $RID non annulable (API) — la vivacité est assurée par le group v12 ; à re-vérifier au prochain tick."
+            fi
+          done
+
       # v10 — SOMMEIL DE CADENCE du relais : le run auto-dispatché attend
       # 10 min AVANT de mesurer, pour que la chaîne d'incident tourne à
       # ~11 min de cycle au lieu de reboucler en < 1 min (anti-tempête).
