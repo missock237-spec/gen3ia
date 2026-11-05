@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-05T22:17:08.041Z",
+  "dureeMs": 1675,
+  "multimodal": {
+    "total": 28,
+    "parModalite": {
+      "image": 20,
+      "audio": 8,
+      "video": 0
+    },
+    "octets": 5893360,
+    "fenetres": {
+      "image": "rafaelpadilla/coco2017#default/val offset 224 (20) — après offset 204 (it.96)",
+      "audio": "google/fleurs#fr_fr/validation offset 76 (8) — après offset 68 (it.96)",
+      "video": "sayakpaul/ucf101-subset#default/train offset 4 (0 — fenêtre épuisée depuis it.90, preuve refaite)"
+    },
+    "pairesServies": 28,
+    "pairesExactes": 28
+  },
+  "corpusProduction": 1062,
+  "snn": {
+    "source": "public/neural/cortex-multimodal-it98.bin",
+    "octetsSource": 12582960,
+    "ondesGravees": 2016,
+    "bande": 9,
+    "mesurePoids": {
+      "avant": {
+        "aretes": 240,
+        "somme": 211.09411823749542,
+        "moyenne": 0.8795588259895643
+      },
+      "apres": {
+        "aretes": 240,
+        "somme": 240,
+        "moyenne": 1
+      },
+      "type": "arêtes des colonnes stimulées (onde complète motif+réponse) vers la bande 9 — mesure déterministe du niveau des poids"
+    },
+    "typeMesure": "rétention (assets réels, onde gravée complète motif+réponse, 4 cycles) + mesure déterministe des poids",
+    "avant": {
+      "hits": 0,
+      "sep": 0,
+      "top3": 0,
+      "total": 28
+    },
+    "apres": {
+      "hits": 0,
+      "sep": 0,
+      "top3": 0,
+      "total": 28
+    },
+    "noteMesure": "MESURE PRIMAIRE = delta de poids (déterministe — arêtes stimulées→b9, boost lrBoost → 1.0). MESURE SECONDAIRE = résonance (protocole it.94c : 4 cycles, onde complète) — limité structurellement par les collisions (une colonne ne spike que si injection × 0,9 ≥ seuil 1, ~3 % des paires — sondes it.96b/c) ; les it.92/94 ne mesuraient eux-mêmes que 12→29 et 0-5 hits. dominance stricte = b9 #1 de toutes (concurrence b0 999 935 paires, b1 101 138 ondes) ; sepTrained = b9 #1 parmi b2..b9.",
+    "snapshot": "public/neural/cortex-multimodal-it99.bin",
+    "octets": 12582960
+  },
+  "snapshot": "public/neural/cortex-multimodal-it99.bin"
+}
