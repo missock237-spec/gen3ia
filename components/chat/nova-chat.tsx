@@ -61,6 +61,12 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import CarteAutoApprentissage from "@/components/chat/auto-apprentissage-carte";
 import IndicateurMoteur from "@/components/chat/indicateur-moteur";
 import { authFetch } from "@/lib/firebase/auth-client";
+import {
+  fusionnerHistoriqueServeur,
+  messagesDepuisServeur,
+  type DetailConversationServeur,
+  type ConversationServeurMeta,
+} from "@/components/chat/sync-historique";
 import { safeClientTimezone } from "@/lib/domain/conversations/stream-client";
 import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
@@ -903,10 +909,53 @@ export default function NovaChat() {
       setActiveId(actif);
       setEffort(etat.effort);
       setCharge(true);
+      // SYNCHRONISATION SERVEUR DE L'HISTORIQUE (suite repositionnement
+      // Gemini) : pour un utilisateur résolu, la liste serveur (méta, 50
+      // dernières) est fusionnée au cache local — les conversations créées
+      // sur un autre appareil apparaissent dans « Récents » et sont
+      // hydratées à la sélection. CONFIDENTIALITÉ : jamais pour l'invite
+      // (compartiment isolé) ; en cas d'échec réseau, le cache local reste
+      // la vérité affichée.
+      if (uid) {
+        try {
+          const response = await authFetch("/api/workspace/conversations?limit=50");
+          if (annule) return;
+          if (response.ok) {
+            const data = (await response.json().catch(() => ({}))) as {
+              conversations?: ConversationServeurMeta[];
+            };
+            const serveurs = Array.isArray(data.conversations) ? data.conversations : [];
+            if (serveurs.length > 0) {
+              const fusion = fusionnerHistoriqueServeur(
+                convsRef.current,
+                serveurs,
+                idSuivant,
+                Date.now(),
+                CFG.maxConvs,
+              );
+              if (fusion.nouvelles > 0 || fusion.misesAJour > 0) {
+                convsRef.current = fusion.convs;
+                // L'actif local peut avoir été éjecté du plafond : repli sûr.
+                if (!fusion.convs.some((c) => c.id === activeIdRef.current)) {
+                  activeIdRef.current = fusion.convs[0]?.id ?? null;
+                  setActiveId(activeIdRef.current);
+                }
+                setConvs(fusion.convs);
+                sauvegarder();
+              }
+            }
+          }
+        } catch {
+          /* historique serveur indisponible : le cache local reste affiché */
+        }
+      }
     })();
     return () => {
       annule = true;
     };
+    // sauvegarder est stable (useCallback à dépendances vides) : le montage
+    // ne doit s'exécuter qu'une fois, la synchro serveur en fait partie.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ---- ÉCRITURE PROGRESSIVE (tampon lissé) ----
@@ -1551,6 +1600,48 @@ export default function NovaChat() {
   }, [conversationActive, majConvs, sauvegarder]);
 
   /* ---- Conversations : sélection, suppression, renommage, export ---- */
+  /* Hydratation des STUBS multi-appareils (suite repositionnement Gemini) :
+   * une conversation importée de la liste serveur n'a que sa méta (messages
+   * vides) — à la sélection, son détail est récupéré et rempli. Garde
+   * d'idempotence (un seul vol par serverId) et garde anti-écrasement : un
+   * fil local devenu non vide entre-temps (l'utilisateur a écrit) n'est
+   * JAMAIS remplacé. */
+  const hydratationEnCoursRef = React.useRef<Set<string>>(new Set());
+  const hydraterSiStub = React.useCallback(
+    async (id: string) => {
+      const conv = convsRef.current.find((c) => c.id === id);
+      if (!conv?.serverId || conv.messages.length > 0) return;
+      const sid = conv.serverId;
+      if (hydratationEnCoursRef.current.has(sid)) return;
+      hydratationEnCoursRef.current.add(sid);
+      try {
+        const response = await authFetch(`/api/workspace/conversations/${encodeURIComponent(sid)}`);
+        const data = (await response.json().catch(() => ({}))) as DetailConversationServeur;
+        if (!response.ok || !data.conversation) return;
+        const messages = messagesDepuisServeur(data, Date.now(), idSuivant);
+        const actuelle = convsRef.current.find((c) => c.id === id);
+        if (!actuelle || actuelle.messages.length > 0) return; // interaction en cours
+        majConvs(
+          convsRef.current.map((c) =>
+            c.id !== id
+              ? c
+              : {
+                  ...c,
+                  messages: [...messages, ...c.messages],
+                  titre: data.conversation?.title ?? c.titre,
+                },
+          ),
+        );
+        sauvegarder();
+      } catch {
+        /* stub conservé : l'utilisateur peut quand même écrire dans le fil */
+      } finally {
+        hydratationEnCoursRef.current.delete(sid);
+      }
+    },
+    [majConvs, sauvegarder],
+  );
+
   const selectionnerConversation = React.useCallback(
     (id: string) => {
       if (id === activeIdRef.current) {
@@ -1564,10 +1655,11 @@ export default function NovaChat() {
         return [];
       });
       majActiveId(id);
+      void hydraterSiStub(id);
       setSidebarOuverte(false);
       sauvegarder();
     },
-    [majActiveId, sauvegarder, viderFichiers],
+    [hydraterSiStub, majActiveId, sauvegarder, viderFichiers],
   );
 
   /* ---- Recherche globale (LOT 13, it.44) ----
@@ -1637,32 +1729,17 @@ export default function NovaChat() {
         const response = await authFetch(
           `/api/workspace/conversations/${encodeURIComponent(resultat.conversationId)}`,
         );
-        const data = (await response.json().catch(() => ({}))) as {
-          conversation?: { id?: string; title?: string; updatedAt?: string };
-          messages?: Array<{
-            id?: string;
-            role?: string;
-            content?: string;
-            createdAt?: string;
-            model?: string;
-          }>;
-        };
+        const data = (await response.json().catch(() => ({}))) as DetailConversationServeur;
         if (!response.ok || !data.conversation) throw new Error("Conversation introuvable.");
-        // Import fidèle au format local (messages serveur → NovaMessage) ;
-        // le contenu reste l'autorité serveur (même mécanique que /workspace).
+        // Import fidèle au format local (messages serveur → NovaMessage via
+        // le mapping partagé de sync-historique) ; le contenu reste
+        // l'autorité serveur (même mécanique que /workspace).
         const convImportee: NovaConversation = {
           id: idSuivant(),
           serverId: data.conversation.id ?? resultat.conversationId,
           titre: data.conversation.title ?? resultat.title,
           maj: Date.parse(data.conversation.updatedAt ?? "") || Date.now(),
-          messages: (data.messages ?? []).map((m, index) => ({
-            id: m.id ?? `srv-${index}-${idSuivant()}`,
-            serverId: typeof m.id === "string" && !m.id.startsWith("srv-") ? m.id : undefined,
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: String(m.content ?? ""),
-            date: Date.parse(m.createdAt ?? "") || Date.now(),
-            modele: m.model,
-          })),
+          messages: messagesDepuisServeur(data, Date.now(), idSuivant),
         };
         // Anti-doublon : un import concurrent pourrait déjà avoir ajouté la
         // conversation entre-temps (double-clic sur le même résultat).
