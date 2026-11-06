@@ -21,7 +21,9 @@ export const TAILLE_CACHE_MAX = 500;
 export const TTL_CACHE_MS = 10 * 60 * 1000;
 
 /** Entrée de cache : composition + horodatage. La composition est figée au
- *  type exact du moteur (source union fermée) pour préserver le contrat. */
+ *  type exact du moteur (source union fermée) pour préserver le contrat.
+ *  it.114 — les trois sources des compartiments calculables sont ajoutées
+ *  (union miroir de SourceLangage du moteur — import interdit : cycle). */
 interface EntreeCache {
   composition: {
     texte: string;
@@ -32,7 +34,10 @@ interface EntreeCache {
       | "decoder_intention"
       | "pilotage"
       | "connaissances_utilisateur"
-      | "vocation";
+      | "vocation"
+      | "compartiment_math"
+      | "compartiment_monde"
+      | "compartiment_terminal";
     theme?: string;
     scoreAppariement?: number;
     clePair?: string;

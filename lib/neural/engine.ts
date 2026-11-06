@@ -44,6 +44,11 @@ import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 import type { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
 import { predireDomaineLexical } from "./training/domaines";
+// it.114 — COMPARTIMENTS CALCULABLES (demande propriétaire) : quatre organes
+// branchés au cerveau — math, sciences/monde virtuel, code/terminal virtuel,
+// raisonnement — plus la passerelle à IA utilisatrices. Injection de
+// dépendance : absent (tests, intégrations minimales) → comportement inchangé.
+import type { CompartimentsGen3 } from "./compartiments/compartiments";
 
 /** Nombre d'époques de résonance RPIA par tour de chat (latence bornée : chaque époque = O(100) ops). */
 export const EPOQUES_RPIA_CHAT = 12;
@@ -56,7 +61,10 @@ export type SourceLangage =
   | "decoder_intention"
   | "pilotage"
   | "connaissances_utilisateur"
-  | "vocation";
+  | "vocation"
+  | "compartiment_math"
+  | "compartiment_monde"
+  | "compartiment_terminal";
 
 /** Composition finale : texte émis + provenance (traçabilité). */
 export interface CompositionReponse {
@@ -274,6 +282,14 @@ export class NeuralEngine {
      * intégrations minimales) → le moteur tourne comme avant.
      */
     private readonly coucheRPIA?: CoucheOndesNeuronales,
+    /**
+     * it.114 — COMPARTIMENTS CALCULABLES : math (calcul exact connecté au
+     * cerveau), sciences (monde virtuel + passerelle à IA utilisatrices),
+     * code (terminal virtuel sandboxé), raisonnement (orchestrateur qui
+     * analyse → rappelle → évalue → choisit à chaque requête). Absent
+     * (tests existants) → la chaîne historique tourne à l'identique.
+     */
+    private readonly compartiments?: CompartimentsGen3,
   ) {}
 
   /**
@@ -475,6 +491,12 @@ export class NeuralEngine {
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
+      // it.114 — COMPARTIMENTS CALCULABLES : la demande de calcul, de
+      // simulation ou d'exécution reçoit une réponse CALCULÉE par l'organe
+      // du cerveau concerné (preuve, pas récitation) — avant le corpus.
+      // Pour une intention « connaissance », l'orchestrateur renvoie null
+      // et la chaîne historique tourne EXACTEMENT comme avant.
+      this.compositionCompartiments(messageUtilisateur) ??
       // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT : une paire apprise avec
       // un appariement fort répond AVANT le pont vocation (le raisonnement
       // appris bat l'ancrage générique — mesure : appariement exact 5,67).
@@ -594,6 +616,8 @@ export class NeuralEngine {
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
+      // it.114 — COMPARTIMENTS CALCULABLES (même règle que generate).
+      this.compositionCompartiments(messageUtilisateur) ??
       // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT : une paire apprise avec
       // un appariement fort répond AVANT le pont vocation (le raisonnement
       // appris bat l'ancrage générique — mesure : appariement exact 5,67).
@@ -683,6 +707,8 @@ export class NeuralEngine {
     // que les deux chemins principaux (génération et flux).
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
+      // it.114 — COMPARTIMENTS CALCULABLES (même règle que generate).
+      this.compositionCompartiments(messageUtilisateur) ??
       // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT (même règle que generate).
       this.compositionCorpusPrioritaire(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
@@ -732,6 +758,28 @@ export class NeuralEngine {
     for (const canal of this.espace.outputPools.keys()) {
       const score = this.espace.readResonance(spikedNeurones, canal) * poids;
       if (score > (resonances[canal] ?? 0)) resonances[canal] = score;
+    }
+  }
+
+  /**
+   * it.114 — COMPOSITION PAR COMPARTIMENTS CALCULABLES : l'orchestrateur de
+   * raisonnement analyse la requête (calcul / simulation / exécution /
+   * connaissance), sollicite l'organe du cerveau concerné (math, monde
+   * virtuel, terminal virtuel) et — seulement si un compartiment produit
+   * une réponse servable — la renvoie avec sa provenance honnête. Pour une
+   * intention « connaissance » (ou compartiments non câblés), retourne
+   * null : la chaîne historique (corpus → vocation → cortex) répond
+   * EXACTEMENT comme avant — zéro régression structurelle.
+   */
+  private compositionCompartiments(messageUtilisateur: string): CompositionReponse | null {
+    if (!this.compartiments) return null;
+    try {
+      const resultat = this.compartiments.orchestrateur.resoudre(messageUtilisateur);
+      if (!resultat) return null;
+      return { texte: resultat.texte, source: resultat.source };
+    } catch {
+      // Un compartiment en échec ne doit jamais casser la conversation.
+      return null;
     }
   }
 
@@ -1069,6 +1117,8 @@ export class NeuralEngine {
       (knowledgeContext
         ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext)
         : null) ??
+      // it.114 — COMPARTIMENTS CALCULABLES (même règle que generate).
+      this.compositionCompartiments(messageUtilisateur) ??
       // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT (même règle que generate).
       this.compositionCorpusPrioritaire(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur);

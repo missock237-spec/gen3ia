@@ -347,6 +347,20 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/v1/agents-os/daemon",
     "/v1/artefacts/audit",
     "/v1/dispatch",
+    /* it.114 — COMPARTIMENTS CALCULABLES (Job 478451, demande
+     * propriétaire : les organes du cerveau accessibles « via le chat IA
+     * et/ou via l'API ») : clients HORS dépôt — applications des
+     * utilisateurs et IA entraînables externes (session ou Bearer
+     * Firebase) :
+     *  - /compartiments : état des 4 compartiments (GET) et requête
+     *    soumise à l'orchestrateur de raisonnement du cerveau (POST —
+     *    réponse + trace complète du raisonnement).
+     *  - /monde/passerelle : la passerelle d'entraînement du monde
+     *    virtuel pour les IA des utilisateurs (observer → prédire →
+     *    feedback mesuré) — le CONSOMMATEUR naturel est une IA externe,
+     *    par définition hors dépôt. Aucune UI prévue au contrat. */
+    "/compartiments",
+    "/monde/passerelle",
   ],
   /** Endpoints PRÉ-UI (roadmap LOT 6 du plan plateforme) : la LIB et la
    *  porte HTTP sont DÉJÀ construites et vivantes côté agent (tool

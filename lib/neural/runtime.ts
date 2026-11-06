@@ -26,6 +26,10 @@ import { EffecteurGenerationVisuelle } from "./effectors/visual";
 import { EffecteurGenerationVideo } from "./effectors/video";
 import { InterfaceVocaleTelephonique } from "./effectors/voice-phone";
 import { NeuralEngine } from "./engine";
+// it.114 — COMPARTIMENTS CALCULABLES : assemblage des quatre organes du
+// cerveau (math, sciences, code, raisonnement) + passerelle IA utilisateurs.
+import { creerCompartimentsGen3 } from "./compartiments/compartiments";
+import type { CompartimentsGen3 } from "./compartiments/compartiments";
 import {
   loadBrainState,
   deleteBrainState,
@@ -144,6 +148,13 @@ export interface NeuralRuntime {
    * nœud d'onde par neurone (taille = config.size).
    */
   coucheRPIA: CoucheOndesNeuronales;
+  /**
+   * it.114 — COMPARTIMENTS CALCULABLES : les quatre organes branchés au
+   * cerveau (math, sciences/monde virtuel, code/terminal virtuel,
+   * raisonnement) + la passerelle à IA utilisatrices + la mémoire de
+   * domaines (1 Go/compartiment) — câblés au moteur de chat.
+   */
+  compartiments: CompartimentsGen3;
   /** Historique des rapports d'entraînement persistés (données réelles). */
   historiqueEntrainement: TrainingReport[];
   /** Date ISO de création du runtime. */
@@ -429,9 +440,13 @@ export function getNeuralRuntime(): NeuralRuntime {
   //    chaque échange réussi est observé, périodiquement consolidé en
   //    mémoire longue, puis le cerveau est sauvegardé (fire-and-forget).
   const evolution = new MoteurEvolutionGen3(cortex);
+  // it.114 — les compartiments calculables sont câblés au moteur : les
+  // requêtes de calcul / simulation / exécution sont résolues PAR LE CERVEAU
+  // (preuve calculée), le reste suit le chemin historique à l'identique.
+  const compartiments = creerCompartimentsGen3();
   const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
     void sauvegarderCerveauRuntime().catch(() => undefined);
-  }, piloterPlateforme, coucheRPIA);
+  }, piloterPlateforme, coucheRPIA, compartiments);
 
   const runtime: NeuralRuntime = {
     reseau,
@@ -449,6 +464,7 @@ export function getNeuralRuntime(): NeuralRuntime {
     superviseur,
     cortex,
     evolution,
+    compartiments,
     coucheRPIA,
     cortexV2,
     historiqueEntrainement: [],
