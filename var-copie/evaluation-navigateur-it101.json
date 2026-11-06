@@ -1,11 +1,11 @@
 {
-  "date": "2026-11-06T04:32:35.821Z",
-  "dureeMs": 1098,
-  "corpus": 1118,
+  "date": "2026-11-06T05:19:52.459Z",
+  "dureeMs": 1163,
+  "corpus": 1146,
   "memoire": {
-    "globalExact": 1058,
-    "globalTotal": 1118,
-    "tauxExact": 94.63,
+    "globalExact": 1086,
+    "globalTotal": 1146,
+    "tauxExact": 94.76,
     "parGroupe": {
       "base-it84": {
         "exact": 62,
@@ -23,6 +23,11 @@
         "total": 28
       },
       "multimodal-it104": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it105": {
         "exact": 28,
         "servie": 28,
         "total": 28
