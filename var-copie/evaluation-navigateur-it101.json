@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-06T00:19:01.516Z",
+  "dureeMs": 989,
+  "corpus": 1090,
+  "memoire": {
+    "globalExact": 1030,
+    "globalTotal": 1090,
+    "tauxExact": 94.5,
+    "parGroupe": {
+      "base-it84": {
+        "exact": 62,
+        "servie": 62,
+        "total": 62
+      },
+      "corps-domaines": {
+        "exact": 800,
+        "servie": 834,
+        "total": 860
+      },
+      "multimodal-it101": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it95": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it96": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it97": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it98": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it99": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      }
+    }
+  },
+  "generalisation": {
+    "reformulations": 6,
+    "repondues": 6
+  },
+  "assetsIt101": 28
+}
