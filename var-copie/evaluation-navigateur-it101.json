@@ -1,11 +1,11 @@
 {
-  "date": "2026-11-06T12:13:37.408Z",
-  "dureeMs": 1989,
-  "corpus": 1314,
+  "date": "2026-11-06T14:04:08.102Z",
+  "dureeMs": 4590,
+  "corpus": 1346,
   "memoire": {
-    "globalExact": 1254,
-    "globalTotal": 1314,
-    "tauxExact": 95.43,
+    "globalExact": 1286,
+    "globalTotal": 1346,
+    "tauxExact": 95.54,
     "parGroupe": {
       "base-it84": {
         "exact": 62,
@@ -62,6 +62,11 @@
         "servie": 28,
         "total": 28
       },
+      "multimodal-it112": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
       "multimodal-it95": {
         "exact": 28,
         "servie": 28,
@@ -86,12 +91,30 @@
         "exact": 28,
         "servie": 28,
         "total": 28
+      },
+      "recents": {
+        "exact": 4,
+        "servie": 4,
+        "total": 4
       }
     }
   },
   "generalisation": {
     "reformulations": 6,
     "repondues": 6
+  },
+  "reflexion": {
+    "exact": 1287,
+    "servie": 1323,
+    "total": 1346,
+    "tauxExact": 95.62,
+    "gainPrecision": 3,
+    "voies": {
+      "directe": 1320,
+      "normalisee": 3,
+      "racourcie": 0,
+      "echec": 23
+    }
   },
   "assetsIt101": 28
 }

@@ -17,6 +17,7 @@ import { writeFileSync } from "node:fs";
 
 import { CORPUS_GEN3 } from "../lib/neural/generation/corpus";
 import { CortexLangagierGen3 } from "../lib/neural/generation/language";
+import { CortexReflexifGen3 } from "../lib/neural/generation/memoire-reflexion";
 import { ASSETS_MULTIMODAL_IT101, PAIRES_MULTIMODAL_IT101 } from "../lib/neural/generation/multimodal-it101";
 
 const log = (m: string): void => console.log(`[${new Date().toISOString().slice(11, 19)}] ${m}`);
@@ -70,7 +71,30 @@ function main(): void {
   }
   log(`  ${"GLOBAL".padEnd(22)} exact ${exactTotal}/${CORPUS_GEN3.length} (${((exactTotal / CORPUS_GEN3.length) * 100).toFixed(1)} %) · servie ${servieTotal}/${CORPUS_GEN3.length}`);
 
-  // ─── 2. GÉNÉRALISATION (reformulations non apprises telles quelles) ─────
+  // ─── 2 bis. MÉMOIRE DE RÉFLEXION (A/B — cortex FRAIS chacun) ─────────────
+  // Le chemin réflexif commence TOUJOURS par la voie directe : il ne peut
+  // pas servir moins que la base. Le gain se MESURE ici, sur le corpus
+  // entier, avec un cortex frais pour éviter toute contamination d'usage.
+  const cortexReflexe = new CortexLangagierGen3();
+  cortexReflexe.apprendre(CORPUS_GEN3 as never);
+  const reflexif = new CortexReflexifGen3(cortexReflexe);
+  let reflexExact = 0;
+  let reflexServie = 0;
+  // Les voies sont comptées ICI (mémoire globale de la session) — le ring
+  // buffer de la mémoire de réflexion reste borné à 256 entrées par design.
+  const voiesComptees = { directe: 0, normalisee: 0, racourcie: 0, echec: 0 };
+  for (const p of CORPUS_GEN3) {
+    const d = reflexif.reflechir(p.motif);
+    voiesComptees[d.voieElue] += 1;
+    if (d.voieElue !== "echec") reflexServie += 1;
+    if (d.elue.includes(p.reponse.slice(0, 60))) reflexExact += 1;
+  }
+  const gainPrecision = voiesComptees.normalisee + voiesComptees.racourcie;
+  log(
+    `MÉMOIRE DE RÉFLEXION : exact ${reflexExact}/${CORPUS_GEN3.length} (${((reflexExact / CORPUS_GEN3.length) * 100).toFixed(1)} %) · servie ${reflexServie}/${CORPUS_GEN3.length} — gain de précision (rattrapées par normalisée/raccourcie) : ${gainPrecision} · voie rapide : ${voiesComptees.directe}/${CORPUS_GEN3.length} · échec : ${voiesComptees.echec}`,
+  );
+
+  // ─── 3. GÉNÉRALISATION (reformulations non apprises telles quelles) ─────
   // Échantillon raisonné : pour des paires multimodales récentes, on pose la
   // question avec une formulation ALTERNE (casse/espace/ordre) — le cortex
   // doit retrouver la conversation la plus proche ou répondre honnêtement.
@@ -99,6 +123,14 @@ function main(): void {
       parGroupe: Object.fromEntries(Array.from(parGroupe.entries()).sort()),
     },
     generalisation: { reformulations: variantes.length, repondues: retrouvees },
+    reflexion: {
+      exact: reflexExact,
+      servie: reflexServie,
+      total: CORPUS_GEN3.length,
+      tauxExact: Number(((reflexExact / CORPUS_GEN3.length) * 100).toFixed(2)),
+      gainPrecision,
+      voies: voiesComptees,
+    },
     assetsIt101: ASSETS_MULTIMODAL_IT101.length,
   };
   writeFileSync("var/evaluation-navigateur-it101.json", JSON.stringify(rapport, null, 2));
