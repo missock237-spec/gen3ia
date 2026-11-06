@@ -56,6 +56,7 @@ import { PAIRES_MULTIMODAL_IT99 } from "./multimodal-it99";
 import { PAIRES_MULTIMODAL_IT101 } from "./multimodal-it101";
 import { PAIRES_MULTIMODAL_IT104 } from "./multimodal-it104";
 import { PAIRES_MULTIMODAL_IT105 } from "./multimodal-it105";
+import { PAIRES_MULTIMODAL_IT106 } from "./multimodal-it106";
 
 /** Paire conversationnelle apprise par le cortex langagier. */
 export interface PaireLangage {
@@ -944,6 +945,9 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
   // it.105 — fenêtre multimodale réelle suivante (COCO offset 284,
   // FLEURS offset 100) : 28 paires servies par le cortex langagier.
   ...PAIRES_MULTIMODAL_IT105,
+  // it.106 — fenêtre multimodale réelle suivante (COCO offset 304,
+  // FLEURS offset 108) : 28 paires servies par le cortex langagier.
+  ...PAIRES_MULTIMODAL_IT106,
 ];
 
 export const TAILLE_CORPUS_GEN3 = CORPUS_GEN3.length;
