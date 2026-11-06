@@ -1,11 +1,11 @@
 /**
  * CARTE DE MÉMOIRE GEN3 (générée par scripts/genere-carte-memoire.ts —
- * 2026-11-06T14:27:59.698Z — depuis le DISQUE, vérité terrain).
+ * 2026-11-06T16:32:09.463Z — depuis le DISQUE, vérité terrain).
  *
  * Demande propriétaire : « assure-toi qu'il a bien mémorisé où [les datasets]
  * se trouvent dans sa mémoire ». Cette carte est la mémoire d'emplacement :
- * 17 fenêtres d'assets réels (566 fichiers, 102.36 Mo)
- * + 15 snapshots SNN cumulatifs (dernier : cortex-multimodal-it112.bin, 12.58 Mo).
+ * 18 fenêtres d'assets réels (594 fichiers, 110.23 Mo)
+ * + 16 snapshots SNN cumulatifs (dernier : cortex-multimodal-it113.bin, 12.58 Mo).
  */
 export interface FenetreMemoire {
   readonly fenetre: string;
@@ -37,13 +37,14 @@ export const CARTE_MEMOIRE: readonly FenetreMemoire[] = [
   { fenetre: "it.110", chemin: "/multimodal-it110/", images: 20, audios: 8, videos: 0, assets: 28, octets: 6412298, snapshot: "/neural/cortex-multimodal-it110.bin", snapshotOctets: 12582960 },
   { fenetre: "it.111", chemin: "/multimodal-it111/", images: 20, audios: 8, videos: 0, assets: 28, octets: 5186714, snapshot: "/neural/cortex-multimodal-it111.bin", snapshotOctets: 12582960 },
   { fenetre: "it.112", chemin: "/multimodal-it112/", images: 20, audios: 8, videos: 0, assets: 28, octets: 6601898, snapshot: "/neural/cortex-multimodal-it112.bin", snapshotOctets: 12582960 },
+  { fenetre: "it.113", chemin: "/multimodal-it113/", images: 20, audios: 8, videos: 0, assets: 28, octets: 7872382, snapshot: "/neural/cortex-multimodal-it113.bin", snapshotOctets: 12582960 },
 ];
 
-export const DERNIER_SNAPSHOT = { fichier: "/neural/cortex-multimodal-it112.bin", octets: 12582960 } as const;
+export const DERNIER_SNAPSHOT = { fichier: "/neural/cortex-multimodal-it113.bin", octets: 12582960 } as const;
 
 export const PAIRES_CARTE_MEMOIRE: readonly { motif: string; reponse: string; theme: string }[] = [
-  { motif: "Où sont stockés les assets multimodaux de gen3 ?", reponse: "Ma carte de mémoire enregistre 17 fenêtres d'assets réels, soit 566 fichiers (102.36 Mo), servis publiquement dans /multimodal-it90/, /multimodal-it94/, /multimodal-it95/, /multimodal-it96/, /multimodal-it97/, /multimodal-it98/, /multimodal-it99/, /multimodal-it101/, /multimodal-it104/, /multimodal-it105/, /multimodal-it106/, /multimodal-it107/, /multimodal-it108/, /multimodal-it109/, /multimodal-it110/, /multimodal-it111/, /multimodal-it112/. Les fenêtres récentes (it.95 → it.112) contiennent chacune 28 assets : 20 images COCO-2017 annotées + 8 audios de parole française FLEURS. Chaque asset a son identifiant kmNN_ câblé dans mon corpus : demande-moi « Que contient l'image km112_image_000 ? » et je réponds avec l'empreinte sha256 du fichier réel.", theme: "memoire-emplacement" },
-  { motif: "Où se trouve la mémoire gravée de gen3 ?", reponse: "Ma mémoire gravée (cortex SNN, bandes 0 à 9) est exportée en 15 snapshots cumulatifs servis depuis /neural/ : de cortex-multimodal-it96.bin à cortex-multimodal-it112.bin (12.58 Mo chacun). Chaque itération grave 2 016 ondes sur la bande 9 multimodale depuis le snapshot précédent — le dernier en date est /neural/cortex-multimodal-it112.bin.", theme: "memoire-emplacement" },
-  { motif: "Où sont servis les fichiers de la fenêtre it.112 ?", reponse: "La fenêtre it.112 réside dans public/multimodal-it112/ : 20 images (COCO-2017) et 8 audios (FLEURS fr_fr), 6.60 Mo mesurés sur le disque — servis à /multimodal-it112/images/ et /multimodal-it112/audio/. Le snapshot SNN associé est /neural/cortex-multimodal-it112.bin (12.58 Mo).", theme: "memoire-emplacement" },
-  { motif: "Quelle est la taille de la mémoire multimodale de gen3 ?", reponse: "Mesuré sur le disque : 566 assets multimodaux réels pour 102.36 Mo au total, répartis en 17 fenêtres (de it.90 à it.112), plus 15 snapshots SNN de 12.58 Mo chacun — soit une mémoire gravée d'environ 188.74 Mo au total. Aucun chiffre inventé : ma carte de mémoire est régénérée depuis le disque à chaque itération.", theme: "memoire-emplacement" },
+  { motif: "Où sont stockés les assets multimodaux de gen3 ?", reponse: "Ma carte de mémoire enregistre 18 fenêtres d'assets réels, soit 594 fichiers (110.23 Mo), servis publiquement dans /multimodal-it90/, /multimodal-it94/, /multimodal-it95/, /multimodal-it96/, /multimodal-it97/, /multimodal-it98/, /multimodal-it99/, /multimodal-it101/, /multimodal-it104/, /multimodal-it105/, /multimodal-it106/, /multimodal-it107/, /multimodal-it108/, /multimodal-it109/, /multimodal-it110/, /multimodal-it111/, /multimodal-it112/, /multimodal-it113/. Les fenêtres récentes (it.95 → it.113) contiennent chacune 28 assets : 20 images COCO-2017 annotées + 8 audios de parole française FLEURS. Chaque asset a son identifiant kmNN_ câblé dans mon corpus : demande-moi « Que contient l'image km113_image_000 ? » et je réponds avec l'empreinte sha256 du fichier réel.", theme: "memoire-emplacement" },
+  { motif: "Où se trouve la mémoire gravée de gen3 ?", reponse: "Ma mémoire gravée (cortex SNN, bandes 0 à 9) est exportée en 16 snapshots cumulatifs servis depuis /neural/ : de cortex-multimodal-it96.bin à cortex-multimodal-it113.bin (12.58 Mo chacun). Chaque itération grave 2 016 ondes sur la bande 9 multimodale depuis le snapshot précédent — le dernier en date est /neural/cortex-multimodal-it113.bin.", theme: "memoire-emplacement" },
+  { motif: "Où sont servis les fichiers de la fenêtre it.113 ?", reponse: "La fenêtre it.113 réside dans public/multimodal-it113/ : 20 images (COCO-2017) et 8 audios (FLEURS fr_fr), 7.87 Mo mesurés sur le disque — servis à /multimodal-it113/images/ et /multimodal-it113/audio/. Le snapshot SNN associé est /neural/cortex-multimodal-it113.bin (12.58 Mo).", theme: "memoire-emplacement" },
+  { motif: "Quelle est la taille de la mémoire multimodale de gen3 ?", reponse: "Mesuré sur le disque : 594 assets multimodaux réels pour 110.23 Mo au total, répartis en 18 fenêtres (de it.90 à it.113), plus 16 snapshots SNN de 12.58 Mo chacun — soit une mémoire gravée d'environ 201.33 Mo au total. Aucun chiffre inventé : ma carte de mémoire est régénérée depuis le disque à chaque itération.", theme: "memoire-emplacement" },
 ];

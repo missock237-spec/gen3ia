@@ -20,6 +20,19 @@
  * donc jamais être inférieur à celui du cortex seul (vérifié par la garde).
  * La mesure A/B honnête (cortex frais chacun) vit dans l'évaluation
  * navigateur : base (direct) vs réflexif (délibération).
+ *
+ * it.113 — MÉMOIRE DE DOMAINES CÂBLÉE (demande propriétaire : « une mémoire
+ * de réflexion qui lui donne des choix et réfléchir... pouvoir évoluer à
+ * mesure qu'il reçoit des données via le chat IA et/ou l'API ») :
+ *   - chaque délibération inscrit le DOMAINE DÉTECTÉ de la requête
+ *     (classifieur honnête de la mémoire de domaines) — le raisonnement
+ *     devient traçable domaine par domaine ;
+ *   - VOIE « MÉMORISÉE » (dernier recours, seulement si les trois voies
+ *     échouent) : replay du meilleur enseignement ingéré via chat/API
+ *     (recouvrement de tokens, seuil documenté) — gen3 évolue à chaque
+ *     échange et peut répondre depuis ce qu'on lui a enseigné. Sans
+ *     mémoire de domaines câblée, le comportement reste EXACTEMENT celui
+ *     d'it.112 (les tests de non-régression couvrent les deux cas).
  */
 import {
   type ContexteLangage,
@@ -27,7 +40,14 @@ import {
   type ReponseLangage,
 } from "./language";
 
-export type VoieReflexion = "directe" | "normalisee" | "racourcie";
+export type VoieReflexion = "directe" | "normalisee" | "racourcie" | "memorisee";
+
+/** Contrat structural (typage en canard) — satisfait par MemoireDomainesGen3
+ * sans dépendance d'import (évite tout cycle de modules). */
+export interface SourceMemoireDomaines {
+  identifieDomaine(motif: string): string | null;
+  repondreIngestion(motif: string): string | null;
+}
 
 export interface CandidatReflexion {
   readonly voie: VoieReflexion;
@@ -38,6 +58,8 @@ export interface CandidatReflexion {
 
 export interface Deliberation {
   readonly motif: string;
+  /** Domaine détecté de la requête (heuristique mots-clés) — null si inconnu. */
+  readonly domaine: string | null;
   /** La voie retenue — "echec" si aucune voie n'a servi. */
   readonly voieElue: VoieReflexion | "echec";
   /** Nombre d'appels réels au cortex (1 = voie rapide, ≥ 2 = réflexion). */
@@ -81,13 +103,18 @@ export function requeteRaccourcie(motif: string): string {
 export class CortexReflexifGen3 {
   private readonly memoire: Deliberation[] = [];
 
-  constructor(private readonly cortex: CortexLangagierGen3) {}
+  constructor(
+    private readonly cortex: CortexLangagierGen3,
+    private readonly memoireDomaines?: SourceMemoireDomaines,
+  ) {}
 
   /**
-   * DÉLIBÉRATION : essaie les voies dans l'ordre (rapide → précises),
-   * s'arrête au premier choix servable, inscrit la délibération en mémoire.
+   * DÉLIBÉRATION : essaie les voies dans l'ordre (rapide → précises →
+   * mémorisée), s'arrête au premier choix servable, inscrit la délibération
+   * en mémoire AVEC le domaine détecté.
    */
   reflechir(motif: string, contexte: ContexteLangage = {}): Deliberation {
+    const domaineDetecte = this.memoireDomaines?.identifieDomaine(motif) ?? null;
     const candidats: CandidatReflexion[] = [];
     let elue = "";
     let voieElue: VoieReflexion | "echec" = "echec";
@@ -109,8 +136,21 @@ export class CortexReflexifGen3 {
         break;
       }
     }
+    // VOIE « MÉMORISÉE » (dernier recours) : replay d'un enseignement ingéré
+    // via chat/API — seulement si TOUTES les autres voies ont échoué (la
+    // non-régression est intacte : cette voie ne peut qu'augmenter le service).
+    if (voieElue === "echec" && this.memoireDomaines) {
+      const reprise = this.memoireDomaines.repondreIngestion(motif);
+      if (reprise !== null && reprise.length > TAILLE_MIN_REPONSE) {
+        essais += 1;
+        voieElue = "memorisee";
+        elue = reprise;
+        candidats.push({ voie: "memorisee", requete: motif, servie: true, texte: reprise });
+      }
+    }
     const deliberation: Deliberation = {
       motif,
+      domaine: domaineDetecte,
       voieElue,
       essais,
       candidats,
@@ -124,10 +164,17 @@ export class CortexReflexifGen3 {
     return deliberation;
   }
 
-  /** Contrat compatible repondre() — le texte élu, ou null si échec. */
+  /** Contrat compatible repondre() — le texte élu, ou null si échec.
+   * La voie « mémorisée » restitue l'enseignement ingéré (source réelle). */
   repondre(motif: string, contexte: ContexteLangage = {}): ReponseLangage | null {
     const d = this.reflechir(motif, contexte);
     if (d.voieElue === "echec") return null;
+    if (d.voieElue === "memorisee") {
+      // L'enseignement provient de l'ingestion (chat/API) — on le restitue
+      // avec la provenance réelle du candidat élu (pas de métrique fabriquée).
+      const texte = d.candidats.find((c) => c.voie === "memorisee")!.texte;
+      return { texte, theme: "memoire-domaines", score: 1, source: "personnalisee" };
+    }
     // La réponse élee PROVIENT du cortex — on restitue sa réponse complète
     // (score/source réels du candidat élu, pas de métrique fabriquée).
     return this.cortex.repondre(d.candidats.find((c) => c.voie === d.voieElue)!.requete, contexte);
@@ -158,6 +205,7 @@ export class CortexReflexifGen3 {
       directe: 0,
       normalisee: 0,
       racourcie: 0,
+      memorisee: 0,
       echec: 0,
     };
     let servies = 0;

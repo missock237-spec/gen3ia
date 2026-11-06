@@ -82,7 +82,9 @@ function main(): void {
   let reflexServie = 0;
   // Les voies sont comptées ICI (mémoire globale de la session) — le ring
   // buffer de la mémoire de réflexion reste borné à 256 entrées par design.
-  const voiesComptees = { directe: 0, normalisee: 0, racourcie: 0, echec: 0 };
+  // it.113 : voie « memorisee » = replay des enseignements chat/API (nécessite
+  // une mémoire de domaines câblée — absente ici, donc toujours 0 dans ce rapport).
+  const voiesComptees = { directe: 0, normalisee: 0, racourcie: 0, memorisee: 0, echec: 0 };
   for (const p of CORPUS_GEN3) {
     const d = reflexif.reflechir(p.motif);
     voiesComptees[d.voieElue] += 1;

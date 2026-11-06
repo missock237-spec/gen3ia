@@ -1,11 +1,11 @@
 {
-  "date": "2026-11-06T14:04:08.102Z",
-  "dureeMs": 4590,
-  "corpus": 1346,
+  "date": "2026-11-06T16:49:41.003Z",
+  "dureeMs": 4898,
+  "corpus": 1384,
   "memoire": {
-    "globalExact": 1286,
-    "globalTotal": 1346,
-    "tauxExact": 95.54,
+    "globalExact": 1324,
+    "globalTotal": 1384,
+    "tauxExact": 95.66,
     "parGroupe": {
       "base-it84": {
         "exact": 62,
@@ -67,6 +67,11 @@
         "servie": 28,
         "total": 28
       },
+      "multimodal-it113": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
       "multimodal-it95": {
         "exact": 28,
         "servie": 28,
@@ -93,9 +98,9 @@
         "total": 28
       },
       "recents": {
-        "exact": 4,
-        "servie": 4,
-        "total": 4
+        "exact": 14,
+        "servie": 14,
+        "total": 14
       }
     }
   },
@@ -104,15 +109,16 @@
     "repondues": 6
   },
   "reflexion": {
-    "exact": 1287,
-    "servie": 1323,
-    "total": 1346,
-    "tauxExact": 95.62,
+    "exact": 1325,
+    "servie": 1361,
+    "total": 1384,
+    "tauxExact": 95.74,
     "gainPrecision": 3,
     "voies": {
-      "directe": 1320,
+      "directe": 1358,
       "normalisee": 3,
       "racourcie": 0,
+      "memorisee": 0,
       "echec": 23
     }
   },

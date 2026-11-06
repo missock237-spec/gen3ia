@@ -75,10 +75,19 @@ import { PAIRES_MULTIMODAL_IT111 } from "./multimodal-it111";
 // offset 424, FLEURS fr_fr offset 156, UCF101 épuisée — preuve du zéro
 // refaite) : 28 assets réels mesurés, 28 paires id↔légende/transcription.
 import { PAIRES_MULTIMODAL_IT112 } from "./multimodal-it112";
+// it.113 — fenêtre multimodale réelle SUIVANTE (COCO-2017 offset 444, FLEURS
+// fr_fr offset 164, UCF101 épuisée — preuve du zéro) : 28 assets réels
+// mesurés, 28 paires id↔légende/transcription servies.
+import { PAIRES_MULTIMODAL_IT113 } from "./multimodal-it113";
 // Carte de mémoire d'emplacement (demande propriétaire : « assure-toi qu'il
 // a bien mémorisé où [les datasets] se trouvent dans sa mémoire ») — paires
 // générées depuis le disque (vérité terrain), régénérées à chaque itération.
 import { PAIRES_CARTE_MEMOIRE } from "./carte-memoire";
+// it.113 — MÉMOIRE DE DOMAINES (demande propriétaire : « 1 Go de données et
+// de datasets par domaine et par capacité... pouvoir évoluer à mesure qu'il
+// reçoit des données via le chat IA ou l'API ») — paires générées depuis les
+// mesures disque + registre HF/Kaggle (nombres mesurés, pas inventés).
+import { PAIRES_MEMOIRE_DOMAINES } from "./memoire-domaines-donnees";
 
 /** Paire conversationnelle apprise par le cortex langagier. */
 export interface PaireLangage {
@@ -988,9 +997,16 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
   // it.112 — fenêtre multimodale réelle suivante (COCO offset 424,
   // FLEURS offset 156) : 28 paires servies par le cortex langagier.
   ...PAIRES_MULTIMODAL_IT112,
+  // it.113 — fenêtre multimodale réelle suivante (COCO offset 444,
+  // FLEURS offset 164) : 28 paires servies par le cortex langagier.
+  ...PAIRES_MULTIMODAL_IT113,
   // Carte de mémoire d'emplacement : où vivent les datasets et la mémoire
   // gravée (4 paires générées depuis le disque).
   ...PAIRES_CARTE_MEMOIRE,
+  // it.113 — mémoire de domaines 1 Go par domaine × capacité : registre
+  // sources HF/Kaggle, comptabilité physique mesurée, expansion déterministe
+  // calculée, ingestion chat/API (10 paires générées depuis les mesures).
+  ...PAIRES_MEMOIRE_DOMAINES,
 ];
 
 export const TAILLE_CORPUS_GEN3 = CORPUS_GEN3.length;
