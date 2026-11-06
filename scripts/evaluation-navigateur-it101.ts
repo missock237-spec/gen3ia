@@ -53,8 +53,14 @@ function main(): void {
     const agg = parGroupe.get(g) ?? { exact: 0, servie: 0, total: 0 };
     agg.total += 1;
     if (r) {
-      if (r.texte.length > 20) servieTotal += 1, (agg.servie += 1);
-      if (r.texte.includes(p.reponse.slice(0, 60))) exactTotal += 1, (agg.exact += 1);
+      if (r.texte.length > 20) {
+        servieTotal += 1;
+        agg.servie += 1;
+      }
+      if (r.texte.includes(p.reponse.slice(0, 60))) {
+        exactTotal += 1;
+        agg.exact += 1;
+      }
     }
     parGroupe.set(g, agg);
   }
@@ -62,7 +68,7 @@ function main(): void {
   for (const [g, a] of Array.from(parGroupe.entries()).sort()) {
     log(`  ${g.padEnd(22)} exact ${a.exact}/${a.total} (${((a.exact / a.total) * 100).toFixed(1)} %) · servie ${a.servie}/${a.total}`);
   }
-  log(`  ${"GLOBAL".padEnd(22)} exact ${exactTotal}/${CORPUS_GEN3.length} (${((exactTotal / CORPUS_GEN3.length) * 100).toFixed(1)} %)`);
+  log(`  ${"GLOBAL".padEnd(22)} exact ${exactTotal}/${CORPUS_GEN3.length} (${((exactTotal / CORPUS_GEN3.length) * 100).toFixed(1)} %) · servie ${servieTotal}/${CORPUS_GEN3.length}`);
 
   // ─── 2. GÉNÉRALISATION (reformulations non apprises telles quelles) ─────
   // Échantillon raisonné : pour des paires multimodales récentes, on pose la
