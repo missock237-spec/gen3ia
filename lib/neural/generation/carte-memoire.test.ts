@@ -18,13 +18,13 @@ import {
 import { CortexLangagierGen3 } from "./language";
 
 describe("carte-memoire — où vivent les datasets et la mémoire gravée", () => {
-  it("énumère les fenêtres réelles, triées, la dernière étant it.122", () => {
-    expect(CARTE_MEMOIRE.length).toBeGreaterThanOrEqual(26);
+  it("énumère les fenêtres réelles, triées, la dernière étant it.123", () => {
+    expect(CARTE_MEMOIRE.length).toBeGreaterThanOrEqual(27);
     const numeros = CARTE_MEMOIRE.map((f) => Number(f.fenetre.slice(3)));
     for (let i = 1; i < numeros.length; i++) {
       expect(numeros[i]!).toBeGreaterThan(numeros[i - 1]!);
     }
-    expect(CARTE_MEMOIRE[CARTE_MEMOIRE.length - 1]!.fenetre).toBe("it.122");
+    expect(CARTE_MEMOIRE[CARTE_MEMOIRE.length - 1]!.fenetre).toBe("it.123");
   });
 
   it("zéro fantôme : chaque chemin existe sur le disque avec ses comptes mesurés", () => {
@@ -51,8 +51,8 @@ describe("carte-memoire — où vivent les datasets et la mémoire gravée", () 
     }
   });
 
-  it("dernier snapshot = it.122, présent, taille mesurée sur le disque", () => {
-    expect(DERNIER_SNAPSHOT.fichier).toBe("/neural/cortex-multimodal-it122.bin");
+  it("dernier snapshot = it.123, présent, taille mesurée sur le disque", () => {
+    expect(DERNIER_SNAPSHOT.fichier).toBe("/neural/cortex-multimodal-it123.bin");
     const fichier = join("public", DERNIER_SNAPSHOT.fichier);
     expect(existsSync(fichier)).toBe(true);
     expect(DERNIER_SNAPSHOT.octets).toBe(statSync(fichier).size);
