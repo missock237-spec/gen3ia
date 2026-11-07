@@ -1,11 +1,11 @@
 /**
  * CARTE DE MÉMOIRE GEN3 (générée par scripts/genere-carte-memoire.ts —
- * 2026-11-07T10:14:39.308Z — depuis le DISQUE, vérité terrain).
+ * 2026-11-07T12:13:54.675Z — depuis le DISQUE, vérité terrain).
  *
  * Demande propriétaire : « assure-toi qu'il a bien mémorisé où [les datasets]
  * se trouvent dans sa mémoire ». Cette carte est la mémoire d'emplacement :
- * 25 fenêtres d'assets réels (790 fichiers, 154.65 Mo)
- * + 23 snapshots SNN cumulatifs (dernier : cortex-multimodal-it121.bin, 12.58 Mo).
+ * 26 fenêtres d'assets réels (818 fichiers, 159.47 Mo)
+ * + 24 snapshots SNN cumulatifs (dernier : cortex-multimodal-it122.bin, 12.58 Mo).
  */
 export interface FenetreMemoire {
   readonly fenetre: string;
@@ -45,13 +45,14 @@ export const CARTE_MEMOIRE: readonly FenetreMemoire[] = [
   { fenetre: "it.119", chemin: "/multimodal-it119/", images: 20, audios: 8, videos: 0, assets: 28, octets: 7738129, snapshot: "/neural/cortex-multimodal-it119.bin", snapshotOctets: 12582960 },
   { fenetre: "it.120", chemin: "/multimodal-it120/", images: 20, audios: 8, videos: 0, assets: 28, octets: 5842169, snapshot: "/neural/cortex-multimodal-it120.bin", snapshotOctets: 12582960 },
   { fenetre: "it.121", chemin: "/multimodal-it121/", images: 20, audios: 8, videos: 0, assets: 28, octets: 5331893, snapshot: "/neural/cortex-multimodal-it121.bin", snapshotOctets: 12582960 },
+  { fenetre: "it.122", chemin: "/multimodal-it122/", images: 20, audios: 8, videos: 0, assets: 28, octets: 4813593, snapshot: "/neural/cortex-multimodal-it122.bin", snapshotOctets: 12582960 },
 ];
 
-export const DERNIER_SNAPSHOT = { fichier: "/neural/cortex-multimodal-it121.bin", octets: 12582960 } as const;
+export const DERNIER_SNAPSHOT = { fichier: "/neural/cortex-multimodal-it122.bin", octets: 12582960 } as const;
 
 export const PAIRES_CARTE_MEMOIRE: readonly { motif: string; reponse: string; theme: string }[] = [
-  { motif: "Où sont stockés les assets multimodaux de gen3 ?", reponse: "Ma carte de mémoire enregistre 25 fenêtres d'assets réels, soit 790 fichiers (154.65 Mo), servis publiquement dans /multimodal-it90/, /multimodal-it94/, /multimodal-it95/, /multimodal-it96/, /multimodal-it97/, /multimodal-it98/, /multimodal-it99/, /multimodal-it101/, /multimodal-it104/, /multimodal-it105/, /multimodal-it106/, /multimodal-it107/, /multimodal-it108/, /multimodal-it109/, /multimodal-it110/, /multimodal-it111/, /multimodal-it112/, /multimodal-it113/, /multimodal-it115/, /multimodal-it116/, /multimodal-it117/, /multimodal-it118/, /multimodal-it119/, /multimodal-it120/, /multimodal-it121/. Les fenêtres récentes (it.95 → it.121) contiennent chacune 28 assets : 20 images COCO-2017 annotées + 8 audios de parole française FLEURS. Chaque asset a son identifiant kmNN_ câblé dans mon corpus : demande-moi « Que contient l'image km121_image_000 ? » et je réponds avec l'empreinte sha256 du fichier réel.", theme: "memoire-emplacement" },
-  { motif: "Où se trouve la mémoire gravée de gen3 ?", reponse: "Ma mémoire gravée (cortex SNN, bandes 0 à 9) est exportée en 23 snapshots cumulatifs servis depuis /neural/ : de cortex-multimodal-it96.bin à cortex-multimodal-it121.bin (12.58 Mo chacun). Chaque itération grave 2 016 ondes sur la bande 9 multimodale depuis le snapshot précédent — le dernier en date est /neural/cortex-multimodal-it121.bin.", theme: "memoire-emplacement" },
-  { motif: "Où sont servis les fichiers de la fenêtre it.121 ?", reponse: "La fenêtre it.121 réside dans public/multimodal-it121/ : 20 images (COCO-2017) et 8 audios (FLEURS fr_fr), 5.33 Mo mesurés sur le disque — servis à /multimodal-it121/images/ et /multimodal-it121/audio/. Le snapshot SNN associé est /neural/cortex-multimodal-it121.bin (12.58 Mo).", theme: "memoire-emplacement" },
-  { motif: "Quelle est la taille de la mémoire multimodale de gen3 ?", reponse: "Mesuré sur le disque : 790 assets multimodaux réels pour 154.65 Mo au total, répartis en 25 fenêtres (de it.90 à it.121), plus 23 snapshots SNN de 12.58 Mo chacun — soit une mémoire gravée d'environ 289.41 Mo au total. Aucun chiffre inventé : ma carte de mémoire est régénérée depuis le disque à chaque itération.", theme: "memoire-emplacement" },
+  { motif: "Où sont stockés les assets multimodaux de gen3 ?", reponse: "Ma carte de mémoire enregistre 26 fenêtres d'assets réels, soit 818 fichiers (159.47 Mo), servis publiquement dans /multimodal-it90/, /multimodal-it94/, /multimodal-it95/, /multimodal-it96/, /multimodal-it97/, /multimodal-it98/, /multimodal-it99/, /multimodal-it101/, /multimodal-it104/, /multimodal-it105/, /multimodal-it106/, /multimodal-it107/, /multimodal-it108/, /multimodal-it109/, /multimodal-it110/, /multimodal-it111/, /multimodal-it112/, /multimodal-it113/, /multimodal-it115/, /multimodal-it116/, /multimodal-it117/, /multimodal-it118/, /multimodal-it119/, /multimodal-it120/, /multimodal-it121/, /multimodal-it122/. Les fenêtres récentes (it.95 → it.122) contiennent chacune 28 assets : 20 images COCO-2017 annotées + 8 audios de parole française FLEURS. Chaque asset a son identifiant kmNN_ câblé dans mon corpus : demande-moi « Que contient l'image km122_image_000 ? » et je réponds avec l'empreinte sha256 du fichier réel.", theme: "memoire-emplacement" },
+  { motif: "Où se trouve la mémoire gravée de gen3 ?", reponse: "Ma mémoire gravée (cortex SNN, bandes 0 à 9) est exportée en 24 snapshots cumulatifs servis depuis /neural/ : de cortex-multimodal-it96.bin à cortex-multimodal-it122.bin (12.58 Mo chacun). Chaque itération grave 2 016 ondes sur la bande 9 multimodale depuis le snapshot précédent — le dernier en date est /neural/cortex-multimodal-it122.bin.", theme: "memoire-emplacement" },
+  { motif: "Où sont servis les fichiers de la fenêtre it.122 ?", reponse: "La fenêtre it.122 réside dans public/multimodal-it122/ : 20 images (COCO-2017) et 8 audios (FLEURS fr_fr), 4.81 Mo mesurés sur le disque — servis à /multimodal-it122/images/ et /multimodal-it122/audio/. Le snapshot SNN associé est /neural/cortex-multimodal-it122.bin (12.58 Mo).", theme: "memoire-emplacement" },
+  { motif: "Quelle est la taille de la mémoire multimodale de gen3 ?", reponse: "Mesuré sur le disque : 818 assets multimodaux réels pour 159.47 Mo au total, répartis en 26 fenêtres (de it.90 à it.122), plus 24 snapshots SNN de 12.58 Mo chacun — soit une mémoire gravée d'environ 301.99 Mo au total. Aucun chiffre inventé : ma carte de mémoire est régénérée depuis le disque à chaque itération.", theme: "memoire-emplacement" },
 ];
