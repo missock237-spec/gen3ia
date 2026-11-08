@@ -31,8 +31,8 @@ import {
   EntrainementParResonance,
   type ResultatRound,
 } from "@/lib/ondes/arene";
-import { CORPUS_GEN3 } from "@/lib/neural/generation/corpus";
 import { CortexLangagierGen3, type EtatLangage } from "@/lib/neural/generation/language";
+import type { PaireLangage } from "@/lib/neural/generation/corpus";
 import { DUREE_MAX_ENTRAINEMENT_MS } from "@/lib/training/timebox";
 import { cx } from "@/lib/ui/cx";
 
@@ -124,6 +124,19 @@ export default function AreneOndes() {
   const entrainementRef = useRef<EntrainementParResonance | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const annuleRef = useRef(false);
+  // Corpus chargé paresseusement (import dynamique) : la fenêtre it.134 a
+  // porté CORPUS_GEN3 à 1941 paires et l'import statique faisait dépasser
+  // le budget First Load JS à /arene (242 kB gzip > 240 kB FAIL). Le chunk
+  // du corpus devient async — hors manifeste des chunks initiaux.
+  const corpusRef = useRef<readonly PaireLangage[] | null>(null);
+  const demarrageRef = useRef(false);
+
+  const chargerCorpus = useCallback(async (): Promise<readonly PaireLangage[]> => {
+    if (corpusRef.current) return corpusRef.current;
+    const mod = await import("@/lib/neural/generation/corpus");
+    corpusRef.current = mod.CORPUS_GEN3;
+    return corpusRef.current;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -182,19 +195,23 @@ export default function AreneOndes() {
 
   /* --------------------------- Session ------------------------------- */
 
-  const lancerSession = useCallback(() => {
-    if (enCours) return;
+  const lancerSession = useCallback(async () => {
+    if (enCours || demarrageRef.current) return;
+    demarrageRef.current = true;
+    try {
+      const corpus = await chargerCorpus();
+      if (enCours) return; // re-vérifié après l'attente (double-clic)
 
     // — Participants (tous locaux, aucun LLM externe) —
     const prof = new CortexLangagierGen3();
-    prof.apprendre(CORPUS_GEN3);
+    prof.apprendre(corpus);
     if (mode === "duel" && etatProfImporte) prof.importerEtat(etatProfImporte);
 
     const eleve = new CortexLangagierGen3();
-    eleve.apprendre(CORPUS_GEN3);
+    eleve.apprendre(corpus);
     if (profilEleve === "amnesique") {
-      for (let i = 0; i < CORPUS_GEN3.length; i++) {
-        if (i % 4 === 0) eleve.reeducer(CORPUS_GEN3[i].motif, "Je ne sais pas encore.", CORPUS_GEN3[i].theme);
+      for (let i = 0; i < corpus.length; i++) {
+        if (i % 4 === 0) eleve.reeducer(corpus[i]!.motif, "Je ne sais pas encore.", corpus[i]!.theme);
       }
     }
     if (profilEleve === "vierge") eleve.oublierPersonnalisees();
@@ -206,7 +223,7 @@ export default function AreneOndes() {
     // — Questions : motifs importés d'abord, puis le corpus —
     const motifs: string[] = [];
     if (etatEleveImporte) motifs.push(...etatEleveImporte.pairesPersonnalisees.map((p) => p.motif));
-    motifs.push(...CORPUS_GEN3.map((p) => p.motif));
+    motifs.push(...corpus.map((p) => p.motif));
     const questions = [...new Set(motifs)].slice(0, Math.max(1, roundsMax));
 
     setEnCours(true);
@@ -214,7 +231,6 @@ export default function AreneOndes() {
     setRoundCourant(0);
     setExportDisponible(false);
     setMessage("");
-
     const observateur = (a: Float32Array, b: Float32Array): void => {
       if (canvasProfRef.current) dessinerChamp(canvasProfRef.current, a, DIM_ARENE, "violet");
       if (canvasEleveRef.current) dessinerChamp(canvasEleveRef.current, b, DIM_ARENE, "cyan");
@@ -246,7 +262,10 @@ export default function AreneOndes() {
       timerRef.current = setTimeout(etapeSuivante, 30);
     };
     etapeSuivante();
-  }, [enCours, mode, profilEleve, roundsMax, etatEleveImporte, etatProfImporte]);
+    } finally {
+      demarrageRef.current = false;
+    }
+  }, [enCours, mode, profilEleve, roundsMax, etatEleveImporte, etatProfImporte, chargerCorpus]);
 
   const arreterSession = useCallback(() => {
     annuleRef.current = true;
@@ -410,7 +429,7 @@ export default function AreneOndes() {
               <input type="range" min={5} max={60} value={roundsMax} onChange={(e) => setRoundsMax(Number(e.target.value))} disabled={enCours} />
             </label>
             <div className="arene-boutons">
-              <button type="button" className="arene-bouton arene-bouton-lancer" onClick={lancerSession} disabled={enCours}>
+              <button type="button" className="arene-bouton arene-bouton-lancer" onClick={() => void lancerSession()} disabled={enCours}>
                 {enCours ? `Round ${roundCourant}…` : "Lancer l'arène"}
               </button>
               {enCours ? (
