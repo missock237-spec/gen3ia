@@ -35,14 +35,21 @@ jobs:
           restore-keys: |
             nextjs-${{ runner.os }}-
 
-      # Résilience CDN : les postinstall ffmpeg-static/onnxruntime-node
-      # téléchargent depuis GitHub Releases, sujet aux brownouts (504 —
-      # constat it.133, 09:00-09:30 UTC). 5 tentatives espacées : ne masque
-      # aucun échec de code (les steps suivants échouent toujours franc).
-      - name: Install dependencies (5 tentatives — brownouts CDN GitHub Releases)
+      # ─── Postinstall EXPRÈS ignorés (--ignore-scripts) ────────────
+      # Les binaires critiques sont embarqués dans les paquets npm eux-mêmes
+      # (onnxruntime-node : libonnxruntime.so + binding CPU ; esbuild :
+      # @esbuild/linux-x64). Seuls les téléchargements CDN EXTERNES sont
+      # perdus : CUDA EP d'onnxruntime (inutile — runners sans GPU) et le
+      # binaire ffmpeg-static (aucun test CI ne l'exécute — les tests vidéo
+      # utilisent le ffmpeg système de l'image runner, garde spawnSync).
+      # Brownout GitHub Releases 504 (constat it.133, 08:45→09:40 UTC) : 4
+      # tentatives CI échouées sur le SEUL téléchargement postinstall — code
+      # vert (vitest 6 234, lint 0, tsc 0 en local). La production (VPS)
+      # installe elle-même ses scripts lifecycle (deploy-vps.yml inchangé).
+      - name: Install dependencies (5 tentatives — npm registry seul, sans scripts lifecycle)
         run: |
           for i in 1 2 3 4 5; do
-            if npm ci --no-audit --no-fund; then exit 0; fi
+            if npm ci --ignore-scripts --no-audit --no-fund; then exit 0; fi
             echo "::warning::npm ci tentative $i/5 échouée — nouvelle tentative dans 60 s"
             sleep 60
           done
@@ -54,10 +61,10 @@ jobs:
       # live-agent n'est PAS installé : sa dépendance @nut-tree/nut-js n'existe
       # plus sur le registre public (pré-existant, documenté T56) et ses tests
       # n'en dépendent pas (modules purs + builtins).
-      - name: Install sandbox service dependencies (5 tentatives — brownouts CDN)
+      - name: Install sandbox service dependencies (5 tentatives — sans scripts lifecycle)
         run: |
           for i in 1 2 3 4 5; do
-            if npm ci --no-audit --no-fund --prefix services/sandbox; then exit 0; fi
+            if npm ci --ignore-scripts --no-audit --no-fund --prefix services/sandbox; then exit 0; fi
             echo "::warning::npm ci sandbox tentative $i/5 échouée — nouvelle tentative dans 60 s"
             sleep 60
           done
@@ -135,10 +142,10 @@ jobs:
       # téléchargent depuis GitHub Releases, sujet aux brownouts (504 —
       # constat it.133, 09:00-09:30 UTC). 5 tentatives espacées : ne masque
       # aucun échec de code (les steps suivants échouent toujours franc).
-      - name: Install dependencies (5 tentatives — brownouts CDN GitHub Releases)
+      - name: Install dependencies (5 tentatives — npm registry seul, sans scripts lifecycle)
         run: |
           for i in 1 2 3 4 5; do
-            if npm ci --no-audit --no-fund; then exit 0; fi
+            if npm ci --ignore-scripts --no-audit --no-fund; then exit 0; fi
             echo "::warning::npm ci tentative $i/5 échouée — nouvelle tentative dans 60 s"
             sleep 60
           done
@@ -166,10 +173,10 @@ jobs:
       # téléchargent depuis GitHub Releases, sujet aux brownouts (504 —
       # constat it.133, 09:00-09:30 UTC). 5 tentatives espacées : ne masque
       # aucun échec de code (les steps suivants échouent toujours franc).
-      - name: Install dependencies (5 tentatives — brownouts CDN GitHub Releases)
+      - name: Install dependencies (5 tentatives — npm registry seul, sans scripts lifecycle)
         run: |
           for i in 1 2 3 4 5; do
-            if npm ci --no-audit --no-fund; then exit 0; fi
+            if npm ci --ignore-scripts --no-audit --no-fund; then exit 0; fi
             echo "::warning::npm ci tentative $i/5 échouée — nouvelle tentative dans 60 s"
             sleep 60
           done
@@ -239,10 +246,10 @@ jobs:
       # téléchargent depuis GitHub Releases, sujet aux brownouts (504 —
       # constat it.133, 09:00-09:30 UTC). 5 tentatives espacées : ne masque
       # aucun échec de code (les steps suivants échouent toujours franc).
-      - name: Install dependencies (5 tentatives — brownouts CDN GitHub Releases)
+      - name: Install dependencies (5 tentatives — npm registry seul, sans scripts lifecycle)
         run: |
           for i in 1 2 3 4 5; do
-            if npm ci --no-audit --no-fund; then exit 0; fi
+            if npm ci --ignore-scripts --no-audit --no-fund; then exit 0; fi
             echo "::warning::npm ci tentative $i/5 échouée — nouvelle tentative dans 60 s"
             sleep 60
           done
