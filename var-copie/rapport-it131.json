@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-08T06:30:56.548Z",
+  "dureeMs": 2037,
+  "multimodal": {
+    "total": 28,
+    "parModalite": {
+      "image": 20,
+      "audio": 8,
+      "video": 0
+    },
+    "octets": 1714027,
+    "fenetres": {
+      "image": "rafaelpadilla/coco2017#default/val offset 784 (20) — après offset 764 (it.130)",
+      "audio": "facebook/multilingual_librispeech#french/dev offset 8 (8 — suite MLS ; FLEURS fr_fr/validation ÉPUISÉ depuis it.129 : 284+5=289 = taille officielle du split ; splits train/test FLEURS dépassent la limite de scan du serveur de datasets — bascule MLS documentée à it.130, 2416 lignes disponibles) — après offset 0 (it.130)",
+      "video": "sayakpaul/ucf101-subset#default/train offset 4 (0 — fenêtre épuisée depuis it.90, preuve refaite)"
+    },
+    "pairesServies": 28,
+    "pairesExactes": 28
+  },
+  "corpusProduction": 1857,
+  "snn": {
+    "source": "public/neural/cortex-multimodal-it130.bin",
+    "octetsSource": 12582960,
+    "ondesGravees": 2016,
+    "bande": 9,
+    "mesurePoids": {
+      "avant": {
+        "aretes": 249,
+        "somme": 211.4156872704625,
+        "moyenne": 0.8490589850219378
+      },
+      "apres": {
+        "aretes": 249,
+        "somme": 249,
+        "moyenne": 1
+      },
+      "type": "arêtes des colonnes stimulées (onde complète motif+réponse) vers la bande 9 — mesure déterministe du niveau des poids"
+    },
+    "typeMesure": "rétention (assets réels, onde gravée complète motif+réponse, 4 cycles) + mesure déterministe des poids",
+    "avant": {
+      "hits": 0,
+      "sep": 0,
+      "top3": 0,
+      "total": 28
+    },
+    "apres": {
+      "hits": 0,
+      "sep": 0,
+      "top3": 0,
+      "total": 28
+    },
+    "noteMesure": "MESURE PRIMAIRE = delta de poids (déterministe — arêtes stimulées→b9, boost lrBoost → 1.0). MESURE SECONDAIRE = résonance (protocole it.94c : 4 cycles, onde complète) — limité structurellement par les collisions (une colonne ne spike que si injection × 0,9 ≥ seuil 1, ~3 % des paires — sondes it.96b/c) ; les it.92/94 ne mesuraient eux-mêmes que 12→29 et 0-5 hits. dominance stricte = b9 #1 de toutes (concurrence b0 999 935 paires, b1 101 138 ondes) ; sepTrained = b9 #1 parmi b2..b9.",
+    "snapshot": "public/neural/cortex-multimodal-it131.bin",
+    "octets": 12582960
+  },
+  "snapshot": "public/neural/cortex-multimodal-it131.bin"
+}
