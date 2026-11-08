@@ -38,11 +38,12 @@ import { actionEffecteur } from "../core/types";
 import type { EspaceFiltreResonant } from "../core/resonant-space";
 import type { SystemeExploitationOutils } from "./tool-os";
 import { statutEffectifDuResultat } from "./audio";
-
-/** Canaux écoutés (mêmes libellés que les pools d'intention du trainer). */
-export const CANAL_GENERER_IMAGE = "GENERER_IMAGE";
-export const CANAL_GENERER_AUDIO = "GENERER_AUDIO";
-export const CANAL_GENERER_VIDEO = "GENERER_VIDEO";
+// Canaux écoutés : DÉFINIS UNE SEULE FOIS dans les effecteurs existants
+// (visual.ts / audio.ts / video.ts) et importés ici — aucune redéfinition,
+// le barrel index.ts reste sans ambiguïté (TS2308, CI PR #136).
+import { CANAL_GENERER_IMAGE } from "./visual";
+import { CANAL_GENERER_AUDIO } from "./audio";
+import { CANAL_GENERER_VIDEO } from "./video";
 
 /** Configuration injectée par le runtime — aucun accès direct à l'environnement. */
 export interface ConfigPontMedia {
@@ -80,7 +81,7 @@ export interface ParametresVoix {
   voix?: string;
 }
 
-export interface ParametresVideo {
+export interface ParametresVideoPont {
   prompt: string;
   largeur?: number;
   hauteur?: number;
@@ -221,7 +222,7 @@ export class EffecteurMediaBridge implements Effecteur {
   }
 
   /** Génération d'un clip vidéo réaliste (LTX-Video + LoRA gen3). */
-  async genererVideo(p: ParametresVideo): Promise<ResultatMedia> {
+  async genererVideo(p: ParametresVideoPont): Promise<ResultatMedia> {
     if (!p.prompt || p.prompt.length === 0) {
       return { statut_rendu: "ECHEC_GENERATION", details: "Prompt requis." };
     }
@@ -440,7 +441,7 @@ function normaliserVoix(args: Record<string, unknown>): ParametresVoix {
   };
 }
 
-function normaliserVideo(args: Record<string, unknown>): ParametresVideo {
+function normaliserVideo(args: Record<string, unknown>): ParametresVideoPont {
   return {
     prompt: chaine(args["prompt"]) ?? "Onde corticale en propagation",
     largeur: nombre(args["largeur"]),
