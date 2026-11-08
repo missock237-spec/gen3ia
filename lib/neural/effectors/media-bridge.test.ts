@@ -252,7 +252,7 @@ describe("EffecteurMediaBridge — pont configuré : lancement honnête + résul
   });
 
   it("proberCapacites : GET /capabilities sans clé, mapping honnête du profil GPU", async () => {
-    const { pont, appels } = monterPont({}, (appel) =>
+    const { pont, appels } = monterPont({}, (_appel) =>
       reponse(true, 200, {
         gpu: true,
         profil: "sd",
