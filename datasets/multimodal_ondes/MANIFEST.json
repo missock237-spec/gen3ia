@@ -1,0 +1,10 @@
+{
+  "name": "gen3ia-multimodal_ondes-v1",
+  "description": "Domaines ondes multimodaux (EOD, it.57) : analyse d'artefacts, briefs photoréalistes SDXL, briefs voix F5/Kokoro, storyboards LTX-Video. Chaque label de domaine reçoit automatiquement sa bande-porteuse (hash FNV-1a → porteur ω) — la méthode s'étend sans changement de code. content_hash à générer via scripts/gen3_ondes_finaliser_dataset.mjs après toute édition.",
+  "rows": 24,
+  "languages": ["fr", "en"],
+  "task_types": ["onde_artifact_analysis", "prompt_to_photoreal_brief", "tts_voice_brief", "video_storyboard"],
+  "full_data": "./train.jsonl",
+  "sample_rows": 24,
+  "generated_at": "2026-11-08T09:00:00+00:00"
+}

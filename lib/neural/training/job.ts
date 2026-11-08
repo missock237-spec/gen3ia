@@ -20,7 +20,11 @@ import {
 } from "./domaines";
 import { CORPUS_GEN3 } from "../generation/corpus";
 import { entrainerDomainesParOndes } from "./entrainement-ondes";
-import type { RapportEntrainementOndes } from "./entrainement-ondes";
+import type { RapportEntrainementOndes, ExempleOnde } from "./entrainement-ondes";
+import {
+  lotOndesMultimodale,
+  TAILLE_ESPACE_ONDES_MULTIMODAL,
+} from "../generation/memoire-ondes-multimodales";
 import type { StatsApprentissageLangage } from "../generation/language";
 import { executionLogger } from "@/lib/observability/logger";
 
@@ -44,6 +48,9 @@ import { executionLogger } from "@/lib/observability/logger";
  *  - « complet »  : les deux, dans le même job ;
  *  - « ondes »    : it.57 — NOUVEAU MOYEN D'ENTRAÎNEMENT par analyse et
  *    traitement des ONDES (cortex v1M, domaines CHOISIS via domainesOndes).
+ *    it.58 — la mémoire ondes multimodales (échantillons SYNTHÉTIQUES
+ *    adressables, cf. memoire-ondes-multimodales.ts) peut être injectée
+ *    en complément des datasets JSONL via l'option ondesMultimodales.
  */
 
 /** État d'un job d'entraînement (données 100 % réelles). */
@@ -84,6 +91,30 @@ export interface NeuralTrainingJob {
   rapportDomaines?: RapportDomaines;
   /** it.57 — rapport de la session d'entraînement PAR ONDES (source « ondes »). */
   rapportOndes?: RapportEntrainementOndes;
+  /**
+   * it.58 — trace HONNÊTE des échantillons SYNTHÉTIQUES injectés par la
+   * mémoire ondes multimodales (grammaires métier adressables, PAS des
+   * données humaines curées — cf. datasets/multimodal_ondes/INFINI.md).
+   * Ces échantillons sont comptés ICI, séparément de statsDomaines qui ne
+   * décrit que les datasets JSONL commis — jamais de synthétique déguisé
+   * en donnée humaine.
+   */
+  ondesMultimodales?: {
+    /** Index de départ demandé dans l'espace adressable. */
+    debut: number;
+    /** Quantité demandée AVANT bornage. */
+    quantiteDemandee: number;
+    /** Échantillons réellement injectés dans la session (après bornes + filtre de domaines). */
+    echantillons: number;
+    /** Répartition par domaine des échantillons injectés. */
+    parDomaine: Record<string, number>;
+    /** Répartition par langue des échantillons injectés. */
+    parLangue: Record<string, number>;
+    /** Nature explicite des échantillons. */
+    nature: "synthetique";
+    /** Générateur (mémoire en code source, déterministe). */
+    source: "memoire-ondes-multimodales";
+  };
   /**
    * Apprentissage langagier du cortex (corpus conversationnel + amorçage +
    * paires de domaine) — stats réelles du dernier passage.
@@ -175,6 +206,71 @@ export interface LancerEntrainementOptions {
    *  vide = tous les 18). Analysés puis traités SOUS ONDES par le cortex
    *  v1M (lib/neural/training/entrainement-ondes.ts). */
   domainesOndes?: string[];
+  /**
+   * it.58 — MÉMOIRE ONDES MULTIMODALES (source « ondes » uniquement) :
+   * injecte des échantillons SYNTHÉTIQUES adressables (grammaires métier,
+   * jamais présentés comme des données humaines) en complément des
+   * datasets JSONL. `debut` = index de départ dans l'espace adressable de
+   * TAILLE_ESPACE_ONDES_MULTIMODAL échantillons uniques ; `quantite` =
+   * nombre d'échantillons (borné à 50 000 par injection — la session EOD
+   * applique ensuite son propre cap maxParDomaine, rapport honnête).
+   */
+  ondesMultimodales?: { debut: number; quantite: number };
+}
+
+/** Borne d'injection synthétique par job (coût mémoire + session EOD bornée). */
+const CAP_ONDES_MULTIMODALES = 50_000;
+
+/**
+ * Construit les échantillons synthétiques de la mémoire ondes multimodales
+ * pour l'option demandée, applique le filtre de domaines de la session et
+ * retourne le lot + la trace honnête (ou null si l'option est absente/vide).
+ */
+function construireOndesMultimodales(
+  option: { debut: number; quantite: number } | undefined,
+  filtre: Set<string> | null,
+): { exemples: ExempleOnde[]; trace: NonNullable<NeuralTrainingJob["ondesMultimodales"]> } | null {
+  if (!option || !Number.isFinite(option.quantite) || option.quantite <= 0) return null;
+  const debut = Math.max(0, Math.floor(option.debut));
+  const quantiteDemandee = Math.floor(option.quantite);
+  const quantite = Math.max(0, Math.min(CAP_ONDES_MULTIMODALES, quantiteDemandee));
+  const fin = Math.min(debut + quantite, TAILLE_ESPACE_ONDES_MULTIMODAL);
+  if (debut >= TAILLE_ESPACE_ONDES_MULTIMODAL || quantite === 0) {
+    // Hors espace ou quantité bornée à zéro : trace honnête à zéro échantillon.
+    return {
+      exemples: [],
+      trace: {
+        debut,
+        quantiteDemandee,
+        echantillons: 0,
+        parDomaine: {},
+        parLangue: {},
+        nature: "synthetique",
+        source: "memoire-ondes-multimodales",
+      },
+    };
+  }
+  const unites = lotOndesMultimodale(debut, fin - debut).filter(
+    (u) => !filtre || filtre.has(u.domaine),
+  );
+  const parDomaine: Record<string, number> = {};
+  const parLangue: Record<string, number> = {};
+  for (const u of unites) {
+    parDomaine[u.domaine] = (parDomaine[u.domaine] ?? 0) + 1;
+    parLangue[u.langue] = (parLangue[u.langue] ?? 0) + 1;
+  }
+  return {
+    exemples: unites.map((u) => ({ texte: u.texte, domaine: u.domaine })),
+    trace: {
+      debut,
+      quantiteDemandee,
+      echantillons: unites.length,
+      parDomaine,
+      parLangue,
+      nature: "synthetique",
+      source: "memoire-ondes-multimodales",
+    },
+  };
 }
 
 /**
@@ -300,6 +396,10 @@ export function lancerEntrainement(
       // ── 2-bis. ONDES (source « ondes » — it.57, demande propriétaire) ───
       //    NOUVEAU MOYEN D'ENTRAÎNEMENT : analyse des ondes + traitement
       //    des ondes sur le cortex v1M, domaines CHOISIS par le propriétaire.
+      //    it.58 — les échantillons SYNTHÉTIQUES de la mémoire ondes
+      //    multimodales peuvent compléter les datasets JSONL (trace
+      //    séparée job.ondesMultimodales — jamais mélangés aux données
+      //    humaines dans les stats de datasets).
       if (source === "ondes") {
         const chargementOndes = await chargerEchantillonsDomaines({
           maxParDomaine,
@@ -308,9 +408,20 @@ export function lancerEntrainement(
         const filtre = options.domainesOndes?.length
           ? new Set(options.domainesOndes.map((d) => d.trim().toLowerCase()).filter(Boolean))
           : null;
-        const exemplesOndes = chargementOndes.samples
+        const exemplesDataset = chargementOndes.samples
           .filter((s) => !filtre || filtre.has(s.label.toLowerCase()))
           .map((s) => ({ texte: s.text, domaine: s.label }));
+        const ondesMultimodales = construireOndesMultimodales(
+          options.ondesMultimodales,
+          filtre,
+        );
+        if (ondesMultimodales) {
+          job.ondesMultimodales = ondesMultimodales.trace;
+        }
+        const exemplesOndes = [
+          ...exemplesDataset,
+          ...(ondesMultimodales?.exemples ?? []),
+        ];
         if (runtime.cortexV2 && exemplesOndes.length > 0) {
           job.nbEchantillonsDomaines = exemplesOndes.length;
           job.statsDomaines = {
@@ -402,7 +513,7 @@ export function lancerEntrainement(
             ? ` (domaines: accuracy test ${job.rapportDomaines.accuracyTest}, ${job.rapportDomaines.samples} échantillons)`
             : "") +
           (job.rapportOndes
-            ? ` (ondes: ${job.rapportOndes.totalEchantillons} échantillons, ${job.rapportOndes.domaines.length} domaine(s), énergie transportée par le bus consolidée)`
+            ? ` (ondes: ${job.rapportOndes.totalEchantillons} échantillons dont ${job.ondesMultimodales?.echantillons ?? 0} SYNTHÉTIQUES de la mémoire ondes multimodales, ${job.rapportOndes.domaines.length} domaine(s), énergie transportée par le bus consolidée)`
             : "") +
           `, langage: ${job.langage.pairesAjoutees} paires ajoutées, sauvegarde: ${sauvegarde}`,
       );
