@@ -180,6 +180,11 @@ import { PAIRES_MULTIMODAL_IT136 } from "./multimodal-it136";
 // fr_fr/validation ÉPUISÉ depuis it.129, UCF101 épuisée — preuves du zéro) :
 // 28 assets réels mesurés, 28 paires id↔légende/transcription servies.
 import { PAIRES_MULTIMODAL_IT137 } from "./multimodal-it137";
+// it.138 — fenêtre multimodale réelle SUIVANTE (COCO-2017 offset 924, MLS
+// french/dev offset 64 — suite MLS après l'offset 56 d'it.137 ; FLEURS
+// fr_fr/validation ÉPUISÉ depuis it.129, UCF101 épuisée — preuves du zéro) :
+// 28 assets réels mesurés, 28 paires id↔légende/transcription servies.
+import { PAIRES_MULTIMODAL_IT138 } from "./multimodal-it138";
 // Carte de mémoire d'emplacement (demande propriétaire : « assure-toi qu'il
 // a bien mémorisé où [les datasets] se trouvent dans sa mémoire ») — paires
 // générées depuis le disque (vérité terrain), régénérées à chaque itération.
@@ -1179,6 +1184,10 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
   // MLS french/dev offset 56 — suite MLS après l'offset 48 d'it.136) :
   // 28 paires servies par le cortex langagier.
   ...PAIRES_MULTIMODAL_IT137,
+  // it.138 — fenêtre multimodale réelle suivante (COCO offset 924,
+  // MLS french/dev offset 64 — suite MLS après l'offset 56 d'it.137) :
+  // 28 paires servies par le cortex langagier.
+  ...PAIRES_MULTIMODAL_IT138,
   // Carte de mémoire d'emplacement : où vivent les datasets et la mémoire
   // gravée (4 paires générées depuis le disque).
   ...PAIRES_CARTE_MEMOIRE,
