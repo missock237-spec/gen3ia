@@ -73,8 +73,15 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Installer les dépendances
-        run: npm ci --include=dev --no-audit --no-fund
+      - name: Installer les dépendances (build runner — sans scripts lifecycle)
+        # --ignore-scripts : le build runner ne fait QUE compiler (npm run
+        # build n'exécute aucun binaire postinstall). Brownout GitHub
+        # Releases 504 (constat it.133, 09:44 UTC) : ffmpeg-static/onnxruntime
+        # faisaient échouer le build sur le seul téléchargement CDN. Les
+        # binaires CPU critiques sont embarqués dans les paquets npm. Le
+        # RUNTIME VPS reste inchangé : le finisher fait son propre npm ci
+        # AVEC scripts sur le VPS (binaire ffmpeg présent en production).
+        run: npm ci --ignore-scripts --include=dev --no-audit --no-fund
 
       - name: Build production
         run: npm run build
