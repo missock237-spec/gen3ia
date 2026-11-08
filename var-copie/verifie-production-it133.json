@@ -1,0 +1,44 @@
+[
+  {
+    "controle": "snapshot it.133 servi",
+    "octets": 12582960,
+    "sha256_distant": "7f1b20f896fc6d1f",
+    "sha256_local": "7f1b20f896fc6d1f",
+    "match": true
+  },
+  {
+    "controle": "asset multimodal-it133/images/image_000.jpg",
+    "octets": 78006,
+    "sha256_distant": "df2ffa1e67f0245d",
+    "sha256_local": "df2ffa1e67f0245d",
+    "match": true
+  },
+  {
+    "controle": "asset multimodal-it133/images/image_014.jpg",
+    "octets": 90984,
+    "sha256_distant": "d90d7a2115339592",
+    "sha256_local": "d90d7a2115339592",
+    "match": true
+  },
+  {
+    "controle": "asset multimodal-it133/audio/audio_000.opus",
+    "octets": 47789,
+    "sha256_distant": "b801f48cc052f796",
+    "sha256_local": "b801f48cc052f796",
+    "match": true
+  },
+  {
+    "controle": "asset multimodal-it133/audio/audio_007.opus",
+    "octets": 76992,
+    "sha256_distant": "2b2588a8b75dd0cc",
+    "sha256_local": "2b2588a8b75dd0cc",
+    "match": true
+  },
+  {
+    "controle": "build de production = commit poussé",
+    "gitSha_distant": "e78f47a",
+    "gitSha_local": "e78f47a",
+    "buildDate": "2026-11-08T10:45:05.416Z",
+    "match": true
+  }
+]
