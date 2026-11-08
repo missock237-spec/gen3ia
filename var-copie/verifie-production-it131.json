@@ -1,0 +1,37 @@
+[
+  {
+    "controle": "snapshot it.131 servi",
+    "octets": 12582960,
+    "sha256_distant": "fb61664b654cc4a4",
+    "sha256_local": "fb61664b654cc4a4",
+    "match": true
+  },
+  {
+    "controle": "asset multimodal-it131/images/image_000.jpg",
+    "octets": 36316,
+    "match": true
+  },
+  {
+    "controle": "asset multimodal-it131/images/image_014.jpg",
+    "octets": 61073,
+    "match": true
+  },
+  {
+    "controle": "asset multimodal-it131/audio/audio_000.opus",
+    "octets": 64960,
+    "match": true
+  },
+  {
+    "controle": "asset multimodal-it131/audio/audio_007.opus",
+    "octets": 70674,
+    "match": true
+  },
+  {
+    "controle": "build de production = commit poussé",
+    "gitSha_distant": "73e21dd",
+    "gitSha_local": "73e21dd",
+    "buildDate": "2026-11-08T06:45:09.214Z",
+    "match": true
+  }
+]
+PRODUCTION : 6/6 contrôles OK — VERDICT : MATCH
