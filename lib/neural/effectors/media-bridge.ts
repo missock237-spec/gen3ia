@@ -12,6 +12,8 @@
  * HONNÊTETÉ : sans MEDIA_BRIDGE_URL + MEDIA_BRIDGE_API_KEY injectés par le
  * runtime, toute action retourne PONT_NON_CONFIGURE — jamais de faux média.
  * La sonde /capabilities du pont ne déclare que ce qui tourne réellement.
+ * L'exécution sandbox d'un pont non configuré remonte ECHEC au noyau
+ * (statutEffectifPont) — jamais un succès déguisé.
  *
  * CONTRAT TOOL OS : executerEnSandbox est synchrone ; la génération GPU est
  * asynchrone (jusqu'à 30 min). L'outil lancé retourne donc
@@ -27,7 +29,11 @@ import {
   POOL_GENERER_AUDIO,
   POOL_GENERER_VIDEO,
 } from "../core/types";
-import type { Effecteur, EffectorActionResult } from "../core/types";
+import type {
+  Effecteur,
+  EffectorActionResult,
+  EffectorStatus,
+} from "../core/types";
 import { actionEffecteur } from "../core/types";
 import type { EspaceFiltreResonant } from "../core/resonant-space";
 import type { SystemeExploitationOutils } from "./tool-os";
@@ -235,7 +241,8 @@ export class EffecteurMediaBridge implements Effecteur {
   /**
    * Écoute du noyau : pour chaque canal dont la résonance atteint 0.80,
    * la commande est lancée via le Tool OS (sandbox, métriques d'usage,
-   * feedback) — contrat identique à l'effecteur visuel.
+   * feedback). Le statut remonté au noyau est HONNÊTE (statutEffectifPont) :
+   * un pont non configuré / inaccessible / en échec remonte ECHEC.
    */
   evaluerEtExecuter(
     spikedNeurones: number[],
@@ -254,7 +261,7 @@ export class EffecteurMediaBridge implements Effecteur {
       const executions = this.toolOs.executerEnSandbox("generer_media_photoreal", parametresMode);
       for (const execution of executions) {
         resultats.push(
-          actionEffecteur(canal, statutEffectifDuResultat(execution), {
+          actionEffecteur(canal, statutEffectifPont(execution), {
             outil: execution["outil"],
             dureeMs: execution["dureeMs"],
             resultat: execution["resultat"],
@@ -270,10 +277,18 @@ export class EffecteurMediaBridge implements Effecteur {
   /**
    * Lancement synchrone (contrat Tool OS) d'une génération asynchrone :
    * retourne immédiatement un accusé honnête PONT_GENERATION_LANCEE ; le
-   * résultat réel se lit via attendreResultat(id).
+   * résultat réel se lit via attendreResultat(id). Sans pont configuré,
+   * aucune promesse n'est créée : PONT_NON_CONFIGURE immédiat.
    */
   private lancerDepuisOutil(args: Record<string, unknown>): Record<string, unknown> {
     const mode = typeof args["mode"] === "string" ? args["mode"] : "";
+    if (!this.url || !this.cleApi || !this.fetchImpl) {
+      return {
+        statut_rendu: "PONT_NON_CONFIGURE",
+        details:
+          "MEDIA_BRIDGE_URL et MEDIA_BRIDGE_API_KEY doivent être injectés par le runtime (cf. docs/entrainement/plan-multimodal-ondes.md).",
+      };
+    }
     let promesse: Promise<ResultatMedia>;
     if (mode === "image") {
       promesse = this.genererImage(normaliserImage(args));
@@ -352,6 +367,31 @@ export class EffecteurMediaBridge implements Effecteur {
       return { statut_rendu: "PONT_INACCESSIBLE", details: message(erreur) };
     }
   }
+}
+
+/**
+ * Statut effectif d'une action pont : l'exécution sandbox est SUCCES dès que
+ * l'outil a tourné, mais un rendu honnête qui déclare un échec du pont
+ * (non configuré, inaccessible, génération échouée) remonte ECHEC au noyau —
+ * jamais un succès déguisé. PONT_GENERATION_LANCEE reste SUCCES : le
+ * lancement réel a eu lieu (id de promesse remis, résultat lisible).
+ */
+function statutEffectifPont(execution: EffectorActionResult): EffectorStatus {
+  const statutBase = statutEffectifDuResultat(execution);
+  if (statutBase !== "SUCCES") return statutBase;
+  const rendu = execution["resultat"];
+  const statutRendu =
+    typeof rendu === "object" && rendu !== null
+      ? (rendu as { statut_rendu?: unknown }).statut_rendu
+      : undefined;
+  if (
+    statutRendu === "PONT_NON_CONFIGURE" ||
+    statutRendu === "PONT_INACCESSIBLE" ||
+    statutRendu === "ECHEC_GENERATION"
+  ) {
+    return "ECHEC";
+  }
+  return statutBase;
 }
 
 function joinUrl(base: string, chemin: string): string {
