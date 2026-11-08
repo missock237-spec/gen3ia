@@ -35,8 +35,18 @@ jobs:
           restore-keys: |
             nextjs-${{ runner.os }}-
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      # Résilience CDN : les postinstall ffmpeg-static/onnxruntime-node
+      # téléchargent depuis GitHub Releases, sujet aux brownouts (504 —
+      # constat it.133, 09:00-09:30 UTC). 5 tentatives espacées : ne masque
+      # aucun échec de code (les steps suivants échouent toujours franc).
+      - name: Install dependencies (5 tentatives — brownouts CDN GitHub Releases)
+        run: |
+          for i in 1 2 3 4 5; do
+            if npm ci --no-audit --no-fund; then exit 0; fi
+            echo "::warning::npm ci tentative $i/5 échouée — nouvelle tentative dans 60 s"
+            sleep 60
+          done
+          exit 1
 
       # Tâche 56 : la suite vitest intègre désormais les services annexes
       # (sandbox — tests comportementaux Fastify). Leurs dépendances sont
@@ -44,8 +54,14 @@ jobs:
       # live-agent n'est PAS installé : sa dépendance @nut-tree/nut-js n'existe
       # plus sur le registre public (pré-existant, documenté T56) et ses tests
       # n'en dépendent pas (modules purs + builtins).
-      - name: Install sandbox service dependencies
-        run: npm ci --no-audit --no-fund --prefix services/sandbox
+      - name: Install sandbox service dependencies (5 tentatives — brownouts CDN)
+        run: |
+          for i in 1 2 3 4 5; do
+            if npm ci --no-audit --no-fund --prefix services/sandbox; then exit 0; fi
+            echo "::warning::npm ci sandbox tentative $i/5 échouée — nouvelle tentative dans 60 s"
+            sleep 60
+          done
+          exit 1
 
       # Task 61 : le SDK public @gen3ia/sdk est typechecké avec un tsc strict
       # dédié et émis en double format (ESM + CJS). Son échec bloque la CI
@@ -115,8 +131,18 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      # Résilience CDN : les postinstall ffmpeg-static/onnxruntime-node
+      # téléchargent depuis GitHub Releases, sujet aux brownouts (504 —
+      # constat it.133, 09:00-09:30 UTC). 5 tentatives espacées : ne masque
+      # aucun échec de code (les steps suivants échouent toujours franc).
+      - name: Install dependencies (5 tentatives — brownouts CDN GitHub Releases)
+        run: |
+          for i in 1 2 3 4 5; do
+            if npm ci --no-audit --no-fund; then exit 0; fi
+            echo "::warning::npm ci tentative $i/5 échouée — nouvelle tentative dans 60 s"
+            sleep 60
+          done
+          exit 1
 
       # Les tests e2e ne touchent JAMAIS la production (émulateurs
       # locaux uniquement, projet demo-gen3ia).
@@ -136,8 +162,18 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      # Résilience CDN : les postinstall ffmpeg-static/onnxruntime-node
+      # téléchargent depuis GitHub Releases, sujet aux brownouts (504 —
+      # constat it.133, 09:00-09:30 UTC). 5 tentatives espacées : ne masque
+      # aucun échec de code (les steps suivants échouent toujours franc).
+      - name: Install dependencies (5 tentatives — brownouts CDN GitHub Releases)
+        run: |
+          for i in 1 2 3 4 5; do
+            if npm ci --no-audit --no-fund; then exit 0; fi
+            echo "::warning::npm ci tentative $i/5 échouée — nouvelle tentative dans 60 s"
+            sleep 60
+          done
+          exit 1
 
       - name: Navigateur Chromium (Playwright)
         run: npx playwright install --with-deps chromium
@@ -199,8 +235,18 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      # Résilience CDN : les postinstall ffmpeg-static/onnxruntime-node
+      # téléchargent depuis GitHub Releases, sujet aux brownouts (504 —
+      # constat it.133, 09:00-09:30 UTC). 5 tentatives espacées : ne masque
+      # aucun échec de code (les steps suivants échouent toujours franc).
+      - name: Install dependencies (5 tentatives — brownouts CDN GitHub Releases)
+        run: |
+          for i in 1 2 3 4 5; do
+            if npm ci --no-audit --no-fund; then exit 0; fi
+            echo "::warning::npm ci tentative $i/5 échouée — nouvelle tentative dans 60 s"
+            sleep 60
+          done
+          exit 1
 
       # Tests de fumée de bout en bout (P3) : les 3 parcours critiques
       # métier — connexion Firebase Auth (firebase-auth-wallet), paiement
