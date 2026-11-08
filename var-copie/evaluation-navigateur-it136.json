@@ -1,0 +1,241 @@
+{
+  "date": "2026-11-08T14:32:32.454Z",
+  "dureeMs": 16047,
+  "corpus": 1997,
+  "memoire": {
+    "globalExact": 1937,
+    "globalTotal": 1997,
+    "tauxExact": 97,
+    "parGroupe": {
+      "base-it84": {
+        "exact": 62,
+        "servie": 62,
+        "total": 62
+      },
+      "corps-domaines": {
+        "exact": 800,
+        "servie": 834,
+        "total": 860
+      },
+      "multimodal-it101": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it104": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it105": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it106": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it107": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it108": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it109": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it110": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it111": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it112": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it113": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it115": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it116": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it117": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it118": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it119": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it120": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it121": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it122": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it123": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it124": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it125": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it126": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it127": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it128": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it129": {
+        "exact": 25,
+        "servie": 25,
+        "total": 25
+      },
+      "multimodal-it130": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it131": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it132": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it133": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it134": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it135": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it136": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it95": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it96": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it97": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it98": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "multimodal-it99": {
+        "exact": 28,
+        "servie": 28,
+        "total": 28
+      },
+      "recents": {
+        "exact": 14,
+        "servie": 14,
+        "total": 14
+      }
+    }
+  },
+  "generalisation": {
+    "reformulations": 6,
+    "repondues": 6
+  },
+  "reflexion": {
+    "exact": 1938,
+    "servie": 1974,
+    "total": 1997,
+    "tauxExact": 97.05,
+    "gainPrecision": 3,
+    "voies": {
+      "directe": 1971,
+      "normalisee": 3,
+      "racourcie": 0,
+      "memorisee": 0,
+      "echec": 23
+    }
+  },
+  "assetsIt131": 28,
+  "fenetreIt131": {
+    "exact": 28,
+    "servie": 28,
+    "total": 28
+  }
+}
