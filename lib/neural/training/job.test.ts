@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from "vitest";
 
 import { lancerEntrainement, getDernierJob } from "./job";
 import { getNeuralRuntime, resetBrain } from "../runtime";
+import { OFFSETS_DOMAINES } from "../generation/memoire-ondes-multimodales";
 
 /**
  * TEST D'INTÉGRATION DU JOB D'ENTRAÎNEMENT — boucle complète sur le corpus
@@ -61,6 +62,55 @@ describe("Job d'entraînement neuronal (E2E)", () => {
     expect(raw).toBeDefined();
     expect(raw.intention).toBeDefined();
   });
+
+  it("source « ondes » : la mémoire ondes multimodales injecte des échantillons SYNTHÉTIQUES tracés honnêtement (it.58)", async () => {
+    const job = lancerEntrainement({
+      source: "ondes",
+      // Le domaine image est celui de l'espace génération_image de la
+      // mémoire (offsets déterministes) — les 6 échantillons injectés
+      // tombent tous dans CE domaine.
+      domainesOndes: ["generation_image"],
+      cyclesParEchantillon: 2,
+      maxParDomaine: 2000,
+      ondesMultimodales: {
+        debut: OFFSETS_DOMAINES.generation_image,
+        quantite: 6,
+      },
+    });
+    expect(job.status).toBe("en_cours");
+    expect(job.source).toBe("ondes");
+
+    const debut = Date.now();
+    while (Date.now() - debut < 120_000) {
+      const courant = getDernierJob();
+      if (courant && courant.status !== "en_cours") break;
+      await new Promise((resoudre) => setTimeout(resoudre, 100));
+    }
+
+    const final = getDernierJob();
+    expect(final).not.toBeNull();
+    expect(final!.status).toBe("termine");
+    expect(final!.rapportOndes).toBeDefined();
+
+    // Trace honnête des SYNTHÉTIQUES : nature explicite, source explicite,
+    // comptage réel — jamais déguisés en données humaines (statsDomaines
+    // reste la répartition des DATASETS commis).
+    expect(final!.ondesMultimodales).toBeDefined();
+    expect(final!.ondesMultimodales!.nature).toBe("synthetique");
+    expect(final!.ondesMultimodales!.source).toBe("memoire-ondes-multimodales");
+    expect(final!.ondesMultimodales!.debut).toBe(OFFSETS_DOMAINES.generation_image);
+    expect(final!.ondesMultimodales!.quantiteDemandee).toBe(6);
+    expect(final!.ondesMultimodales!.echantillons).toBe(6);
+    expect(final!.ondesMultimodales!.parDomaine["generation_image"]).toBe(6);
+
+    // La session EOD a réellement traité au moins les échantillons synthétiques.
+    expect(final!.rapportOndes!.totalEchantillons).toBeGreaterThanOrEqual(6);
+    const domaineImage = final!.rapportOndes!.domaines.find(
+      (d) => d.domaine === "generation_image",
+    );
+    expect(domaineImage).toBeDefined();
+    expect(domaineImage!.echantillons).toBeGreaterThanOrEqual(6);
+  }, 150_000);
 
   afterAll(() => {
     // Nettoyage : le test E2E a réellement persisté un cerveau entraîné sur le

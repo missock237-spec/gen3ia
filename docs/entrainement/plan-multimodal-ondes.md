@@ -59,6 +59,23 @@ node scripts/gen3_ondes_finaliser_dataset.mjs --check datasets/multimodal_ondes/
 
 ---
 
+### Injection de la mémoire ondes multimodales (it.58)
+
+L'option `ondesMultimodales` du job (`lib/neural/training/job.ts`, câblée — **FAIT**) complète les datasets JSONL par des échantillons **SYNTHÉTIQUES** adressables (grammaires métier — cf. `datasets/multimodal_ondes/INFINI.md`) :
+
+```json
+{
+  "source": "ondes",
+  "domainesOndes": ["generation_image"],
+  "maxParDomaine": 2000,
+  "ondesMultimodales": { "debut": 7488960, "quantite": 1000 }
+}
+```
+
+**Honnêteté** : les synthétiques sont tracés dans `job.ondesMultimodales` (`nature: "synthetique"`, `source: "memoire-ondes-multimodales"`, répartition par domaine et par langue, quantité demandée vs réellement injectée après bornes et filtre de domaines) — **jamais** comptés dans `statsDomaines`, qui décrit uniquement les datasets JSONL commis. Le log de fin de job porte le décompte explicite « dont N SYNTHÉTIQUES ». La session EOD applique ensuite son propre cap par domaine (`maxParDomaine`, plafond dur 2 000). Bornes de l'API : `debut ∈ [0, 5 665 359 359]`, `quantite ≤ 50 000` par injection. Couvert par le test d'intégration `lib/neural/training/job.test.ts` (3ᵉ cas).
+
+---
+
 ## 3. Voie B — Entraîner les organes GPU (Colab L4/A100, packs existants)
 
 ### gen3-core (conversation naturelle + analyse d'artefacts)
@@ -134,3 +151,4 @@ Reste opérationnel (hors code) : renseigner les deux variables dans l'environne
 - Bus d'ondes : `lib/neural/core/v2/bus-ondes-regions.ts` — champ cortical : `lib/neural/core/v2/champ-cortical.ts`
 - Effecteur pont : `lib/neural/effectors/media-bridge.ts` — tests : `lib/neural/effectors/media-bridge.test.ts` — pont GPU : `training/gen3-media-pack/bridge/gen3_media_bridge.py`
 - Dataset : `datasets/multimodal_ondes/` (MANIFEST + train.jsonl, hash via `scripts/gen3_ondes_finaliser_dataset.mjs`)
+- Mémoire ondes multimodales : `lib/neural/generation/memoire-ondes-multimodales.ts` — injection au job : `lib/neural/training/job.ts` (option `ondesMultimodales`)
