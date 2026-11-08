@@ -135,7 +135,7 @@ const listeChemins = fenetres.map((f) => f.chemin).join(", ");
 const paires = [
   {
     motif: "Où sont stockés les assets multimodaux de gen3 ?",
-    reponse: `Ma carte de mémoire enregistre ${fenetres.length} fenêtres d'assets réels, soit ${totaleAssets} fichiers (${mo(totalOctets)}), servis publiquement dans ${listeChemins}. Les fenêtres récentes (it.95 → ${derniere.fenetre}) contiennent chacune 28 assets : 20 images COCO-2017 annotées + 8 audios de parole française FLEURS. Chaque asset a son identifiant kmNN_ câblé dans mon corpus : demande-moi « Que contient l'image km${derniere.fenetre.slice(3)}_image_000 ? » et je réponds avec l'empreinte sha256 du fichier réel.`,
+    reponse: `Ma carte de mémoire enregistre ${fenetres.length} fenêtres d'assets réels, soit ${totaleAssets} fichiers (${mo(totalOctets)}), servis publiquement dans ${listeChemins}. Les fenêtres récentes (it.95 → ${derniere.fenetre}) délivrent à chaque itération 20 images COCO-2017 annotées + 8 audios de parole française à transcriptions officielles (Google FLEURS fr_fr/validation jusqu'à son épuisement en it.129 — fenêtre partielle de 5 clips — puis Meta Multilingual LibriSpeech french/dev depuis it.130). Chaque asset a son identifiant kmNN_ câblé dans mon corpus : demande-moi « Que contient l'image km${derniere.fenetre.slice(3)}_image_001 ? » et je réponds avec l'empreinte sha256 du fichier réel.`,
     theme: "memoire-emplacement",
   },
   {
@@ -145,7 +145,7 @@ const paires = [
   },
   {
     motif: `Où sont servis les fichiers de la fenêtre ${derniere.fenetre} ?`,
-    reponse: `La fenêtre ${derniere.fenetre} réside dans public${derniere.chemin} : ${derniere.images} images (COCO-2017) et ${derniere.audios} audios (FLEURS fr_fr), ${mo(derniere.octets)} mesurés sur le disque — servis à ${derniere.chemin}images/ et ${derniere.chemin}audio/. Le snapshot SNN associé est ${derniere.snapshot} (${derniere.snapshotOctets ? mo(derniere.snapshotOctets) : "n/a"}).`,
+    reponse: `La fenêtre ${derniere.fenetre} réside dans public${derniere.chemin} : ${derniere.images} images (COCO-2017) et ${derniere.audios} audios (parole française à transcriptions officielles), ${mo(derniere.octets)} mesurés sur le disque — servis à ${derniere.chemin}images/ et ${derniere.chemin}audio/. Le snapshot SNN associé est ${derniere.snapshot} (${derniere.snapshotOctets ? mo(derniere.snapshotOctets) : "n/a"}).`,
     theme: "memoire-emplacement",
   },
   {
