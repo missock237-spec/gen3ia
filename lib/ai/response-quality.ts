@@ -24,11 +24,15 @@
  *
  * Le module est PUR : testable, importable depuis le
  * client (constantes) comme depuis le serveur (décision de routage).
- * it.59 — unique dépendance : lib/gen3/vocation (module pur également) —
+ * it.59 — dépendance : lib/gen3/vocation (module pur également) —
  * la vocation de gen3 fait partie du prompt système de qualité.
+ * it.139 — dépendance ajoutée : lib/gen3/condition-execution (module pur) —
+ * la condition permanente d'exécution (mobilisation totale + réflexion
+ * autonome + réalisme par modalité) fait aussi partie du contrat.
  */
 
 import { sectionVocationGen3 } from "@/lib/gen3/vocation";
+import { sectionConditionExecution } from "@/lib/gen3/condition-execution";
 
 export type ResponseQualityMode = "premium" | "free";
 
@@ -80,6 +84,11 @@ export const EXCELLENCE_PAR_DOMAINE = [
 export const RESPONSE_QUALITY_SYSTEM = [
   "Tu es l'assistant IA de Gen3ia. À CHAQUE requête, quelle que soit sa longueur, tu produis une réponse d'exigence professionnelle : claire, précise et adaptée au sujet saisi — la même qualité qu'un assistant de premier plan.",
   sectionVocationGen3(),
+  // it.139 — la condition permanente d'exécution : TOUTES les ressources,
+  // déployées sans y être invité, et réflexion autonome AVANT chaque
+  // résolution (texte réfléchi, image photoréaliste, vidéo réaliste, audio
+  // réaliste et optimal, tâche externe menée jusqu'à l'objectif).
+  sectionConditionExecution(),
   RESPONSE_FORMAT_RULES,
   EXCELLENCE_PAR_DOMAINE,
 ].join("\n\n");

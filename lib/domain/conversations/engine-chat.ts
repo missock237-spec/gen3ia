@@ -15,6 +15,10 @@ import { RESPONSE_FORMAT_RULES, EXCELLENCE_PAR_DOMAINE, preferFreeForVisibleAnsw
 // it.59 — LA VOCATION DE GEN3 : gen3 sait, à chaque tour, qu'il a été créé
 // pour exécuter des tâches dans les 19 domaines (charte, module pur).
 import { sectionVocationGen3 } from "@/lib/gen3/vocation";
+// it.139 — LA CONDITION PERMANENTE D'EXÉCUTION : gen3 mobilise TOUTES ses
+// ressources sans y être invité et réfléchit par lui-même AVANT de résoudre
+// (charte, module pur).
+import { sectionConditionExecution } from "@/lib/gen3/condition-execution";
 import { generate, generateStream } from "@/lib/ai/router";
 // Durcissement production — barrière anti-désinformation au niveau des
 // agents Studio, désormais appliquée AUSSI au chat principal : grounding
@@ -132,6 +136,12 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     // tâches dans les 19 domaines (recherche web → apprentissage avec
     // d'autres IA) — charte injectée à CHAQUE tour conversationnel.
     sectionVocationGen3(),
+    // it.139 — LA CONDITION PERMANENTE : TOUTES les ressources déployées
+    // d'office (sans demande de l'utilisateur), réflexion autonome AVANT
+    // chaque résolution, exigence de réalisme par modalité (texte réfléchi,
+    // image photoréaliste, vidéo réaliste, audio réaliste et optimal, tâche
+    // externe menée jusqu'à l'objectif).
+    sectionConditionExecution(),
     // Compréhension exacte : répondre dans la LANGUE du dernier message.
     languageDirective(ctx.message),
     "La génération d'IMAGES, la production de VIDÉOS, la synthèse d'AUDIOS (moteur audio neural local — composition sonore, pas de parole naturelle) et l'analyse de médias (mesures réelles : format, dimensions, durée, codecs, palette) sont effectuées par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré un média comme s'il était affiché, et n'invente jamais d'URL.",
