@@ -25,6 +25,11 @@ import type { GenerateurLocalMedia } from "./effectors/audio";
 import { EffecteurGenerationVisuelle } from "./effectors/visual";
 import { EffecteurGenerationVideo } from "./effectors/video";
 import { InterfaceVocaleTelephonique } from "./effectors/voice-phone";
+// PONT MÉDIA (plan multimodal ondes) — organe de génération photoréaliste
+// (SDXL / F5-TTS·Kokoro / LTX-Video) via le pont GPU auto-hébergé : module
+// pur, configuration injectée depuis l'environnement (MEDIA_BRIDGE_URL/KEY).
+import { EffecteurMediaBridge } from "./effectors/media-bridge";
+import type { ConfigPontMedia } from "./effectors/media-bridge";
 import { NeuralEngine } from "./engine";
 // it.114 — COMPARTIMENTS CALCULABLES : assemblage des quatre organes du
 // cerveau (math, sciences, code, raisonnement) + passerelle IA utilisateurs.
@@ -85,7 +90,7 @@ import {
  * Assemblage complet du système Gen3 :
  *  - réseau seedé (42 par défaut), espace résonant, générateur de veille ;
  *  - corps sémantique : Tool OS, moteur de compétences, effecteurs audio /
- *    visuel / vidéo / vocal-téléphonique, tous enregistrés au noyau —
+ *    visuel / vidéo / vocal-téléphonique / pont média, tous enregistrés au noyau —
  *    les effecteurs média exécutent les MOTEURS LOCAUX RÉELS
  *    (lib/neural/generation/ — SVG, WAV, SVG animé calculés depuis
  *    l'état APPRIS du cerveau, aucune IA externe) ;
@@ -120,6 +125,14 @@ export interface NeuralRuntime {
   effecteurVideo: EffecteurGenerationVideo;
   /** Interface vocale & téléphonique (moteurs externes déconnectés — honnête). */
   interfaceVocale: InterfaceVocaleTelephonique;
+  /**
+   * EFFECTEUR PONT MÉDIA — organe de génération photoréaliste (SDXL /
+   * F5-TTS·Kokoro / LTX-Video) branché au pont GPU auto-hébergé
+   * (training/gen3-media-pack/bridge). Honnête : PONT_NON_CONFIGURE tant
+   * que MEDIA_BRIDGE_URL + MEDIA_BRIDGE_API_KEY sont absents du runtime —
+   * jamais de faux média, jamais d'IA externe.
+   */
+  effecteurPontMedia: EffecteurMediaBridge;
   /** Noyau central (orchestration des cycles + horloge virtuelle `time`). */
   noyau: NoyauCentralGen3;
   /** Moteur adapté au contrat IA du projet (generate/generateStream). */
@@ -222,6 +235,23 @@ export function configCortexV2DepuisEnv(): {
     ? Math.min(4_194_304, Math.max(1024, brutColonnes))
     : CORTEX_CONFIG_DEFAUTS.colonnes;
   return { actif, colonnes };
+}
+
+/**
+ * Lit la configuration du PONT MÉDIA depuis l'environnement (cf.
+ * docs/entrainement/plan-multimodal-ondes.md §4) : MEDIA_BRIDGE_URL +
+ * MEDIA_BRIDGE_API_KEY. Les deux variables doivent être définies
+ * ENSEMBLE — sans l'une des deux, la configuration est incomplète et
+ * l'effecteur déclarera honnêtement PONT_NON_CONFIGURE. La clé n'est
+ * jamais loggée (honnêteté : l'URL seule suffit au diagnostic).
+ */
+export function configPontMediaDepuisEnv(): ConfigPontMedia {
+  const url = process.env.MEDIA_BRIDGE_URL?.trim();
+  const cleApi = process.env.MEDIA_BRIDGE_API_KEY?.trim();
+  return {
+    ...(url ? { url } : {}),
+    ...(cleApi ? { cleApi } : {}),
+  };
 }
 
 /**
@@ -345,6 +375,24 @@ export function getNeuralRuntime(): NeuralRuntime {
   const effecteurVideo = new EffecteurGenerationVideo(espace, toolOs, moteurVideoLocal);
   const interfaceVocale = new InterfaceVocaleTelephonique(espace);
 
+  // 3-bis. PONT MÉDIA — organe de génération photoréaliste branché au
+  //    pont GPU auto-hébergé (cf. docs/entrainement/plan-multimodal-ondes.md
+  //    §4). La configuration vient de l'environnement (MEDIA_BRIDGE_URL +
+  //    MEDIA_BRIDGE_API_KEY) ; SANS pont, l'effecteur est câblé quand même
+  //    au noyau et déclare honnêtement PONT_NON_CONFIGURE — la mécanique
+  //    (gating résonance ≥ 0.80, Tool OS, métriques) reste 100 % réelle.
+  const configPontMedia = configPontMediaDepuisEnv();
+  const effecteurPontMedia = new EffecteurMediaBridge(espace, toolOs, configPontMedia);
+  if (configPontMedia.url && configPontMedia.cleApi) {
+    console.log(
+      `[NEURAL] Pont média configuré : ${configPontMedia.url} (SDXL / F5-Kokoro / LTX-Video auto-hébergés).`,
+    );
+  } else {
+    console.log(
+      "[NEURAL] Pont média NON configuré — generer_media_photoreal retournera PONT_NON_CONFIGURE (honnête).",
+    );
+  }
+
   // 4. Noyau central avec tous les effecteurs enregistrés — dont le CORTEX
   //    V2 (traitement interne de chaque cycle : colonnes + champ 1e9).
   const noyau = new NoyauCentralGen3(reseau, espace, veille);
@@ -354,6 +402,7 @@ export function getNeuralRuntime(): NeuralRuntime {
   noyau.enregistrerEffecteur(effecteurVisuel);
   noyau.enregistrerEffecteur(effecteurVideo);
   noyau.enregistrerEffecteur(interfaceVocale);
+  noyau.enregistrerEffecteur(effecteurPontMedia);
   if (cortexV2) noyau.enregistrerEffecteur(cortexV2);
 
   // 5. Pools d'entrée/sortie du runtime (les pools média sont enregistrés
@@ -458,6 +507,7 @@ export function getNeuralRuntime(): NeuralRuntime {
     effecteurVisuel,
     effecteurVideo,
     interfaceVocale,
+    effecteurPontMedia,
     noyau,
     engine,
     hippocampe,

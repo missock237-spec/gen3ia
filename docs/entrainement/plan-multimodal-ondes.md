@@ -91,9 +91,11 @@ Notebook prêt : `training/colab/gen3ia_gpu_media_training.ipynb` (secrets : `HF
 ## 4. Intégration plateforme (VPS 2 Go sans GPU)
 
 1. **Machine GPU** : lancer le pont (`gen3_media_bridge.py`) — il expose `/capabilities`, `/v1/image`, `/v1/tts`, `/v1/video` (média en base64, clé en temps constant, borne 30 min).
-2. **Plateforme** : injecter `MEDIA_BRIDGE_URL` + `MEDIA_BRIDGE_API_KEY` dans `EffecteurMediaBridge` (`lib/neural/effectors/media-bridge.ts`) via `lib/neural/runtime.ts` — **chantier restant explicite** : le constructeur attend la config injectée (module pur, aucun accès direct à l'environnement).
+2. **Plateforme** : **FAIT** — `MEDIA_BRIDGE_URL` + `MEDIA_BRIDGE_API_KEY` sont lus par le runtime (`configPontMediaDepuisEnv()` dans `lib/neural/runtime.ts`) et injectés au constructeur pur de `EffecteurMediaBridge` (`lib/neural/effectors/media-bridge.ts`), qui est enregistré au noyau à chaque démarrage. Sans l'une des deux variables (les DEUX sont requises), l'effecteur déclare honnêtement `PONT_NON_CONFIGURE` — la mécanique (gating résonance ≥ 0.80, Tool OS, métriques) reste 100 % réelle ; la clé n'est jamais loggée. Couvert par les tests : `lib/neural/effectors/media-bridge.test.ts` (fetch injecté, 21 cas).
 3. Le média reçu est archivé en R2 (chemin permanent utilisateur) puis servi au client ; `/capabilities` ne déclare que ce qui tourne réellement.
 4. Sans pont configuré, chaque action retourne `PONT_NON_CONFIGURE` — la page Capacités et limites continue d'afficher la vérité.
+
+Reste opérationnel (hors code) : renseigner les deux variables dans l'environnement du VPS (`.env`, cf. §5 étape 5) une fois la machine GPU en ligne.
 
 ---
 
@@ -103,7 +105,7 @@ Notebook prêt : `training/colab/gen3ia_gpu_media_training.ipynb` (secrets : `HF
 2. Session EOD sur les 4 domaines (voie A) — quelques minutes sur le VPS.
 3. Colab gen3-core : train + bench `--comparer` (preuve chiffrée du gain) — sessions de 6 h.
 4. Colab media-pack : image → voix → vidéo, bench_media après chaque — 1 à 2 jours.
-5. Brancher le pont : injecter la config dans runtime.ts, tester les trois `/v1/*`, committer le test unitaire du stub fetch.
+5. Brancher le pont : l'injection runtime et le test unitaire du stub fetch sont **commités** — il reste à renseigner `MEDIA_BRIDGE_URL`/`MEDIA_BRIDGE_API_KEY` sur le VPS puis tester les trois `/v1/*` contre le pont réel (et `/capabilities` pour la sonde honnête).
 6. Itérer : bench → faiblesses → nouveaux échantillons → ré-entraînement (la seule boucle honnête).
 
 ---
@@ -130,5 +132,5 @@ Notebook prêt : `training/colab/gen3ia_gpu_media_training.ipynb` (secrets : `HF
 
 - Méthode ondes : `docs/entrainement/methode-ondes.md` — implémentation : `lib/neural/training/entrainement-ondes.ts`
 - Bus d'ondes : `lib/neural/core/v2/bus-ondes-regions.ts` — champ cortical : `lib/neural/core/v2/champ-cortical.ts`
-- Effecteur pont : `lib/neural/effectors/media-bridge.ts` — pont GPU : `training/gen3-media-pack/bridge/gen3_media_bridge.py`
+- Effecteur pont : `lib/neural/effectors/media-bridge.ts` — tests : `lib/neural/effectors/media-bridge.test.ts` — pont GPU : `training/gen3-media-pack/bridge/gen3_media_bridge.py`
 - Dataset : `datasets/multimodal_ondes/` (MANIFEST + train.jsonl, hash via `scripts/gen3_ondes_finaliser_dataset.mjs`)
