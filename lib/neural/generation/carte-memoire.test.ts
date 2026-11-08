@@ -18,13 +18,13 @@ import {
 import { CortexLangagierGen3 } from "./language";
 
 describe("carte-memoire — où vivent les datasets et la mémoire gravée", () => {
-  it("énumère les fenêtres réelles, triées, la dernière étant it.128", () => {
-    expect(CARTE_MEMOIRE.length).toBeGreaterThanOrEqual(32);
+  it("énumère les fenêtres réelles, triées, la dernière étant it.129", () => {
+    expect(CARTE_MEMOIRE.length).toBeGreaterThanOrEqual(33);
     const numeros = CARTE_MEMOIRE.map((f) => Number(f.fenetre.slice(3)));
     for (let i = 1; i < numeros.length; i++) {
       expect(numeros[i]!).toBeGreaterThan(numeros[i - 1]!);
     }
-    expect(CARTE_MEMOIRE[CARTE_MEMOIRE.length - 1]!.fenetre).toBe("it.128");
+    expect(CARTE_MEMOIRE[CARTE_MEMOIRE.length - 1]!.fenetre).toBe("it.129");
   });
 
   it("zéro fantôme : chaque chemin existe sur le disque avec ses comptes mesurés", () => {
@@ -35,10 +35,13 @@ describe("carte-memoire — où vivent les datasets et la mémoire gravée", () 
       expect(f.assets).toBeGreaterThan(0);
       expect(f.octets).toBeGreaterThan(0);
     }
-    // la fenêtre la plus récente : 20 images COCO + 8 audios FLEURS
+    // la fenêtre la plus récente : 20 images COCO + 5 audios FLEURS
+    // (offset 284 : les 5 DERNIÈRES lignes du split fr_fr/validation,
+    // 284+5=289 — split ÉPUISÉ, taille officielle mesurée via l'API
+    // datasets-server /size ; fenêtre partielle honnête)
     const derniere = CARTE_MEMOIRE[CARTE_MEMOIRE.length - 1]!;
     expect(derniere.images).toBe(20);
-    expect(derniere.audios).toBe(8);
+    expect(derniere.audios).toBe(5);
     expect(derniere.videos).toBe(0);
   });
 
@@ -51,8 +54,8 @@ describe("carte-memoire — où vivent les datasets et la mémoire gravée", () 
     }
   });
 
-  it("dernier snapshot = it.128, présent, taille mesurée sur le disque", () => {
-    expect(DERNIER_SNAPSHOT.fichier).toBe("/neural/cortex-multimodal-it128.bin");
+  it("dernier snapshot = it.129, présent, taille mesurée sur le disque", () => {
+    expect(DERNIER_SNAPSHOT.fichier).toBe("/neural/cortex-multimodal-it129.bin");
     const fichier = join("public", DERNIER_SNAPSHOT.fichier);
     expect(existsSync(fichier)).toBe(true);
     expect(DERNIER_SNAPSHOT.octets).toBe(statSync(fichier).size);

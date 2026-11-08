@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-08T02:16:24.878Z",
+  "dureeMs": 1864,
+  "multimodal": {
+    "total": 25,
+    "parModalite": {
+      "image": 20,
+      "audio": 5,
+      "video": 0
+    },
+    "octets": 4509938,
+    "fenetres": {
+      "image": "rafaelpadilla/coco2017#default/val offset 744 (20) — après offset 724 (it.128)",
+      "audio": "google/fleurs#fr_fr/validation offset 284 (5 — DERNIÈRES lignes du split : 284+5=289, taille officielle /size — SPLIT ÉPUISÉ, comme UCF101 depuis it.90) — après offset 276 (it.128)",
+      "video": "sayakpaul/ucf101-subset#default/train offset 4 (0 — fenêtre épuisée depuis it.90, preuve refaite)"
+    },
+    "pairesServies": 25,
+    "pairesExactes": 25
+  },
+  "corpusProduction": 1801,
+  "snn": {
+    "source": "public/neural/cortex-multimodal-it128.bin",
+    "octetsSource": 12582960,
+    "ondesGravees": 2000,
+    "bande": 9,
+    "mesurePoids": {
+      "avant": {
+        "aretes": 217,
+        "somme": 201.28627495467663,
+        "moyenne": 0.9275865205284637
+      },
+      "apres": {
+        "aretes": 217,
+        "somme": 217,
+        "moyenne": 1
+      },
+      "type": "arêtes des colonnes stimulées (onde complète motif+réponse) vers la bande 9 — mesure déterministe du niveau des poids"
+    },
+    "typeMesure": "rétention (assets réels, onde gravée complète motif+réponse, 4 cycles) + mesure déterministe des poids",
+    "avant": {
+      "hits": 0,
+      "sep": 0,
+      "top3": 0,
+      "total": 25
+    },
+    "apres": {
+      "hits": 0,
+      "sep": 0,
+      "top3": 0,
+      "total": 25
+    },
+    "noteMesure": "MESURE PRIMAIRE = delta de poids (déterministe — arêtes stimulées→b9, boost lrBoost → 1.0). MESURE SECONDAIRE = résonance (protocole it.94c : 4 cycles, onde complète) — limité structurellement par les collisions (une colonne ne spike que si injection × 0,9 ≥ seuil 1, ~3 % des paires — sondes it.96b/c) ; les it.92/94 ne mesuraient eux-mêmes que 12→29 et 0-5 hits. dominance stricte = b9 #1 de toutes (concurrence b0 999 935 paires, b1 101 138 ondes) ; sepTrained = b9 #1 parmi b2..b9.",
+    "snapshot": "public/neural/cortex-multimodal-it129.bin",
+    "octets": 12582960
+  },
+  "snapshot": "public/neural/cortex-multimodal-it129.bin"
+}
