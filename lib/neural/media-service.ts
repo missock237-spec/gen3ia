@@ -384,6 +384,9 @@ export async function genererVisuelNeuralEtPersister(params: {
  * scène est sonore (sons nommés, météo ou cadre reconnus), le design
  * sonore comporte des COUCHES sémantiques (pluie, vagues, vent…)
  * plus une musique structurée ; sinon repli honnête sur la nappe v1.
+ * VOIX HUMAINE : quand le professeur est configuré, la demande part
+ * d'abord vers son TTS réel — voix au choix dans VOIX_PROFESSEUR,
+ * vitesse réglable ; échec = nappe neuronale honnête.
  * Cache de contenu sur (prompt, durée, fréquence, empreinte).
  */
 export async function genererAudioNeuralEtPersister(params: {
@@ -391,13 +394,22 @@ export async function genererAudioNeuralEtPersister(params: {
   prompt: string;
   dureeSecondes?: number;
   frequenceEchantillonnage?: number;
+  voix?: string;
+  vitesse?: number;
 }): Promise<MediaNeuralGenere> {
   // PROFESSEUR TEMPORAIRE : VOIX HUMAINE RÉELLE (TTS) tant que le signal
   // d'onde gen3 n'a pas été distillé. Échec = nappe neuronale honnête.
   if (professeurDisponible()) {
     try {
-      const œuvre = await professeurVoix({ texte: params.prompt });
-      const cle = cleCacheMedia(params.userId, "audio", `prof|${œuvre.meta.moteur}|${params.prompt}`, "wav");
+      const œuvre = await professeurVoix({
+        texte: params.prompt,
+        ...(params.voix !== undefined ? { voix: params.voix } : {}),
+        ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+      });
+      // Clé de contenu incluant voix + vitesse : la même demande avec une
+      // autre voix ou une autre vitesse est un rendu DIFFÉRENT (jamais de
+      // cache hit servant la mauvaise voix).
+      const cle = cleCacheMedia(params.userId, "audio", `prof|${œuvre.meta.moteur}|${œuvre.meta.voix ?? "défaut"}|${params.vitesse ?? 1}|${params.prompt}`, "wav");
       const persiste = await persistGeneratedBuffer({
         userId: params.userId,
         buffer: œuvre.buffer,

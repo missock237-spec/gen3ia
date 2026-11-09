@@ -11,6 +11,7 @@ import {
 import { isOwnedPermanentKey } from "@/lib/files/import";
 import { probeMedia, runFfmpeg, cleanupTmpDir } from "@/lib/video/ffmpeg";
 import { VIDEO_LIMITS } from "@/lib/video/security";
+import { tenterTranscriptionProfesseur } from "@/lib/neural/professeur-media";
 import type { MessageAttachment } from "@/lib/domain/conversations/types";
 
 /**
@@ -24,13 +25,15 @@ import type { MessageAttachment } from "@/lib/domain/conversations/types";
  *    détails), opacité ;
  *  - AUDIO  (ffprobe + ffmpeg volumedetect) : durée, codec, canaux,
  *    fréquence d'échantillonnage, débit moyen, volume moyen et crêtes ;
+ *    PLUS transcription vocale RÉELLE (ASR) quand le professeur média est
+ *    configuré (loi CONTRAINTE-ONDES) — sinon absence déclarée honnêtement ;
  *  - VIDÉO  (ffprobe + extraction d'images clés + sharp) : durée,
  *    dimensions, image/s, codecs, et analyse visuelle de 3 instants
  *    (palette + luminance) qui décrivent l'évolution de la scène.
  *
  * HONNÊTETÉ (invariant du projet) : le moteur ne PRÉTEND jamais percevoir
- * au-delà — la transcription vocale parlée n'est PAS incluse (aucun modèle
- * ASR local), le résumé le dit explicitement quand c'est pertinent.
+ * au-delà — sans professeur configuré, aucune transcription n'est
+ * produite et le résumé le dit explicitement ; JAMAIS de texte inventé.
  * Chaque analyse reflète des mesures réelles du fichier, jamais une
  * invention.
  */
@@ -331,15 +334,29 @@ async function analyserAudioLocale(buffer: Buffer, mime: string): Promise<Analys
       // Fail-soft : la mesure de volume est un plus, pas un prérequis.
     }
 
+    // TRANSCRIPTION VOCALE RÉELLE (ASR) quand le professeur média est
+    // configuré (loi CONTRAINTE-ONDES) ; fail-soft total — sans professeur
+    // ou en cas d'erreur, absence déclarée honnêtement, JAMAIS de texte
+    // inventé (règle it.58).
+    const transcription = await tenterTranscriptionProfesseur(buffer);
+
     const canaux = probe.hasAudio ? "piste audio présente" : "AUCUNE piste audio détectée";
     const debitMoyen = probe.durationSec && probe.durationSec > 0
       ? Math.round((buffer.length * 8) / probe.durationSec / 1000)
       : undefined;
 
+    const phraseTranscription = transcription.disponible && transcription.texte
+      ? `Transcription vocale RÉELLE (${transcription.moteur ?? "professeur-asr"}) : « ${
+          transcription.texte.length > 400
+            ? `${transcription.texte.slice(0, 400)}…`
+            : transcription.texte
+        } ».`
+      : "Le contenu parlé ou chanté n'est PAS transcrit ici : aucun moteur de reconnaissance vocale n'est configuré pour ce rendu, les mesures restent purement acoustiques.";
+
     const resume = [
       `Audio ${mime.replace("audio/", "").toUpperCase()} — ${formatterDuree(probe.durationSec ?? NaN)}, ${canaux}${probe.audioCodec ? ` (codec ${probe.audioCodec})` : ""}${debitMoyen ? `, débit moyen ≈ ${debitMoyen} kbit/s` : ""}.`,
       decrireDynamique(volumes.moyenDb, volumes.creteDb),
-      "Le contenu parlé ou chanté n'est PAS transcrit : le moteur local mesure les caractéristiques acoustiques, il n'inclut pas de reconnaissance vocale.",
+      phraseTranscription,
     ].filter(Boolean).join(" ");
 
     return {
@@ -354,6 +371,7 @@ async function analyserAudioLocale(buffer: Buffer, mime: string): Promise<Analys
         debitMoyenKbps: debitMoyen,
         volumeMoyenDb: volumes.moyenDb,
         volumeCreteDb: volumes.creteDb,
+        transcription,
       },
     };
   });

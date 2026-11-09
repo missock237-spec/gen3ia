@@ -18,9 +18,10 @@ describe("libellés des outils (couche anti-référence interne)", () => {
     expect(toolLabel("composio.execute")).toBe("Application connectée");
     expect(toolLabel("mcp.call")).toBe("Outil externe connecté");
     expect(toolLabel("artifact.create")).toBe("Création de document");
-    // Libellé honnête (audit multimodal) : synthèse audio LOCALE, pas une
-    // promesse de voix parlée naturelle.
-    expect(toolLabel("voice.speak")).toBe("Synthèse audio (locale)");
+    // it.140 : libellé de la capacité réelle — synthèse vocale PARLÉE
+    // (voix humaine réelle via le professeur média quand il est configuré,
+    // repli local honnête sinon ; les deux modes sont vrais).
+    expect(toolLabel("voice.speak")).toBe("Synthèse vocale parlée");
   });
 
   it("ne révèle jamais un identifiant brut inconnu", () => {

@@ -1,22 +1,29 @@
 import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
 import { genererAudioNeuralEtPersister } from "@/lib/neural/media-service";
+import { VOIX_PROFESSEUR } from "@/lib/neural/professeur-media";
 
 /**
- * Outil voice.speak — SYNTHÈSE AUDIO LOCALE RÉELLE.
+ * Outil voice.speak — SYNTHÈSE VOCALE PARLÉE RÉELLE (deux modes honnêtes).
  *
  * Rend réel le contrat annoncé depuis longtemps au planificateur
  * (unified-agent AUDIO RULE, catalogue conversationnel) : l'outil
  * voice.speak était PROMIS mais aucun exécuteur n'existait — toute étape
  * planifiée échouait « Unknown tool: voice.speak » (audit multimodal).
  *
- * Moteur : composition harmonique NEURONALE locale (mêmes moteurs que les
- * signaux audio du corps sémantique) — déterministe, instantanée, sans IA
- * externe ni clé. HONNÊTETÉ : le rendu est une composition sonore dérivée
- * du texte (rythme, tons, intensité) — CE N'EST PAS une parole humaine
- * naturelle ; aucune reconnaissance ni synthèse vocale parlée n'existe
- * dans le moteur local. La note accompagne chaque résultat pour que ni le
- * planner ni l'utilisateur ne soient trompés.
+ * MODE 1 — VOIX HUMAINE RÉELLE (par défaut dès que le professeur média
+ * est configuré, loi CONTRAINTE-ONDES) : le texte part vers le TTS réel
+ * du professeur — voix humaine naturelle, choisie dans le roster
+ * documenté (VOIX_PROFESSEUR : tongtong, chuichui, xiaochen, jam, kazi,
+ * douji, luodo), vitesse réglable 0.5–2. Chaque œuvre porte la mention
+ * honnête `echafaudage: true` (échafaudage supprimable : le signal
+ * d'onde gen3 prendra le relais après distillation).
+ *
+ * MODE 2 — REPLI LOCAL HONNÊTE (professeur absent) : composition
+ * harmonique neuronale déterministe (mêmes moteurs que les signaux audio
+ * du corps sémantique) — rythme et tons dérivés du texte. CE N'EST PAS de
+ * la parole humaine naturelle ; la note du résultat le dit alors
+ * explicitement, pour que ni le planner ni l'utilisateur ne soient trompés.
  *
  * Sortie compatible avec le contrat artefact du moteur conversationnel
  * (lib/domain/conversations/engine.ts) :
@@ -30,7 +37,15 @@ const VoiceSpeakInput = z.object({
     "Le texte EXACT source de la synthèse (fidèle à la demande utilisateur).",
   ),
   dureeSecondes: z.number().int().min(1).max(30).optional().describe(
-    "Durée souhaitée en secondes (défaut dérivé du texte, borné 4–30 s).",
+    "Durée souhaitée en secondes (défaut dérivé du texte, borné 4–30 s). " +
+      "Mode voix humaine réelle : la durée suit le texte (ce paramètre est indicatif).",
+  ),
+  voix: z.enum(VOIX_PROFESSEUR).optional().describe(
+    "Voix humaine du professeur (mode voix réelle). Défaut : tongtong. " +
+      "Roster : tongtong, chuichui, xiaochen, jam, kazi, douji, luodo.",
+  ),
+  vitesse: z.number().min(0.5).max(2).optional().describe(
+    "Vitesse de parole en mode voix humaine réelle (0.5 = lent, 2 = rapide, défaut 1).",
   ),
 });
 
@@ -47,7 +62,7 @@ interface VoiceSpeakToolOutput {
   mimeType: "audio/wav";
   dureeSecondes: number;
   moteur: string;
-  /** Note d'honnêteté sur la nature du rendu (signal neural, pas parole). */
+  /** Note d'honnêteté : mode voix humaine réelle vs repli local. */
   note: string;
 }
 
@@ -64,9 +79,11 @@ export const voiceSpeakTool: ToolDefinition<
   id: "voice.speak",
   name: "voice.speak",
   description:
-    "Synthétise un fichier AUDIO local à partir d'un texte : composition harmonique neuronale déterministe " +
-    "(rythme et tons dérivés du texte), instantanée, archivée en stockage permanent. " +
-    "Moteur local — ce n'est pas de la parole naturelle.",
+    "Synthétise un AUDIO PARLÉ à partir d'un texte. VOIX HUMAINE RÉELLE via le professeur média " +
+    "temporaire quand il est configuré (loi CONTRAINTE-ONDES) : voix au choix (tongtong, chuichui, " +
+    "xiaochen, jam, kazi, douji, luodo), vitesse 0.5–2, archivage permanent. " +
+    "Repli local honnête quand le professeur est absent : composition harmonique neuronale " +
+    "déterministe — ce n'est PAS de la parole, et le résultat le signale.",
   category: "media",
   risk: "low",
   inputSchema: VoiceSpeakInput,
@@ -76,10 +93,13 @@ export const voiceSpeakTool: ToolDefinition<
       prompt: input.text.trim(),
       dureeSecondes: input.dureeSecondes ?? dureeDuTexte(input.text),
       frequenceEchantillonnage: 22050,
+      ...(input.voix !== undefined ? { voix: input.voix } : {}),
+      ...(input.vitesse !== undefined ? { vitesse: input.vitesse } : {}),
     });
 
     const estPermanent = rendu.storage === "r2" && typeof rendu.cleStockage === "string";
     const estProfesseur = rendu.meta?.echafaudage === true;
+    const voixUtilisée = typeof rendu.meta?.voix === "string" ? rendu.meta.voix : null;
     return {
       // Contrat artefact : `url` = clé permanente résolvable (Task 113).
       ...(estPermanent ? { url: rendu.cleStockage } : {}),
@@ -91,9 +111,11 @@ export const voiceSpeakTool: ToolDefinition<
       dureeSecondes: typeof rendu.meta.duree === "number" ? rendu.meta.duree : 0,
       moteur: String(rendu.meta.moteur ?? "gen3-snn-audio-v1"),
       note: estProfesseur
-        ? "Voix humaine réelle générée par le professeur média temporaire (loi CONTRAINTE-ONDES — échafaudage supprimable ; le signal d'onde gen3 prendra le relais après distillation)."
+        ? "Voix humaine RÉELLE générée par le professeur média temporaire (loi CONTRAINTE-ONDES — échafaudage supprimable ; le signal d'onde gen3 prendra le relais après distillation)." +
+          (voixUtilisée ? ` Voix utilisée : ${voixUtilisée}.` : "")
         : "Audio synthétisé localement par le moteur neuronal Gen3 (composition harmonique dérivée du texte). " +
-          "Ce rendu n'est pas une parole humaine naturelle — le moteur local n'inclut pas de synthèse vocale parlée.",
+          "Ce rendu n'est pas une parole humaine naturelle — le professeur média n'est pas configuré, " +
+          "aucune synthèse vocale parlée n'est disponible dans ce mode.",
     };
   },
 };

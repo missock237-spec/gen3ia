@@ -22,6 +22,19 @@ import "server-only";
  * locaux (compositions abstraites honnêtes) prennent la main.
  */
 
+/** Voix TTS documentées de la passerelle (roster officiel, défaut tongtong). */
+export const VOIX_PROFESSEUR = [
+  "tongtong",
+  "chuichui",
+  "xiaochen",
+  "jam",
+  "kazi",
+  "douji",
+  "luodo",
+] as const;
+
+export type VoixProfesseur = (typeof VOIX_PROFESSEUR)[number];
+
 export interface ConfigurationProfesseur {
   baseUrl: string;
   apiKey: string;
@@ -213,15 +226,24 @@ export async function professeurImage(params: {
 /* VOIX HUMAINE                                                        */
 /* ------------------------------------------------------------------ */
 
-/** Génère une VOIX HUMAINE (TTS) via le professeur (échafaudage). */
+/** Génère une VOIX HUMAINE (TTS) via le professeur (échafaudage).
+ *  Voix au choix dans le roster documenté (VOIX_PROFESSEUR), vitesse
+ *  réglable 0.5–2 ; la durée réelle est mesurée dans l'en-tête WAV renvoyé. */
 export async function professeurVoix(params: {
   texte: string;
   vitesse?: number;
+  voix?: string;
 }): Promise<ŒuvreProfesseur> {
   const config = configurationProfesseur();
   if (!config) throw new Error("Professeur média absent (configuration manquante).");
   const texte = params.texte.trim().slice(0, 2000);
   if (texte.length < 2) throw new Error("Professeur voix : texte trop court.");
+
+  // Défense en profondeur : une voix hors roster retombe sur la voix par défaut.
+  const voixDemandée = (VOIX_PROFESSEUR as readonly string[]).includes(params.voix ?? "")
+    ? (params.voix as VoixProfesseur)
+    : undefined;
+  const voix = voixDemandée ?? config.voix ?? "tongtong";
 
   const réponse = await fetchAvecDélai(
     `${config.baseUrl}/audio/tts`,
@@ -230,7 +252,7 @@ export async function professeurVoix(params: {
       headers: enTetes(config),
       body: JSON.stringify({
         input: texte,
-        voice: config.voix ?? "tongtong",
+        voice: voix,
         speed: Math.min(2, Math.max(0.5, params.vitesse ?? 1)),
         response_format: "wav",
       }),
@@ -242,6 +264,7 @@ export async function professeurVoix(params: {
   }
   const buffer = Buffer.from(await réponse.arrayBuffer());
   if (buffer.length < 1024) throw new Error("Professeur voix : audio vide.");
+  const duree = dureeWavSecondes(buffer);
 
   return {
     buffer,
@@ -251,12 +274,137 @@ export async function professeurVoix(params: {
       echafaudage: true,
       loi: "CONTRAINTE-ONDES",
       professeurSupprimable: true,
-      voix: config.voix ?? "tongtong",
+      voix,
+      ...(duree !== undefined ? { duree } : {}),
       caractères: texte.length,
       octets: buffer.length,
       note: "Voix du professeur temporaire — le signal d'onde gen3 prendra le relais après distillation.",
     },
   };
+}
+
+/**
+ * Durée réelle (secondes) lue dans l'en-tête WAV RIFF : parcours des chunks
+ * (fmt → byteRate, data → octets PCM). Fail-soft : undefined si l'en-tête
+ * est absent ou malformé — JAMAIS de durée inventée.
+ */
+export function dureeWavSecondes(buffer: Buffer): number | undefined {
+  if (buffer.length < 44) return undefined;
+  if (buffer.subarray(0, 4).toString("ascii") !== "RIFF") return undefined;
+  if (buffer.subarray(8, 12).toString("ascii") !== "WAVE") return undefined;
+  let byteRate = 0;
+  let octetsDonnees = 0;
+  let off = 12;
+  for (let garde = 0; garde < 16 && off + 8 <= buffer.length; garde += 1) {
+    const id = buffer.subarray(off, off + 4).toString("ascii");
+    const brut = buffer.readUInt32LE(off + 4);
+    const restant = buffer.length - (off + 8);
+    const taille = Math.min(brut, Math.max(0, restant)); // clamp anti-malformation
+    if (id === "fmt " && taille >= 16) {
+      byteRate = buffer.readUInt32LE(off + 8 + 8); // fmt : format(2)+canaux(2)+sampleRate(4) puis byteRate(4)
+    }
+    if (id === "data") {
+      octetsDonnees = taille;
+      break;
+    }
+    off += 8 + taille + (taille % 2); // chunks alignés sur mot
+  }
+  if (byteRate <= 0 || octetsDonnees <= 0) return undefined;
+  return Math.round((octetsDonnees / byteRate) * 100) / 100;
+}
+
+/* ------------------------------------------------------------------ */
+/* TRANSCRIPTION VOCALE (ASR)                                          */
+/* ------------------------------------------------------------------ */
+
+/** Résultat honnête d'une tentative de transcription. */
+export interface TranscriptionProfesseur {
+  disponible: boolean;
+  texte?: string;
+  moteur?: string;
+  echafaudage?: boolean;
+  /** Raison honnête quand disponible === false. */
+  raison?: string;
+}
+
+/**
+ * Transcrit un AUDIO via le professeur (échafaudage) — configuration
+ * passée EXPLICITEMENT (fonction pure testable : le mock fetch remplace
+ * le réseau, aucune clé réelle n'est jamais lue en test).
+ * Endpoint : POST {baseUrl}/audio/asr — corps { file_base64 }, réponse { text }
+ * (contrat exact du SDK officiel z-ai-web-dev-sdk, client createAudioASR).
+ */
+export async function transcriptionViaProfesseurAvec(
+  config: ConfigurationProfesseur,
+  buffer: Buffer,
+): Promise<{ texte: string; meta: Record<string, unknown> }> {
+  if (buffer.length < 512) throw new Error("Professeur ASR : audio trop court.");
+  if (buffer.length > 25_000_000) {
+    throw new Error("Professeur ASR : audio trop volumineux (max 25 Mo).");
+  }
+
+  const réponse = await fetchAvecDélai(
+    `${config.baseUrl}/audio/asr`,
+    {
+      method: "POST",
+      headers: enTetes(config),
+      body: JSON.stringify({ file_base64: buffer.toString("base64") }),
+    },
+    55_000,
+  );
+  if (!réponse.ok) {
+    throw new Error(`Professeur ASR ${réponse.status}: ${(await réponse.text()).slice(0, 200)}`);
+  }
+  const json = (await réponse.json()) as { text?: unknown };
+  if (typeof json.text !== "string" || json.text.trim().length === 0) {
+    throw new Error("Professeur ASR : réponse sans texte.");
+  }
+
+  return {
+    texte: json.text,
+    meta: {
+      moteur: "professeur-asr-temporaire",
+      echafaudage: true,
+      loi: "CONTRAINTE-ONDES",
+      professeurSupprimable: true,
+      caractères: json.text.length,
+      octets: buffer.length,
+      note: "Transcription du professeur temporaire — le signal d'onde gen3 prendra le relais après distillation.",
+    },
+  };
+}
+
+/**
+ * Tente une transcription vocale réelle du buffer audio — FAIL-SOFT TOTAL :
+ * professeur absent, erreur réseau ou réponse vide → { disponible: false,
+ * raison } honnête. JAMAIS de texte inventé (règle it.58 / invariant
+ * InterfaceVocaleTelephonique : pas de transcription fabriquée).
+ */
+export async function tenterTranscriptionProfesseur(
+  buffer: Buffer,
+): Promise<TranscriptionProfesseur> {
+  if (!professeurDisponible()) {
+    return {
+      disponible: false,
+      raison: "Aucun moteur de reconnaissance vocale configuré (professeur média absent) — mesures acoustiques seules.",
+    };
+  }
+  try {
+    const config = configurationProfesseur();
+    if (!config) {
+      return { disponible: false, raison: "Configuration professeur illisible — transcription indisponible." };
+    }
+    const œuvre = await transcriptionViaProfesseurAvec(config, buffer);
+    return {
+      disponible: true,
+      texte: œuvre.texte,
+      moteur: String(œuvre.meta.moteur ?? "professeur-asr-temporaire"),
+      echafaudage: true,
+    };
+  } catch (erreur) {
+    const raison = erreur instanceof Error ? erreur.message.slice(0, 200) : "erreur de transcription";
+    return { disponible: false, raison: `Transcription indisponible : ${raison}` };
+  }
 }
 
 /* ------------------------------------------------------------------ */
