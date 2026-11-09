@@ -1,0 +1,31 @@
+{
+  "iteration": "it.140",
+  "commit": "214b297",
+  "theme": "la voix naturelle et l'oreille (TTS maitrise + ASR reel)",
+  "ci": {
+    "check_runs_total": 21,
+    "success": 19,
+    "skipped": 2,
+    "failures": 0,
+    "note": "les 2 skipped = Armement pull (no-op quand production == main, comportement normal)"
+  },
+  "production": {
+    "url_version": "https://www.gen3ia.online/version.json",
+    "gitSha": "214b2970361a0bdce5a14f246d85d82d022e7fbc",
+    "buildDate": "2026-11-09T20:43:58.154Z",
+    "phase": "production",
+    "endpoints": { "/": 200, "/capacites": 200 }
+  },
+  "tests": { "vitest": "6313 verts / 12 skipped (+18)", "eslint": 0, "tsc": 0, "scan_tokens_diff": 0 },
+  "verifications": [
+    "roster 7 voix documentees (tongtong, chuichui, xiaochen, jam, kazi, douji, luodo)",
+    "ASR contrat SDK officiel: POST /audio/asr { file_base64 } -> { text }",
+    "duree WAV reelle mesuree dans l'en-tete RIFF (fmt byteRate / data)",
+    "cle cache contenu incluant voix + vitesse (jamais la mauvaise voix servie)",
+    "dementis interdits au registre (ancien 'La transcription vocale n'est pas incluse' / 'ce n'est pas de la parole naturelle')",
+    "fail-soft total: disponible:false + raison honnete, jamais de texte invente (it.58)"
+  ],
+  "donnees": "fenetre it.140 non consommee (iteration capacites) — parametres recales en it.141: COCO-2017 offset 944 (20 images), MLS french/dev offset 72 (8 clips), snapshot depuis cortex-multimodal-it138.bin",
+  "date_verification": "2026-11-09T21:05:00Z",
+  "job": 478451
+}
