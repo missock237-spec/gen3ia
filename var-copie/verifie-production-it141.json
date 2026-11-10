@@ -1,0 +1,71 @@
+{
+  "date": "2026-11-10",
+  "commit": "60b1196",
+  "ci": {
+    "check_runs": {
+      "success": 16,
+      "skipped": 1
+    },
+    "total": 17
+  },
+  "production": {
+    "version_gitSha": "60b119637ef1f5a23d6d2d606ba6fc302442f70e",
+    "buildDate": "2026-11-10T04:28:09.798Z",
+    "routes_200": [
+      "/",
+      "/capacites"
+    ],
+    "assets_verifies": [
+      {
+        "url": "/multimodal-it141/images/image_000.jpg",
+        "http": 200,
+        "octets": 58710,
+        "sha256_16": "bb30047e9f2d935d",
+        "match_local": true
+      },
+      {
+        "url": "/multimodal-it141/images/image_001.jpg",
+        "http": 200,
+        "octets": 45787,
+        "sha256_16": "80fb6055bd2813dd",
+        "match_local": true
+      },
+      {
+        "url": "/multimodal-it141/audio/audio_006.opus",
+        "http": 200,
+        "octets": 55769,
+        "sha256_16": "a247d9ee73906fed",
+        "match_local": true
+      },
+      {
+        "url": "/multimodal-it141/audio/audio_007.opus",
+        "http": 200,
+        "octets": 52027,
+        "sha256_16": "b8e24ad589788496",
+        "match_local": true
+      },
+      {
+        "url": "/neural/cortex-multimodal-it141.bin",
+        "http": 200,
+        "octets": 12582960,
+        "sha256_16": "1fb55265b03690aa",
+        "match_local": true
+      }
+    ],
+    "controles": "6/6 MATCH (version.json gitSha + 2 routes + 4 fichiers sha256-identiques)"
+  },
+  "mesures": {
+    "corpus": 2081,
+    "exact": "2021/2081 (97.1 %)",
+    "servie": "2055/2081",
+    "reflexion": "2022/2081 (97.2 %), gain +3",
+    "generalisation": "6/6",
+    "fenetre_it141": "28/28",
+    "carte": "43 fenêtres, 1291 assets, 215.97 Mo, 41 snapshots",
+    "gravure": "2016 ondes bande 9, 234 arêtes 0.9053→1.0000 (+10.5 %)",
+    "vitest": "6322 verts / 12 skipped",
+    "eslint": 0,
+    "tsc": 0,
+    "scan_tokens": 0
+  }
+}
