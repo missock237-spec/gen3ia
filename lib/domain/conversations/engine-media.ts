@@ -265,6 +265,45 @@ export async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResul
     const image = await produceConversationImage(ctx, undefined, async ({ label, stage, percent }) => {
       await onEvent({ type: "status", phase: "image", label, stage, percent });
     });
+    // ÉCHELLE SERVEUR ÉCHOUÉE sur une demande PHOTORÉALISTE (it.144 : la
+    // passerelle est injoignable d'un VPS public et HF 402 sans crédits) →
+    // DÉLÉGATION WebGPU au navigateur de l'utilisateur (SD 2.1 + LoRA
+    // photoréalisme, essaim gen3) au lieu de servir une scène plate.
+    if (looksLikePhotorealRequest(ctx.message) && image.erreurProfesseur) {
+      const jobIdDélégation = randomUUID();
+      await onEvent({
+        type: "webgpu_media",
+        jobId: jobIdDélégation,
+        conversationId: ctx.conversationId,
+        kind: "image",
+        prompt: ctx.message.trim().slice(0, 2000),
+        ratio: detectImageRatio(ctx.message),
+        engine: { repo: WEBGPU_MEDIA_REPO, manifest: "MANIFEST.json" },
+      });
+      const messageDélégation = await appendMessage({
+        conversationId: ctx.conversationId,
+        userId: ctx.userId,
+        role: "assistant",
+        content:
+          "Photoréalisme serveur indisponible depuis ce réseau (constat honnête : " +
+          `${image.erreurProfesseur.slice(0, 140)}) — je délègue la génération à l'IA centrale de l'essaim gen3, ` +
+          "qui la répartit sur les GPU disponibles (le vôtre participe via l'agent gen3 dans votre navigateur ; " +
+          "première génération : téléchargement des modèles ~1 à 2 Go). Si l'essaim ne peut pas calculer, " +
+          "je vous l'annoncerai honnêtement plutôt que de prétendre à un photoréalisme faux.",
+        provider: "gen3-webgpu",
+        model: "gen3-media-engine-v1",
+        generationStatus: "complete",
+      });
+      await onEvent({ type: "message_complete", message: messageDélégation });
+      return {
+        conversationId: ctx.conversationId,
+        userMessage: ctx.userMessage,
+        assistantMessage: messageDélégation,
+        artifacts: [],
+        approvals: [],
+        intent: { mode: "chat", understanding: "Photoréalisme : serveur indisponible → délégation WebGPU." },
+      };
+    }
     await onEvent({ type: "status", phase: "image", label: "Image prête.", stage: "complete", percent: 100 });
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
