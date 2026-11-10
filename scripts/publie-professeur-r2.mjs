@@ -33,7 +33,17 @@ function lireEnvProduction(chemin) {
     if (!proprete || proprete.startsWith("#")) continue;
     const indice = proprete.indexOf("=");
     if (indice <= 0) continue;
-    variables[proprete.slice(0, indice).trim()] = proprete.slice(indice + 1).trim();
+    let valeur = proprete.slice(indice + 1).trim();
+    // GUILLEMETS DOTENV (incidence réelle run #471) : une valeur écrite
+    // R2_ACCOUNT_ID="8d31…" livrait le hostname « "8d31…".r2.cloudflarestorage.com »
+    // — getaddrinfo ENOTFOUND, la config professeur n'atteignait jamais R2.
+    // L'application (dotenv) strippait déjà ; le script fait pareil désormais.
+    if (valeur.length >= 2
+        && ((valeur.startsWith('"') && valeur.endsWith('"'))
+          || (valeur.startsWith("'") && valeur.endsWith("'")))) {
+      valeur = valeur.slice(1, -1).trim();
+    }
+    variables[proprete.slice(0, indice).trim()] = valeur;
   }
   return variables;
 }

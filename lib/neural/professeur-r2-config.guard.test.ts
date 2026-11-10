@@ -144,6 +144,11 @@ describe("VERROUS STRUCTURELS (balayage des sources)", () => {
     expect(sourceScript.includes("writeFileSync(")).toBe(false);
     // jamais bloquant : échec → exit 0 avec warning
     expect(sourceScript).toContain("process.exit(0); // jamais bloquant");
+    // GUILLEMETS DOTENV (incidence réelle run #471) : les valeurs .env
+    // entourées de guillemets sont strippées — sinon le hostname S3 part
+    // avec des « "… » et getaddrinfo ENOTFOUND tue la publication
+    expect(sourceScript).toContain("startsWith('\"') && valeur.endsWith('\"')");
+    expect(sourceScript).toContain("valeur.slice(1, -1).trim()");
   });
 
   it("professeur-media : la clé R2 est privée et bornée (lecture 64 Ko max)", () => {
