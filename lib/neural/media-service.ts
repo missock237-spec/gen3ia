@@ -283,7 +283,7 @@ export async function genererVisuelNeuralEtPersister(params: {
   // PROFESSEUR TEMPORAIRE (loi CONTRAINTE-ONDES) : médias photoréalistes
   // RÉELS tant que le signal d'onde gen3 n'a pas été distillé. Échec =
   // repli silencieux sur la composition neuronale abstraite (honnête).
-  let erreurProfesseur: string | null = null;
+  const erreurProfesseur: string | null = null;
   if (await professeurDisponibleAsync()) {
     try {
       const œuvre = await professeurImage({ prompt: params.prompt, ratio: params.ratio });
