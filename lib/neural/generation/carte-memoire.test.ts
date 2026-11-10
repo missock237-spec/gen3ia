@@ -18,13 +18,13 @@ import {
 import { CortexLangagierGen3 } from "./language";
 
 describe("carte-memoire — où vivent les datasets et la mémoire gravée", () => {
-  it("énumère les fenêtres réelles, triées, la dernière étant it.142", () => {
-    expect(CARTE_MEMOIRE.length).toBeGreaterThanOrEqual(44);
+  it("énumère les fenêtres réelles, triées, la dernière étant it.143", () => {
+    expect(CARTE_MEMOIRE.length).toBeGreaterThanOrEqual(45);
     const numeros = CARTE_MEMOIRE.map((f) => Number(f.fenetre.slice(3)));
     for (let i = 1; i < numeros.length; i++) {
       expect(numeros[i]!).toBeGreaterThan(numeros[i - 1]!);
     }
-    expect(CARTE_MEMOIRE[CARTE_MEMOIRE.length - 1]!.fenetre).toBe("it.142");
+    expect(CARTE_MEMOIRE[CARTE_MEMOIRE.length - 1]!.fenetre).toBe("it.143");
   });
 
   it("zéro fantôme : chaque chemin existe sur le disque avec ses comptes mesurés", () => {
@@ -36,8 +36,8 @@ describe("carte-memoire — où vivent les datasets et la mémoire gravée", () 
       expect(f.octets).toBeGreaterThan(0);
     }
     // la fenêtre la plus récente : 20 images COCO + 8 audios MLS
-    // (facebook/multilingual_librispeech french/dev offset 80 — suite MLS
-    // après l'offset 72 d'it.141 ; FLEURS fr_fr/validation ÉPUISÉ depuis
+    // (facebook/multilingual_librispeech french/dev offset 88 — suite MLS
+    // après l'offset 80 d'it.142 ; FLEURS fr_fr/validation ÉPUISÉ depuis
     // it.129 : 284+5=289 = taille officielle du split ; splits train/test
     // au-delà de la limite de scan du serveur de datasets — bascule
     // documentée à it.130)
@@ -56,8 +56,8 @@ describe("carte-memoire — où vivent les datasets et la mémoire gravée", () 
     }
   });
 
-  it("dernier snapshot = it.142, présent, taille mesurée sur le disque", () => {
-    expect(DERNIER_SNAPSHOT.fichier).toBe("/neural/cortex-multimodal-it142.bin");
+  it("dernier snapshot = it.143, présent, taille mesurée sur le disque", () => {
+    expect(DERNIER_SNAPSHOT.fichier).toBe("/neural/cortex-multimodal-it143.bin");
     const fichier = join("public", DERNIER_SNAPSHOT.fichier);
     expect(existsSync(fichier)).toBe(true);
     expect(DERNIER_SNAPSHOT.octets).toBe(statSync(fichier).size);

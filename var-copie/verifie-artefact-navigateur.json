@@ -1,8 +1,8 @@
 {
   "demande": "En production dans le navigateur, corriger l'affichage à l'envoi d'un artefact puis tester la disparition réelle",
-  "quand": "2026-11-10T07:29:08.097867+00:00",
+  "quand": "2026-11-10T09:13:34.892507+00:00",
   "base": "https://www.gen3ia.online",
-  "compte_test": "artefact-e2e-1794295686@gen3ia.test",
+  "compte_test": "artefact-e2e-1794301946@gen3ia.test",
   "correctifs_verifies": [
     "45f351d (CORS auto-réparation R2)",
     "1599bea (CSP connect-src *.r2.cloudflarestorage.com)"
@@ -20,7 +20,7 @@
       "n": 2,
       "label": "2. inscription UI + session serveur posée (redirection /dashboard)",
       "ok": true,
-      "detail": "artefact-e2e-1794295686@gen3ia.test"
+      "detail": "artefact-e2e-1794301946@gen3ia.test"
     },
     {
       "n": 3,
@@ -74,12 +74,13 @@
       "n": 11,
       "label": "10. AUCUNE erreur console Failed to fetch / CSP",
       "ok": true,
-      "detail": "6 erreur(s) console au total, 0 suspecte(s)"
+      "detail": "7 erreur(s) console au total, 0 suspecte(s)"
     }
   ],
   "erreurs_console": [
     "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
@@ -89,6 +90,7 @@
     "401 https://www.gen3ia.online/api/auth/session",
     "401 https://www.gen3ia.online/api/auth/session",
     "403 https://www.gen3ia.online/status?_rsc=95XpWZDYBWq3k6mU",
+    "403 https://www.gen3ia.online/api/essaim/ondes",
     "403 https://www.gen3ia.online/api/essaim/ondes",
     "403 https://www.gen3ia.online/api/essaim/ondes",
     "403 https://www.gen3ia.online/api/essaim/ondes"
