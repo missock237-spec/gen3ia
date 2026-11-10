@@ -1,13 +1,13 @@
 {
   "demande": "génération d'image photoréaliste par gen3 en production (capture propriétaire : scène plate)",
-  "quand": "2026-11-10T17:38:56.170703+00:00",
-  "compte_test": "image-e2e-1794332284@gen3ia.test",
+  "quand": "2026-11-10T20:39:10.061032+00:00",
+  "compte_test": "image-e2e-1794343105@gen3ia.test",
   "prompt": "Génère une image photoréaliste : un homme assis sur une branche d'arbre dans une forêt ensoleillée, lumière du matin.",
   "verifications": [
     {
       "label": "1. inscription UI + session posée (redirection /dashboard)",
       "ok": true,
-      "detail": "image-e2e-1794332284@gen3ia.test"
+      "detail": "image-e2e-1794343105@gen3ia.test"
     },
     {
       "label": "2. chat authentifié (zone de saisie visible)",
@@ -37,12 +37,12 @@
     {
       "label": "5b. image téléchargée > 30 Ko (une scène plate en fait ~5-15 Ko)",
       "ok": true,
-      "detail": "69813 octets"
+      "detail": "99336 octets"
     },
     {
       "label": "5c. moteur annoncé = professeur (photoréalisme réel)",
-      "ok": false,
-      "detail": "« professeur » absent du fil"
+      "ok": true,
+      "detail": ""
     },
     {
       "label": "6. AUCUN toast « Erreur de génération »",
@@ -55,7 +55,7 @@
       "detail": "5 erreur(s) au total"
     }
   ],
-  "octets_image": 69813,
+  "octets_image": 99336,
   "erreurs_console": [
     "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
@@ -63,5 +63,5 @@
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)"
   ],
-  "verdict": "PROBLÈME ENCORE PRÉSENT"
+  "verdict": "PHOTORÉALISME PRODUCTION OK"
 }

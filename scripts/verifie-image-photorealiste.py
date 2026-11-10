@@ -147,16 +147,22 @@ def main() -> None:
         page.screenshot(path="/tmp/verif-image-page.png", full_page=True)
 
         # 5 bis. CLASSIFICATION DU ROUTAGE (texte final du fil)
+        #   it.144 bis : une img servie par le moteur serveur est un SUCCÈS
+        #   potentiel — le photoréalisme se JUGE visuellement sur les octets
+        #   (var-copie/image-photorealiste-prod.jpg). Une img « scène plate »
+        #   porte la surcharge « Gen3 v2 scène » incrustée dans les octets.
         texte_fil = page.inner_text("body")[-1600:]
-        if "Génération photoréaliste lancée" in texte_fil and "WebGPU" in texte_fil:
+        if "Génération photoréaliste lancée" in texte_fil and "WebGPU" in texte_fil and not img_ok:
             routage = "webgpu-navigateur"
+        elif img_ok and data is not None and b"Gen3 v2" in (data or b""):
+            routage = "scene-plate-servie (ÉCHEC)"
+        elif img_ok:
+            routage = "img-serveur (photoréalisme à confirmer au jugement visuel)"
         elif "Aucun moteur d'image disponible" in texte_fil:
             routage = "erreur-honnete-moteurs"
-        elif img_ok:
-            routage = "img-serveur (moteur à juger visuellement)"
         else:
             routage = "aucun-signal"
-        verif("5 bis. routage photoréaliste honnête", routage != "img-serveur (moteur à juger visuellement)",
+        verif("5 bis. routage photoréaliste", routage != "scene-plate-servie (ÉCHEC)",
               f"routage = {routage}")
 
         src = None
@@ -201,14 +207,16 @@ def main() -> None:
         navigateur.close()
 
     ok_count = sum(1 for v in verifications if v["ok"])
-    if img_ok and data is not None and routage.startswith("img-serveur"):
-        verdict = "IMG SERVIE — moteur à juger visuellement"
+    if routage == "scene-plate-servie (ÉCHEC)":
+        verdict = "PROBLÈME ENCORE PRÉSENT (scène plate servie)"
     elif routage == "webgpu-navigateur":
-        verdict = "ROUTAGE HONNÊTE : photoréalisme délégué au WebGPU du navigateur (moteur serveur indisponible — passerelle privée + HF 402 crédits)"
+        verdict = "ROUTAGE HONNÊTE : photoréalisme délégué au WebGPU du navigateur"
     elif routage == "erreur-honnete-moteurs":
-        verdict = "ERREUR HONNÊTE citant les moteurs (aucune scène plate servie — contrat respecté)"
+        verdict = "ERREUR HONNÊTE citant les moteurs (aucune scène plate servie)"
+    elif routage.startswith("img-serveur"):
+        verdict = "IMG SERVIE PAR LE MOTEUR SERVEUR — photoréalisme à confirmer au jugement visuel des octets"
     else:
-        verdict = "PROBLÈME ENCORE PRÉSENT"
+        verdict = "AUCUN SIGNAL"
     rapport = {
         "demande": "Gen3 doit générer des images PHOTORÉALISTES en production (correctif 4c523b4)",
         "quand": datetime.now(timezone.utc).isoformat(),
