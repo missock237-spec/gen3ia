@@ -320,12 +320,21 @@ export async function professeurImage(params: {
   } else {
     erreurs.push("passerelle : injoignable depuis ce réseau (adresses privées)");
   }
-  // 2) Hugging Face Inference Providers (public — chemin de production)
+  // 2) Hugging Face Inference Providers (public — chemin officiel)
   if (config.hfToken) {
     try {
       return await professeurImageHf(params, config);
     } catch (erreur) {
       erreurs.push(`hugging face : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
+    }
+  }
+  // 2 bis) espace HF gratuit (quota ZeroGPU du jeton — constat it.144 :
+  //  le router 402 sans crédits, l'espace répond event complete)
+  if (config.hfToken) {
+    try {
+      return await professeurImageEspace(params, config);
+    } catch (erreur) {
+      erreurs.push(`espace hf : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
     }
   }
   throw new Error(`Aucun moteur d'image disponible — ${erreurs.join(" · ")}`);
@@ -454,6 +463,91 @@ async function professeurImageHf(
       taille: `${largeur}x${hauteur}`,
       octets: buffer.length,
       note: "Œuvre du professeur temporaire (Hugging Face, demande propriétaire) — le signal d'onde gen3 prendra le relais après distillation.",
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* ESPACE HF GRATUIT (gradio API — quota ZeroGPU du jeton)              */
+/* ------------------------------------------------------------------ */
+
+/** Constat it.144 (2026-11-10, sondes réelles) : le router hf-inference
+ *  exige des crédits prépayés (HTTP 402 — « Purchase pre-paid credits ») et
+ *  l'API legacy api-inference.huggingface.co n'existe plus (DNS vide). L'
+ *  espace officiel black-forest-labs/FLUX.1-schnell sert en revanche la
+ *  file d'attente GPU gratuite à tout porteur de jeton (sonde : image
+ *  photoréaliste 1024×1024 livrée, event complete). Contrat gradio :
+ *  POST /gradio_api/call/infer → {event_id}, puis GET
+ *  /gradio_api/call/infer/{event_id} (SSE) — « event: complete » porte le
+ *  tableau de fichiers, [0].url est l'image générée. */
+const ESPACE_FLUX_SCHNELL = "https://black-forest-labs-flux-1-schnell.hf.space";
+
+async function professeurImageEspace(
+  params: { prompt: string; ratio?: string },
+  config: ConfigurationProfesseur,
+): Promise<ŒuvreProfesseur> {
+  const taille = (TAILLES_IMAGE[params.ratio ?? "1:1"] ?? "1024x1024").split("x");
+  const largeur = Math.min(1536, Math.max(256, Number(taille[0]) || 1024));
+  const hauteur = Math.min(1536, Math.max(256, Number(taille[1]) || 1024));
+  const prompt = durcirPromptImage(params.prompt);
+
+  const lancement = await fetchAvecDélai(
+    `${ESPACE_FLUX_SCHNELL}/gradio_api/call/infer`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.hfToken}`,
+      },
+      // contrat de la démo FLUX.1-schnell : [prompt, seed, randomize, largeur, hauteur, pas]
+      body: JSON.stringify({ data: [prompt, 0, true, largeur, hauteur, 4] }),
+    },
+    60_000,
+  );
+  if (!lancement.ok) {
+    throw new Error(`espace gradio ${lancement.status} : ${(await lancement.text()).slice(0, 200)}`);
+  }
+  const { event_id } = (await lancement.json()) as { event_id?: string };
+  if (!event_id) throw new Error("espace gradio : event_id absent.");
+
+  const flux = await fetchAvecDélai(
+    `${ESPACE_FLUX_SCHNELL}/gradio_api/call/infer/${encodeURIComponent(event_id)}`,
+    { headers: { Authorization: `Bearer ${config.hfToken}` } },
+    150_000,
+  );
+  if (!flux.ok) throw new Error(`espace gradio flux ${flux.status}`);
+  const sse = await flux.text();
+  let issue = "";
+  let donnee = "";
+  for (const bloc of sse.split("\n\n")) {
+    const ev = /^event:\s*(.+)$/m.exec(bloc);
+    const da = /^data:\s*(.*)$/m.exec(bloc);
+    if (ev) issue = ev[1]!.trim();
+    if (da) donnee = da[1]!.trim();
+  }
+  if (issue !== "complete") {
+    const detail = donnee && donnee !== "null" ? ` — ${donnee.slice(0, 120)}` : "";
+    throw new Error(`espace gradio : file d'attente « ${issue || "inconnue"} »${detail}`);
+  }
+  const fichiers = JSON.parse(donnee || "[]") as Array<{ url?: string }>;
+  const url = fichiers[0]?.url;
+  if (!url) throw new Error("espace gradio : URL d'image absente du résultat.");
+  const téléchargement = await fetchAvecDélai(url, {}, 120_000);
+  if (!téléchargement.ok) throw new Error(`espace gradio : téléchargement ${téléchargement.status}`);
+  const buffer = Buffer.from(await téléchargement.arrayBuffer());
+  if (buffer.length < 1024) throw new Error("espace gradio : image trop petite.");
+  return {
+    buffer,
+    mime: mimeDepuisOctets(buffer, "image/webp"),
+    meta: {
+      moteur: "professeur-image-espace-flux-schnell",
+      echafaudage: true,
+      loi: "CONTRAINTE-ONDES",
+      professeurSupprimable: true,
+      espace: "black-forest-labs/FLUX.1-schnell",
+      taille: `${largeur}x${hauteur}`,
+      octets: buffer.length,
+      note: "Œuvre du professeur temporaire (espace HF FLUX.1-schnell, quota ZeroGPU du jeton) — le signal d'onde gen3 prendra le relais après distillation.",
     },
   };
 }
@@ -765,6 +859,8 @@ function mimeDepuisOctets(buffer: Buffer, repli: string): string {
   if (buffer.length >= 12 && buffer.subarray(4, 8).toString("ascii") === "ftyp") return "video/mp4";
   if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) return "image/jpeg";
   if (buffer.length >= 8 && buffer.subarray(0, 8).toString("hex") === "89504e470d0a1a0a") return "image/png";
+  if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF"
+    && buffer.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
   if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF"
     && buffer.subarray(8, 12).toString("ascii") === "WAVE") return "audio/wav";
   if (buffer.length >= 3 && buffer.subarray(0, 3).toString("ascii") === "ID3") return "audio/mpeg";

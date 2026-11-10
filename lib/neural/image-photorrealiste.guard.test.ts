@@ -37,8 +37,8 @@ const CONFIG_FICTIVE: ConfigurationProfesseur = {
   apiKey: "cle-de-test-fictive",
 };
 
-async function professeurFrais() {
-  vi.stubEnv("ZAI_CONFIG_JSON", JSON.stringify(CONFIG_FICTIVE));
+async function professeurFrais(surcharge: Partial<ConfigurationProfesseur> = {}) {
+  vi.stubEnv("ZAI_CONFIG_JSON", JSON.stringify({ ...CONFIG_FICTIVE, ...surcharge }));
   vi.resetModules();
   return import("@/lib/neural/professeur-media");
 }
@@ -144,5 +144,104 @@ describe("VERROUS STRUCTURELS (balayage des sources)", () => {
     expect(sourceOutil).toContain("PAS photoréaliste");
     // l'ancien label menteur est interdit
     expect(sourceOutil.includes("aucune IA externe")).toBe(false);
+  });
+});
+
+describe("professeurImageEspace — contrat gradio HF Spaces (quota ZeroGPU du jeton)", () => {
+  const SSE_COMPLET =
+    'event: complete\ndata: [{"path": "/tmp/gradio/x/image.webp", "url": "https://black-forest-labs-flux-1-schnell.hf.space/gradio_api/file=/tmp/gradio/x/image.webp", "meta": {"_type": "gradio.FileData"}}]';
+
+  function stubEspace(options: { sse?: string; statusFlux?: number; octets?: number } = {}) {
+    const appels: Array<{ url: string; init?: RequestInit }> = [];
+    const png = Buffer.concat([
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+      Buffer.alloc(options.octets ?? 2048, 7),
+    ]);
+    vi.stubGlobal("fetch", (async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      appels.push({ url: u, init });
+      if (u.startsWith("https://passerelle.exemple")) {
+        return new Response("indisponible", { status: 503 }); // passerelle privée injoignable
+      }
+      if (u.startsWith("https://router.huggingface.co/")) {
+        return new Response('{"error":"Purchase pre-paid credits"}', { status: 402 });
+      }
+      if (u === "https://black-forest-labs-flux-1-schnell.hf.space/gradio_api/call/infer") {
+        return new Response(JSON.stringify({ event_id: "e1" }), { status: 200 });
+      }
+      if (u.includes("/gradio_api/call/infer/e1")) {
+        return new Response(options.sse ?? SSE_COMPLET, {
+          status: options.statusFlux ?? 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }
+      if (u.includes("/gradio_api/file=")) {
+        return new Response(new Uint8Array(png), { status: 200 });
+      }
+      return new Response("introuvable", { status: 404 });
+    }) as typeof fetch);
+    return appels;
+  }
+
+  it("contrat gradio : Bearer sur les 3 appels, data [prompt durci, 0, true, W, H, 4], méta honnête", async () => {
+    const appels = stubEspace();
+    const { professeurImage } = await professeurFrais({ hfToken: "hf_test_fictif" });
+    const œuvre = await professeurImage({ prompt: "un homme assis sur un arbre", ratio: "3:2" });
+    const lancement = appels.find((a) => a.url.endsWith("/gradio_api/call/infer"));
+    const flux = appels.find((a) => a.url.includes("/call/infer/e1"));
+    const fichier = appels.find((a) => a.url.includes("/gradio_api/file="));
+    expect(lancement).toBeTruthy();
+    expect(flux).toBeTruthy();
+    expect(fichier).toBeTruthy();
+    // les 2 appels gradio portent le Bearer ; le téléchargement du fichier
+    // généré est une URL publique (pas de Bearer requis)
+    for (const a of [lancement!, flux!]) {
+      expect(String(a.init?.headers?.Authorization ?? "")).toBe("Bearer hf_test_fictif");
+    }
+    const corps = JSON.parse(String(lancement!.init?.body ?? "{}")) as { data: unknown[] };
+    expect(corps.data[0]).toContain("un homme assis sur un arbre");
+    expect(corps.data[0]).toContain("rendu photoréaliste");
+    expect(corps.data[1]).toBe(0);
+    expect(corps.data[2]).toBe(true);
+    expect(corps.data[3]).toBe(1248); // 3:2
+    expect(corps.data[4]).toBe(832);
+    expect(corps.data[5]).toBe(4);
+    expect(œuvre.meta["moteur"]).toBe("professeur-image-espace-flux-schnell");
+    expect(œuvre.meta["echafaudage"]).toBe(true);
+    expect(œuvre.meta["espace"]).toBe("black-forest-labs/FLUX.1-schnell");
+    expect(œuvre.buffer.length).toBeGreaterThan(1024);
+  });
+
+  it("file d'attente « error » → échec honnête citant la marche espace (jamais de média faux)", async () => {
+    stubEspace({ sse: "event: error\ndata: null" });
+    const { professeurImage } = await professeurFrais({ hfToken: "hf_test_fictif" });
+    await expect(professeurImage({ prompt: "un arbre photoréaliste" })).rejects.toThrow(
+      /espace hf : espace gradio : file d'attente « error »/,
+    );
+  });
+
+  it("event_id absent → échec honnête", async () => {
+    const appels: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", (async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      appels.push({ url: u, init });
+      if (u.startsWith("https://passerelle.exemple")) return new Response("", { status: 503 });
+      if (u.startsWith("https://router.huggingface.co/")) return new Response("", { status: 402 });
+      if (u.endsWith("/gradio_api/call/infer")) return new Response("{}", { status: 200 });
+      return new Response("introuvable", { status: 404 });
+    }) as typeof fetch);
+    const { professeurImage } = await professeurFrais({ hfToken: "hf_test_fictif" });
+    await expect(professeurImage({ prompt: "un arbre" })).rejects.toThrow(/event_id absent/);
+  });
+
+  it("échelle complète : passerelle + router + espace tous en échec → erreur agrégée citant les trois", async () => {
+    stubEspace({ sse: "event: error\ndata: null" });
+    const { professeurImage } = await professeurFrais({ hfToken: "hf_test_fictif" });
+    await expect(professeurImage({ prompt: "un arbre" })).rejects.toThrow(
+      /Aucun moteur d'image disponible — passerelle : .*hugging face : .*espace hf : /,
+    );
   });
 });
