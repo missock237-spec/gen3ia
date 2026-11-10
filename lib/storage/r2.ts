@@ -218,6 +218,85 @@ export async function ensureBucketCors(allowedOrigins: string[]): Promise<{ appl
 }
 
 /* ------------------------------------------------------------------ */
+/* Auto-réparation CORS du téléversement direct navigateur → R2        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Origines autorisées pour le téléversement direct navigateur → R2.
+ * Même logique que la route de diagnostic : APP_URL d'abord ; www et le
+ * clone local ne rejoignent la liste qu'EN DÉVELOPPEMENT (production sans
+ * localhost — durcissement déjà appliqué sur le diagnostic).
+ */
+export function originesTeleversementDirect(): string[] {
+  const origin = process.env.APP_URL || "https://gen3ia.online";
+  return process.env.NODE_ENV === "production"
+    ? [origin, "https://www.gen3ia.online"]
+    : [origin, "https://www.gen3ia.online", "http://localhost:3000"];
+}
+
+/** 6 h entre deux bootstrap réussis par instance (un PutBucketCors est idempotent). */
+export const CORS_BOOTSTRAP_TTL_REUSSITE_MS = 6 * 60 * 60 * 1000;
+/** 10 min d'attente après un échec avant de retenter (pas de marteau-pilon). */
+export const CORS_BOOTSTRAP_REPRISE_APRES_ECHEC_MS = 10 * 60 * 1000;
+
+/**
+ * Décision pure : faut-il (re)tenter le bootstrap CORS maintenant ?
+ * Testée unitairement — les constantes ci-dessus en sont les bornes exactes.
+ */
+export function decisionBootstrapCors(
+  dernierSuccesMs: number,
+  dernierEchecMs: number,
+  maintenantMs: number,
+): boolean {
+  if (dernierSuccesMs > 0 && maintenantMs - dernierSuccesMs < CORS_BOOTSTRAP_TTL_REUSSITE_MS) return false;
+  if (dernierEchecMs > 0 && maintenantMs - dernierEchecMs < CORS_BOOTSTRAP_REPRISE_APRES_ECHEC_MS) return false;
+  return true;
+}
+
+let corsAssureLe = 0;
+let corsEchecLe = 0;
+
+/**
+ * Garantit que le bucket porte une règle CORS acceptant le PUT navigateur.
+ *
+ * Incidence réelle corrigée (production, 2026-11-10) : la règle CORS
+ * n'était appliquée QUE par la route de diagnostic admin — un bucket neuf
+ * ou recréé restait SANS règle, le préflight OPTIONS du navigateur
+ * échouait (403 sans Access-Control-Allow-Origin), le PUT direct était
+ * bloqué et CHAQUE pièce jointe du chat se soldait par « Erreur de
+ * génération — le message est conservé dans la zone de saisie ». Le
+ * bootstrap est désormais déclenché à l'ouverture de CHAQUE session de
+ * téléversement : au plus un PutBucketCors toutes les 6 h par instance,
+ * 10 min d'attente après un échec, JAMAIS bloquant (fail-soft total : la
+ * session serveur reste valide même si le bootstrap échoue).
+ */
+export async function assureBucketCorsPourTeleversement(): Promise<boolean> {
+  if (!decisionBootstrapCors(corsAssureLe, corsEchecLe, Date.now())) {
+    return corsAssureLe > 0;
+  }
+  if (!isR2Configured()) return false;
+  try {
+    await ensureBucketCors(originesTeleversementDirect());
+    corsAssureLe = Date.now();
+    corsEchecLe = 0;
+    return true;
+  } catch (error) {
+    corsEchecLe = Date.now();
+    console.warn(
+      "[r2] auto-réparation CORS impossible — le téléversement direct navigateur peut être bloqué :",
+      error instanceof Error ? error.message : String(error),
+    );
+    return false;
+  }
+}
+
+/** Remise à zéro du cache d'auto-réparation (tests uniquement). */
+export function reinitialiseCacheCorsPourTest(): void {
+  corsAssureLe = 0;
+  corsEchecLe = 0;
+}
+
+/* ------------------------------------------------------------------ */
 /* Écritures conditionnelles (migration R2 totale — moteur r2fs)        */
 /* ------------------------------------------------------------------ */
 /* Cloudflare R2 supporte les écritures conditionnelles S3 : un PUT      */

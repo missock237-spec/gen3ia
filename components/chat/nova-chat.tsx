@@ -1539,10 +1539,22 @@ export default function NovaChat() {
           );
           setSaisie(message);
           setFichiers(pieces);
-          afficherToast("Erreur de génération — le message est conservé dans la zone de saisie.");
+          // HONNÊTETÉ (incidence réelle 2026-11-10) : la cause réelle était
+          // jetée — l'utilisateur ne voyait qu'un texte générique et ne
+          // savait ni ce qui cassait, ni quoi faire. Le message d'erreur
+          // ACTIONNABLE (audit 25-a/25-d, humanizeStorageError) atteint
+          // désormais le toast ; le générique reste le repli.
+          const raison = err instanceof Error && err.message ? err.message.slice(0, 180) : "";
+          afficherToast(
+            raison
+              ? `Erreur de génération — ${raison} Le message est conservé dans la zone de saisie.`
+              : "Erreur de génération — le message est conservé dans la zone de saisie.",
+            6000,
+          );
+          console.error("[nova-chat] envoi impossible :", err);
         } else {
           viderFichiers(pieces);
-          afficherToast("Erreur de génération");
+          afficherToast("Erreur de génération", 6000);
         }
         sauvegarder();
         saisieRef.current?.focus();

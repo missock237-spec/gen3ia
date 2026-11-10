@@ -4,6 +4,7 @@ import { FieldValue } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 import {
   abortMultipartUpload,
+  assureBucketCorsPourTeleversement,
   completeMultipartUpload,
   createDownloadUrl,
   createMultipartUpload,
@@ -149,6 +150,11 @@ function sessionRef(uploadId: string) { return adminDb.collection(SESSIONS_COLLE
  * depassements des l'ouverture de session.
  */
 export async function createUploadSessions(params: { userId: string; intents: ValidatedUploadIntent[] }): Promise<UploadSessionView[]> {
+  // Auto-réparation CORS (jamais bloquante) : sans règle sur le bucket, le
+  // préflight OPTIONS du navigateur échoue en 403, le PUT direct est bloqué
+  // et chaque pièce jointe du chat se solde par une erreur de génération.
+  await assureBucketCorsPourTeleversement();
+
   const usage = await getUserStorageUsage(params.userId);
   if (usage.usedBytes + params.intents.reduce((sum, intent) => sum + intent.sizeBytes, 0) > usage.quotaBytes) {
     throw new Error("Quota de stockage depasse. Supprimez des fichiers ou passez a un plan superieur.");
