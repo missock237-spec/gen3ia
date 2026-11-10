@@ -83,6 +83,23 @@ jobs:
         # AVEC scripts sur le VPS (binaire ffmpeg présent en production).
         run: npm ci --ignore-scripts --include=dev --no-audit --no-fund
 
+      # PROFESSEUR MÉDIA — CANAL PULL (it.144, 2026-11-10) : le canal SSH est
+      # muet (PerSourcePenalties/fail2ban) et l'installation /opt/gen3ia/
+      # .z-ai-config n'a JAMAIS réussi en mode pull — le professeur média
+      # (image photoréaliste, voix humaine, vidéo) était absent de la
+      # production. Le runner lit la config du secret ZAI_CONFIG_JSON_B64 et
+      # la dépose dans le bucket R2 PRIVÉ de l'application (credentials R2
+      # du .env.production déjà restauré) ; l'application VPS la lit au
+      # runtime (candidat R2 de professeur-media). Aucun secret ni dans la
+      # release publique ni dans le dépôt. Non bloquant : sans secret ou
+      # sans creds → repli neuronal honnête.
+      - name: Publier la config du professeur média dans R2 (canal pull)
+        run: |
+          printf '%s' "$ZAI_CONFIG_JSON_B64" | base64 -d > /tmp/zai-config.json
+          node scripts/publie-professeur-r2.mjs
+        env:
+          ZAI_CONFIG_JSON_B64: ${{ secrets.ZAI_CONFIG_JSON_B64 }}
+
       - name: Build production
         run: npm run build
         env:

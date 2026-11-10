@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus, errorCode } from "@/lib/security/http-errors";
-import { professeurDisponible, configurationProfesseur, professeurVoix } from "@/lib/neural/professeur-media";
+import { professeurDisponibleAsync, configurationProfesseurAsync, professeurVoix } from "@/lib/neural/professeur-media";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,8 +78,8 @@ export async function GET(_request: NextRequest) {
     });
   }
 
-  const disponible = professeurDisponible();
-  const config = configurationProfesseur();
+  const disponible = await professeurDisponibleAsync();
+  const config = await configurationProfesseurAsync();
   const chemins = sonderChemins();
 
   const diagnostic: Record<string, unknown> = {

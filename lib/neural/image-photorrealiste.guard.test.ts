@@ -130,7 +130,7 @@ describe("VERROUS STRUCTURELS (balayage des sources)", () => {
 
   it("routage : photoréaliste → professeur d'abord (WebGPU seulement sans professeur)", () => {
     expect(sourceEngineMedia).toContain(
-      "looksLikePhotorealRequest(ctx.message) && !professeurDisponible()",
+      "looksLikePhotorealRequest(ctx.message) && !(await professeurDisponibleAsync())",
     );
     expect(sourceEngineMedia).toContain('from "@/lib/neural/professeur-media"');
   });

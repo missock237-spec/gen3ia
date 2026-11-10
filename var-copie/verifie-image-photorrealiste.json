@@ -1,0 +1,68 @@
+{
+  "demande": "génération d'image photoréaliste par gen3 en production (capture propriétaire : scène plate)",
+  "quand": "2026-11-10T16:51:20.552881+00:00",
+  "compte_test": "image-e2e-1794329418@gen3ia.test",
+  "prompt": "Génère une image photoréaliste : un homme assis sur une branche d'arbre dans une forêt ensoleillée, lumière du matin.",
+  "verifications": [
+    {
+      "label": "1. inscription UI + session posée (redirection /dashboard)",
+      "ok": true,
+      "detail": "image-e2e-1794329418@gen3ia.test"
+    },
+    {
+      "label": "2. chat authentifié (zone de saisie visible)",
+      "ok": true,
+      "detail": "/chat"
+    },
+    {
+      "label": "3. demande photoréaliste envoyée",
+      "ok": true,
+      "detail": "Génère une image photoréaliste : un homme assis sur une bran"
+    },
+    {
+      "label": "4a. génération démarrée",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "4b. génération terminée (≤240 s — professeur + persistance R2)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "5a. une image est rendue dans le fil",
+      "ok": true,
+      "detail": "1 img(s)"
+    },
+    {
+      "label": "5b. image téléchargée > 30 Ko (une scène plate en fait ~5-15 Ko)",
+      "ok": true,
+      "detail": "69813 octets"
+    },
+    {
+      "label": "5c. moteur annoncé = professeur (photoréalisme réel)",
+      "ok": false,
+      "detail": "« professeur » absent du fil"
+    },
+    {
+      "label": "6. AUCUN toast « Erreur de génération »",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "7. zéro erreur console suspecte (fetch/CSP)",
+      "ok": true,
+      "detail": "6 erreur(s) au total"
+    }
+  ],
+  "octets_image": 69813,
+  "erreurs_console": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "verdict": "PROBLÈME ENCORE PRÉSENT"
+}

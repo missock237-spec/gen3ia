@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/security/authenticated-request";
 import { errorStatus } from "@/lib/security/http-errors";
 import { listCapabilitiesForUser } from "@/lib/capabilities/catalog";
-import { professeurDisponible } from "@/lib/neural/professeur-media";
+import { professeurDisponibleAsync } from "@/lib/neural/professeur-media";
 
 /**
  * CATALOGUE DE CAPACITÉS (concept post-SaaS #5 « AI Operating System ») :
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       principal: catalog.principal,
       // PROFESSEUR MÉDIA TEMPORAIRE (loi CONTRAINTE-ONDES) : statut de
       // l'échafaudage image/voix/vidéo — diagnostic sans accès SSH.
-      professeurMedia: professeurDisponible(),
+      professeurMedia: await professeurDisponibleAsync(),
     };
     if (kindFilter) {
       const filtered = catalog.capabilities.filter((entry) => entry.kind === kindFilter);

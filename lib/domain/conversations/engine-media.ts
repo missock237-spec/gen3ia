@@ -14,7 +14,7 @@ import { produceConversationImage } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import type { ConversationTurnResult } from "./engine-turn";
 import { randomUUID } from "node:crypto";
-import { professeurDisponible } from "@/lib/neural/professeur-media";
+import { professeurDisponibleAsync } from "@/lib/neural/professeur-media";
 
 /**
  * VIDÉO COURTE RÉALISTE (loi CONTRAINTE-ONDES) : une demande de vidéo
@@ -222,7 +222,7 @@ export async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResul
     // GPU navigateur (téléchargement 1-2 Go) était une régression d'usage.
     // Le WebGPU reste le chemin de repli quand la passerelle n'est pas
     // configurée — son repli serveur lui-même passe par le professeur).
-    if (looksLikePhotorealRequest(ctx.message) && !professeurDisponible()) {
+    if (looksLikePhotorealRequest(ctx.message) && !(await professeurDisponibleAsync())) {
       const jobId = randomUUID();
       await onEvent({
         type: "webgpu_media",

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { downloadFromR2 } from "@/lib/storage/r2";
+
 /**
  * PROFESSEUR MÉDIA TEMPORAIRE — échafaudage externe de la loi CONTRAINTE-ONDES.
  *
@@ -47,6 +49,24 @@ export interface ConfigurationProfesseur {
 
 let cacheConfig: ConfigurationProfesseur | null | undefined;
 
+/** Normalise un objet de config brut (env, fichier, R2) — exporté pour la garde. */
+export function normaliserConfigurationProfesseur(
+  parsed: Partial<ConfigurationProfesseur>,
+): ConfigurationProfesseur | null {
+  if (typeof parsed.baseUrl === "string" && typeof parsed.apiKey === "string"
+    && parsed.baseUrl.length > 0 && parsed.apiKey.length > 0) {
+    return {
+      baseUrl: parsed.baseUrl.replace(/\/$/, ""),
+      apiKey: parsed.apiKey,
+      ...(typeof parsed.chatId === "string" && parsed.chatId ? { chatId: parsed.chatId } : {}),
+      ...(typeof parsed.userId === "string" && parsed.userId ? { userId: parsed.userId } : {}),
+      ...(typeof parsed.token === "string" && parsed.token ? { token: parsed.token } : {}),
+      ...(typeof parsed.voix === "string" && parsed.voix ? { voix: parsed.voix } : {}),
+    };
+  }
+  return null;
+}
+
 /** Lit la configuration du professeur (mise en cache, lecture unique). */
 export function configurationProfesseur(): ConfigurationProfesseur | null {
   if (cacheConfig !== undefined) return cacheConfig;
@@ -54,17 +74,67 @@ export function configurationProfesseur(): ConfigurationProfesseur | null {
   return cacheConfig;
 }
 
+/* ---- CANAL R2 (mode pull) ------------------------------------------------
+ * Le canal SSH du CD est muet : l'installation /opt/gen3ia/.z-ai-config
+ * n'a JAMAIS réussi en mode pull (runs #79→…→#471 skippés) — le professeur
+ * était donc absent de la production. Le runner CD dépose désormais la
+ * config dans le bucket R2 PRIVÉ de l'application (credentials du .env
+ * de production) et l'application la lit ici au runtime — cache positif
+ * 6 h / négatif 10 min pour ne jamais marteler R2.
+ */
+export const CLE_R2_CONFIG_PROFESSEUR = "private/professeur-media/z-ai-config.json";
+const TTL_R2_POSITIF_MS = 6 * 60 * 60 * 1000;
+const TTL_R2_NEGATIF_MS = 10 * 60 * 1000;
+
+let cacheR2Config: { config: ConfigurationProfesseur | null; expiration: number } | null = null;
+
+/** Résolution ASYNC de la configuration : candidats locaux d'abord, puis le
+ *  bucket R2 privé. Zéro throw — absent ⇒ null (repli neuronal honnête). */
+export async function configurationProfesseurAsync(): Promise<ConfigurationProfesseur | null> {
+  const locale = configurationProfesseur();
+  if (locale) return locale;
+  const maintenant = Date.now();
+  if (cacheR2Config && maintenant < cacheR2Config.expiration) return cacheR2Config.config;
+  try {
+    const brut = await downloadFromR2(CLE_R2_CONFIG_PROFESSEUR, 64 * 1024);
+    const parsed = JSON.parse(brut.toString("utf-8")) as Partial<ConfigurationProfesseur>;
+    const config = normaliserConfigurationProfesseur(parsed);
+    cacheR2Config = { config, expiration: maintenant + (config ? TTL_R2_POSITIF_MS : TTL_R2_NEGATIF_MS) };
+    return config;
+  } catch {
+    // clé absente / R2 indisponible / JSON illisible → absent (cache négatif)
+    cacheR2Config = { config: null, expiration: maintenant + TTL_R2_NEGATIF_MS };
+    return null;
+  }
+}
+
+/** Disponibilité ASYNC du professeur (mêmes gardes d'environnement que la
+ *  version sync + candidat R2). */
+export async function professeurDisponibleAsync(): Promise<boolean> {
+  if (process.env.GEN3_PROFESSEUR_MEDIA === "0") return false;
+  if (process.env.NODE_ENV === "test") return false;
+  return (await configurationProfesseurAsync()) !== null;
+}
+
 function chargerConfigurationProfesseur(): ConfigurationProfesseur | null {
+  // GEN3_PROFESSEUR_FICHIERS_LOCALS=0 : ignore les candidats FICHIERS
+  // (/etc, $HOME, cwd, /opt) — isolation de test et mode R2-seul. La var
+  // d'env ZAI_CONFIG_JSON reste le premier candidat (contrat inchangé).
+  const ignorerFichiers = process.env.GEN3_PROFESSEUR_FICHIERS_LOCALS === "0";
   const candidats: Array<() => string | null> = [
     () => process.env.ZAI_CONFIG_JSON ?? null,
-    () => lireFichier("/etc/.z-ai-config"),
-    () => lireFichier(`${process.env.HOME ?? "/root"}/.z-ai-config`),
-    () => lireFichier(`${process.cwd()}/.z-ai-config`),
-    // VPS de production : le cwd de PM2 peut différer du répertoire
-    // applicatif (le workflow CD y dépose la config via SSH). Chemin
-    // explicite + racine passée par variable d'environnement.
-    () => lireFichier("/opt/gen3ia/.z-ai-config"),
-    () => (process.env.GEN3IA_ROOT ? lireFichier(`${process.env.GEN3IA_ROOT}/.z-ai-config`) : null),
+    ...(ignorerFichiers
+      ? []
+      : [
+          () => lireFichier("/etc/.z-ai-config"),
+          () => lireFichier(`${process.env.HOME ?? "/root"}/.z-ai-config`),
+          () => lireFichier(`${process.cwd()}/.z-ai-config`),
+          // VPS de production : le cwd de PM2 peut différer du répertoire
+          // applicatif (le workflow CD y dépose la config via SSH). Chemin
+          // explicite + racine passée par variable d'environnement.
+          () => lireFichier("/opt/gen3ia/.z-ai-config"),
+          () => (process.env.GEN3IA_ROOT ? lireFichier(`${process.env.GEN3IA_ROOT}/.z-ai-config`) : null),
+        ]),
   ];
   for (const lire of candidats) {
     const brut = lire();
@@ -175,7 +245,7 @@ export async function professeurImage(params: {
   prompt: string;
   ratio?: string;
 }): Promise<ŒuvreProfesseur> {
-  const config = configurationProfesseur();
+  const config = await configurationProfesseurAsync();
   if (!config) throw new Error("Professeur média absent (configuration manquante).");
   const taille = TAILLES_IMAGE[params.ratio ?? "1:1"] ?? "1024x1024";
   const prompt = durcirPromptImage(params.prompt);
@@ -239,7 +309,7 @@ export async function professeurVoix(params: {
   vitesse?: number;
   voix?: string;
 }): Promise<ŒuvreProfesseur> {
-  const config = configurationProfesseur();
+  const config = await configurationProfesseurAsync();
   if (!config) throw new Error("Professeur média absent (configuration manquante).");
   const texte = params.texte.trim().slice(0, 2000);
   if (texte.length < 2) throw new Error("Professeur voix : texte trop court.");
@@ -395,7 +465,7 @@ export async function tenterTranscriptionProfesseur(
     };
   }
   try {
-    const config = configurationProfesseur();
+    const config = await configurationProfesseurAsync();
     if (!config) {
       return { disponible: false, raison: "Configuration professeur illisible — transcription indisponible." };
     }
@@ -442,7 +512,7 @@ export async function professeurVideo(params: {
   duréeSecondes?: number;
   délaiMaxMs?: number;
 }): Promise<ŒuvreProfesseur> {
-  const config = configurationProfesseur();
+  const config = await configurationProfesseurAsync();
   if (!config) throw new Error("Professeur média absent (configuration manquante).");
   const prompt = params.prompt.trim().slice(0, 1500);
   if (prompt.length < 4) throw new Error("Professeur vidéo : prompt trop court.");

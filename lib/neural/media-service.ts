@@ -18,7 +18,7 @@ import { genererAudioScene, sceneSonore } from "./generation/audio-composition";
 import { genererVideoScene } from "./generation/video-storyboard";
 import { lexiqueMultimodal } from "./generation/lexique-serveur";
 import {
-  professeurDisponible,
+  professeurDisponibleAsync,
   professeurImage,
   professeurVoix,
   professeurVideo,
@@ -283,7 +283,7 @@ export async function genererVisuelNeuralEtPersister(params: {
   // PROFESSEUR TEMPORAIRE (loi CONTRAINTE-ONDES) : médias photoréalistes
   // RÉELS tant que le signal d'onde gen3 n'a pas été distillé. Échec =
   // repli silencieux sur la composition neuronale abstraite (honnête).
-  if (professeurDisponible()) {
+  if (await professeurDisponibleAsync()) {
     try {
       const œuvre = await professeurImage({ prompt: params.prompt, ratio: params.ratio });
       const cle = cleCacheMedia(params.userId, "visuel", `prof|${œuvre.meta.moteur}|${params.prompt}|${params.ratio ?? "1:1"}`, œuvre.mime === "image/png" ? "png" : "jpg");
@@ -399,7 +399,7 @@ export async function genererAudioNeuralEtPersister(params: {
 }): Promise<MediaNeuralGenere> {
   // PROFESSEUR TEMPORAIRE : VOIX HUMAINE RÉELLE (TTS) tant que le signal
   // d'onde gen3 n'a pas été distillé. Échec = nappe neuronale honnête.
-  if (professeurDisponible()) {
+  if (await professeurDisponibleAsync()) {
     try {
       const œuvre = await professeurVoix({
         texte: params.prompt,
@@ -507,7 +507,7 @@ export async function genererVideoNeuralEtPersister(params: {
 }): Promise<MediaNeuralGenere> {
   // PROFESSEUR TEMPORAIRE : VIDÉO RÉALISTE RÉELLE tant que le signal
   // d'onde gen3 n'a pas été distillé. Échec = storyboard neuronal honnête.
-  if (professeurDisponible()) {
+  if (await professeurDisponibleAsync()) {
     try {
       const œuvre = await professeurVideo({ prompt: params.prompt, duréeSecondes: params.dureeSecondes });
       const cle = cleCacheMedia(params.userId, "video", `prof|${œuvre.meta.moteur}|${params.prompt}|${params.dureeSecondes ?? 5}`, "mp4");

@@ -1,0 +1,78 @@
+{
+  "demande": "Gen3 doit générer des images PHOTORÉALISTES en production (correctif 4c523b4)",
+  "quand": "2026-11-10T17:14:57.482928+00:00",
+  "base": "https://www.gen3ia.online",
+  "compte_test": "image-e2e-1794330839@gen3ia.test",
+  "requête": "Génère une image photoréaliste d'un homme assis sur une branche d'arbre, en forêt, lumière naturelle du matin.",
+  "verifications": [
+    {
+      "label": "1. page production ouverte",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "label": "2. inscription UI + session posée (redirection /dashboard)",
+      "ok": true,
+      "detail": "image-e2e-1794330839@gen3ia.test"
+    },
+    {
+      "label": "3. chat authentifié (zone de saisie visible)",
+      "ok": true,
+      "detail": "/chat"
+    },
+    {
+      "label": "4. demande envoyée",
+      "ok": true,
+      "detail": "repli Entrée"
+    },
+    {
+      "label": "5. image générée apparue dans le fil",
+      "ok": true,
+      "detail": "21 s"
+    },
+    {
+      "label": "6. source de l'image extraite",
+      "ok": true,
+      "detail": "https://gen3ia-artifacts.8d31e557c682da00dc5860ab6b8cd0d9.r2.cloudflarestorage.c"
+    },
+    {
+      "label": "7. image téléchargée (HTTP)",
+      "ok": true,
+      "detail": "200 — 70916 octets"
+    },
+    {
+      "label": "8. octets réels sauvegardés",
+      "ok": true,
+      "detail": "70916 octets, dimensions 1024x1024 — image-photorealiste-prod.jpg"
+    },
+    {
+      "label": "9. AUCUNE erreur console Failed to fetch / CSP",
+      "ok": true,
+      "detail": "6 erreur(s) console, 0 suspecte(s)"
+    }
+  ],
+  "verdict_global": "IMAGE PHOTORÉALISTE LIVRÉE (à confirmer au jugement visuel)",
+  "ok": "9/9",
+  "image_octets": 70916,
+  "image_dimensions": [
+    1024,
+    1024
+  ],
+  "erreurs_console": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "echecs_reseau_4xx": [
+    "401 https://www.gen3ia.online/api/auth/session",
+    "401 https://www.gen3ia.online/api/auth/session",
+    "403 https://www.gen3ia.online/status?_rsc=95XpWZDYBWq3k6mU",
+    "403 https://www.gen3ia.online/api/essaim/ondes",
+    "403 https://www.gen3ia.online/api/essaim/ondes",
+    "403 https://www.gen3ia.online/api/essaim/ondes"
+  ],
+  "texte_fil_final": "u · 5/12 domaine(s) maîtrisé(s)\n\nLa boucle tourne jusqu'à maîtrise complète du catalogue (mesures réelles).\n\nDomaines (5/12 maîtrisés · 41 évaluation(s))\nHistorique des évaluations\nHugging Face ✓\nKaggle ✓\n\n780 cycles exécutés\n\n7084 paires · 22950 échantillons · 94 datasets\n\nDernier cycle : echec — Domaine « Langues & traduction » : 0 dataset(s) ingéré(s), 0 paire(s), 0 échantillon(s) ; pas assez de matière pour une évaluation comptable. Progression : 5/12 domaine(s) maîtrisé(s).\n\nLancer un cycle maintenant\nParamètres\nÉtat du service\nGen3 · Équilibré\nPrête — demandez-lui tout\nMoteur Gen3 opérationnel\n35 s max · repli garanti\nSe connecter\nGénère une image photoréaliste d'un homme assis sur une branche d'arbre, en forêt, lumière naturelle du matin.\n17:14\nCopier\nG\n\nVoici l'image que j'ai générée pour vous. Elle est également enregistrée dans les artefacts de la conversation.\n\ngen3-snn-visuel-v2-scene\n17:14\nCopier\nRégénérer\nRésume en 3 points\nDonne-moi un exemple concret\nQuelle est la prochaine étape ?\nOutils\n🎯\nÉquilibré\nRecherche web\nAgent Live\nEntrée pour envoyer · Maj + Entrée pour aller à la ligne · Gen3ia pilote toute la plateforme : agents, automatisations, médias, documents.\nHaut"
+}
