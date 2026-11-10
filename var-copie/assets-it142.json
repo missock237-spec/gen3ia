@@ -1,0 +1,286 @@
+{
+  "total_octets": 1520127,
+  "n": 28,
+  "assets": [
+    {
+      "id": "km142_image_001",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "51938",
+      "file": "public/multimodal-it142/images/image_000.jpg",
+      "bytes": 40738,
+      "sha256": "aed15b30e9156c9b",
+      "legende_reelle": "scène contenant : personne, skis (13 objets annotés)"
+    },
+    {
+      "id": "km142_image_002",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "28809",
+      "file": "public/multimodal-it142/images/image_001.jpg",
+      "bytes": 32917,
+      "sha256": "ed017f057010cc2e",
+      "legende_reelle": "scène contenant : banane (4 objets annotés)"
+    },
+    {
+      "id": "km142_image_003",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "170474",
+      "file": "public/multimodal-it142/images/image_002.jpg",
+      "bytes": 41906,
+      "sha256": "008641418b601cda",
+      "legende_reelle": "scène contenant : ballon, chaise, personne, raquette de tennis (4 objets annotés)"
+    },
+    {
+      "id": "km142_image_004",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "279774",
+      "file": "public/multimodal-it142/images/image_003.jpg",
+      "bytes": 44442,
+      "sha256": "2de427202337f8dc",
+      "legende_reelle": "scène contenant : batte de baseball, chaise, personne (9 objets annotés)"
+    },
+    {
+      "id": "km142_image_005",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "383386",
+      "file": "public/multimodal-it142/images/image_004.jpg",
+      "bytes": 70574,
+      "sha256": "4f19574a09767553",
+      "legende_reelle": "scène contenant : chaise, ours en peluche (4 objets annotés)"
+    },
+    {
+      "id": "km142_image_006",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "363461",
+      "file": "public/multimodal-it142/images/image_005.jpg",
+      "bytes": 55551,
+      "sha256": "76a433e177fc10b9",
+      "legende_reelle": "scène contenant : chaise, clavier, ordinateur portable, souris, téléviseur (6 objets annotés)"
+    },
+    {
+      "id": "km142_image_007",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "432553",
+      "file": "public/multimodal-it142/images/image_006.jpg",
+      "bytes": 43835,
+      "sha256": "16283bf841ec0b20",
+      "legende_reelle": "scène contenant : banc, chien, personne, vélo (5 objets annotés)"
+    },
+    {
+      "id": "km142_image_008",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "332455",
+      "file": "public/multimodal-it142/images/image_007.jpg",
+      "bytes": 29792,
+      "sha256": "dd38f115e6c1dd08",
+      "legende_reelle": "scène contenant : toilettes (1 objets annotés)"
+    },
+    {
+      "id": "km142_image_009",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "281447",
+      "file": "public/multimodal-it142/images/image_008.jpg",
+      "bytes": 61785,
+      "sha256": "63e1e8f015931fa4",
+      "legende_reelle": "scène contenant : cheval (3 objets annotés)"
+    },
+    {
+      "id": "km142_image_010",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "217425",
+      "file": "public/multimodal-it142/images/image_009.jpg",
+      "bytes": 30657,
+      "sha256": "99d620d70ebed719",
+      "legende_reelle": "scène contenant : horloge (1 objets annotés)"
+    },
+    {
+      "id": "km142_image_011",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "291664",
+      "file": "public/multimodal-it142/images/image_010.jpg",
+      "bytes": 101974,
+      "sha256": "72051bb52047f13b",
+      "legende_reelle": "scène contenant : borne incendie, chien (2 objets annotés)"
+    },
+    {
+      "id": "km142_image_012",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "50679",
+      "file": "public/multimodal-it142/images/image_011.jpg",
+      "bytes": 37393,
+      "sha256": "6fdc9f454421c87b",
+      "legende_reelle": "scène contenant : orange, voiture (13 objets annotés)"
+    },
+    {
+      "id": "km142_image_013",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "137106",
+      "file": "public/multimodal-it142/images/image_012.jpg",
+      "bytes": 15154,
+      "sha256": "d8a95a564f565ba7",
+      "legende_reelle": "scène contenant : lit, personne (2 objets annotés)"
+    },
+    {
+      "id": "km142_image_014",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "249643",
+      "file": "public/multimodal-it142/images/image_013.jpg",
+      "bytes": 78311,
+      "sha256": "c3dc7ccdc09ee76e",
+      "legende_reelle": "scène contenant : personne, train (3 objets annotés)"
+    },
+    {
+      "id": "km142_image_015",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "322352",
+      "file": "public/multimodal-it142/images/image_014.jpg",
+      "bytes": 44467,
+      "sha256": "17fd27c74bd6ef96",
+      "legende_reelle": "scène contenant : chaise, horloge, plante en pot, table, vase (14 objets annotés)"
+    },
+    {
+      "id": "km142_image_016",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "345356",
+      "file": "public/multimodal-it142/images/image_015.jpg",
+      "bytes": 40522,
+      "sha256": "2925d520a7e46e77",
+      "legende_reelle": "scène contenant : bouteille, cuillère, personne, table, tasse, téléphone portable, vase (11 objets annotés)"
+    },
+    {
+      "id": "km142_image_017",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "480936",
+      "file": "public/multimodal-it142/images/image_016.jpg",
+      "bytes": 52007,
+      "sha256": "6c39aaccbf97c5c9",
+      "legende_reelle": "scène contenant : chaise, hot-dog, livre, personne (5 objets annotés)"
+    },
+    {
+      "id": "km142_image_018",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "225532",
+      "file": "public/multimodal-it142/images/image_017.jpg",
+      "bytes": 22544,
+      "sha256": "d087d4578ee72220",
+      "legende_reelle": "scène contenant : voiture (8 objets annotés)"
+    },
+    {
+      "id": "km142_image_019",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "226147",
+      "file": "public/multimodal-it142/images/image_018.jpg",
+      "bytes": 51159,
+      "sha256": "4f90112e23f6a654",
+      "legende_reelle": "scène contenant : chaise, couteau, cuillère, fourchette, horloge, personne, sac à dos, sac à main, sandwich, table, tasse, téléphone portable, vase (21 objets annotés)"
+    },
+    {
+      "id": "km142_image_020",
+      "modality": "image",
+      "dataset": "rafaelpadilla/coco2017#default/val",
+      "row_id": "445365",
+      "file": "public/multimodal-it142/images/image_019.jpg",
+      "bytes": 68797,
+      "sha256": "e4d407bba56142dc",
+      "legende_reelle": "scène contenant : girafe (2 objets annotés)"
+    },
+    {
+      "id": "km142_audio_001",
+      "modality": "audio",
+      "dataset": "facebook/multilingual_librispeech#french/dev",
+      "row_id": "1591_1028_000080",
+      "file": "public/multimodal-it142/audio/audio_000.opus",
+      "bytes": 74985,
+      "sha256": "ba0e94412dd3a895",
+      "legende_reelle": "il en sera ce qu'il plaira au sultan mais il faut espérer qu'il aura la bonté de suspendre ma mort jusqu'à demain effectivement schahriar loin d'ordonner ce trépas ce jour-là attendit la nuit prochaine avec impatience tant il avait d'envie d'apprendre la fin de l'histoire du roi grec et la suite de celle du pêcheur et du génie"
+    },
+    {
+      "id": "km142_audio_002",
+      "modality": "audio",
+      "dataset": "facebook/multilingual_librispeech#french/dev",
+      "row_id": "1591_1028_000081",
+      "file": "public/multimodal-it142/audio/audio_001.opus",
+      "bytes": 81021,
+      "sha256": "6e7a96b1c83db082",
+      "legende_reelle": "les vizirs les émirs les officiers de la garde enfin toute la cour se rendit le jour suivant dans la salle d'audience pour en être témoin on vit bientôt paraître le médecin douban qui s'avança jusqu'au pied du trône royal avec un gros livre à la main là il se fit apporter un bassin sur lequel il étendit la couverture dont le livre était enveloppé et présentant le livre au roi"
+    },
+    {
+      "id": "km142_audio_003",
+      "modality": "audio",
+      "dataset": "facebook/multilingual_librispeech#french/dev",
+      "row_id": "1591_1028_000082",
+      "file": "public/multimodal-it142/audio/audio_002.opus",
+      "bytes": 64702,
+      "sha256": "be686f91c47bbe57",
+      "legende_reelle": "j'ai appris de bonne part répliqua le roi que tu es un espion et que tu n'es venu dans ma cour que pour attenter à ma vie mais pour te prévenir je veux te ravir la tienne frappe ajouta-t-il au bourreau qui était présent et me délivre d'un perfide qui ne s'est introduit ici que pour m'assassiner"
+    },
+    {
+      "id": "km142_audio_004",
+      "modality": "audio",
+      "dataset": "facebook/multilingual_librispeech#french/dev",
+      "row_id": "1591_1028_000083",
+      "file": "public/multimodal-it142/audio/audio_003.opus",
+      "bytes": 56967,
+      "sha256": "883ec432e85854f6",
+      "legende_reelle": "heureusement il retrouva son chemin et arriva sain et sauf auprès du roi son père auquel il raconta de point en point le danger qu'il venait de courir par la faute du grand vizir le roi irrité contre ce ministre le fit étrangler à l'heure même"
+    },
+    {
+      "id": "km142_audio_005",
+      "modality": "audio",
+      "dataset": "facebook/multilingual_librispeech#french/dev",
+      "row_id": "1591_1028_000084",
+      "file": "public/multimodal-it142/audio/audio_004.opus",
+      "bytes": 75722,
+      "sha256": "9f879dc5704bf679",
+      "legende_reelle": "schahriar ayant marqué qu'il était dans la même crainte hé bien sire dit la sultane je vais vous tirer de peine après que la fausse princesse des indes eut dit au jeune prince de se recommander à dieu comme il crut qu'elle ne lui parlait pas sincèrement et qu'elle comptait sur lui comme s'il eût déjà été sa proie il leva les mains au ciel et dit"
+    },
+    {
+      "id": "km142_audio_006",
+      "modality": "audio",
+      "dataset": "facebook/multilingual_librispeech#french/dev",
+      "row_id": "1591_1028_000085",
+      "file": "public/multimodal-it142/audio/audio_005.opus",
+      "bytes": 80178,
+      "sha256": "1a7ddd14739220e9",
+      "legende_reelle": "quelque curiosité qu'eût dinarzade d'entendre le reste de l'histoire du roi grec elle ne se réveilla pas cette nuit de si bonne heure qu'à l'ordinaire il était même presque jour lorsqu'elle dit à la sultane ma chère soeur je vous prie de continuer la merveilleuse histoire du roi grec mais hâtez-vous de grâce car le jour paraîtra bientôt"
+    },
+    {
+      "id": "km142_audio_007",
+      "modality": "audio",
+      "dataset": "facebook/multilingual_librispeech#french/dev",
+      "row_id": "1591_1028_000086",
+      "file": "public/multimodal-it142/audio/audio_006.opus",
+      "bytes": 62112,
+      "sha256": "42839ae6a7fa6779",
+      "legende_reelle": "non dit le pécheur je ne te délivrerai pas c'est trop raisonné je vais te précipiter au fond de la mer encore un mot pêcheur s'écria le génie je te promets de ne te faire aucun mal bien éloigné de cela je t'enseignerai un moyen de devenir puissamment riche"
+    },
+    {
+      "id": "km142_audio_008",
+      "modality": "audio",
+      "dataset": "facebook/multilingual_librispeech#french/dev",
+      "row_id": "1591_1028_000087",
+      "file": "public/multimodal-it142/audio/audio_007.opus",
+      "bytes": 59915,
+      "sha256": "1ed304e6fedecbcb",
+      "legende_reelle": "cependant le médecin fondant en pleurs et se plaignant pitoyablement de se voir si mal payé du service qu'il avait rendu au roi se prépara à recevoir le coup de la mort le bourreau lui banda les yeux lui lia les mains et se mit en devoir de tirer son sabre"
+    }
+  ]
+}
