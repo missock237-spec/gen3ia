@@ -1,0 +1,96 @@
+{
+  "demande": "En production dans le navigateur, corriger l'affichage à l'envoi d'un artefact puis tester la disparition réelle",
+  "quand": "2026-11-10T07:29:08.097867+00:00",
+  "base": "https://www.gen3ia.online",
+  "compte_test": "artefact-e2e-1794295686@gen3ia.test",
+  "correctifs_verifies": [
+    "45f351d (CORS auto-réparation R2)",
+    "1599bea (CSP connect-src *.r2.cloudflarestorage.com)"
+  ],
+  "code_secret_pdf": "K7-ARKALIS",
+  "verdict_global": "PROBLEME DISPARU",
+  "verifications": [
+    {
+      "n": 1,
+      "label": "1. page production ouverte (HTTP 200)",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "n": 2,
+      "label": "2. inscription UI + session serveur posée (redirection /dashboard)",
+      "ok": true,
+      "detail": "artefact-e2e-1794295686@gen3ia.test"
+    },
+    {
+      "n": 3,
+      "label": "3. chat authentifie (zone de saisie visible)",
+      "ok": true,
+      "detail": "/chat"
+    },
+    {
+      "n": 4,
+      "label": "4. artefact PDF attache (puce visible dans la barre)",
+      "ok": true,
+      "detail": "1 input file sur la page"
+    },
+    {
+      "n": 5,
+      "label": "5. envoi declenche (touche Entrée, bouton restait inactif)",
+      "ok": true,
+      "detail": "repli Entrée"
+    },
+    {
+      "n": 6,
+      "label": "6a. generation demarree (bouton passe a « Arrêter »)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "n": 7,
+      "label": "6b. generation terminee (bouton revenu a « Envoyer »)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "n": 8,
+      "label": "7. reponse assistant non vide",
+      "ok": true,
+      "detail": "2 bulle(s)"
+    },
+    {
+      "n": 9,
+      "label": "8. PREUVE FORTE : code secret du PDF lu par Gen3",
+      "ok": true,
+      "detail": "attendu « K7-ARKALIS » dans la reponse"
+    },
+    {
+      "n": 10,
+      "label": "9. AUCUN toast « Erreur de génération » pendant tout le flux",
+      "ok": true,
+      "detail": "observateur=False texte-final=False"
+    },
+    {
+      "n": 11,
+      "label": "10. AUCUNE erreur console Failed to fetch / CSP",
+      "ok": true,
+      "detail": "6 erreur(s) console au total, 0 suspecte(s)"
+    }
+  ],
+  "erreurs_console": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "echecs_reseau_4xx": [
+    "401 https://www.gen3ia.online/api/auth/session",
+    "401 https://www.gen3ia.online/api/auth/session",
+    "403 https://www.gen3ia.online/status?_rsc=95XpWZDYBWq3k6mU",
+    "403 https://www.gen3ia.online/api/essaim/ondes",
+    "403 https://www.gen3ia.online/api/essaim/ondes",
+    "403 https://www.gen3ia.online/api/essaim/ondes"
+  ]
+}
