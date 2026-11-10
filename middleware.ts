@@ -61,10 +61,20 @@ const CONTENT_SECURITY_POLICY = [
   //     SENTRY_INGEST_HOSTS dans instrumentation.ts) ;
   //   - Google AdSense (Task 40) : beacons du loader et suivi de clic
   //     (googlesyndication, doubleclick, googleadservices) ;
+  //   - R2 Cloudflare (téléversement DIRECT des pièces jointes) : le flux
+  //     multipart à URLs présignées fait déposer par le NAVIGATEUR chaque
+  //     partie directement chez R2 (lib/storage/upload-client.ts) — c'est
+  //     un fetch navigateur PAR CONCEPTION (aucune donnée ne transite par
+  //     le serveur), donc *.r2.cloudflarestorage.com DOIT figurer ici.
+  //     Sonde réelle 2026-11-10 : sans cette entrée le fetch PUT échouait
+  //     en « Failed to fetch » (bloqué par la CSP AVANT le réseau), chaque
+  //     pièce jointe du chat se soldait par « Erreur de génération ». Le
+  //     bucket est privé : toute opération exige une URL présignée — le
+  //     joker n'expose aucune donnée.
   //   - Composio, Upstash, Qdrant, Agnes/Groq, webhooks sortants :
   //     appels SERVEUR uniquement — volontairement ABSENTS de la CSP
   //     navigateur (aucun fetch direct depuis le client).
-  "connect-src 'self' https://apis.google.com https://*.googleapis.com https://www.gstatic.com https://*.firebaseio.com wss://*.googleapis.com wss://*.firebaseio.com https://o4511820262473728.ingest.de.sentry.io https://ingest.de.sentry.io https://ingest.sentry.io https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com https://js.chariowcdn.com https://*.mychariow.shop",
+  "connect-src 'self' https://apis.google.com https://*.googleapis.com https://www.gstatic.com https://*.firebaseio.com wss://*.googleapis.com wss://*.firebaseio.com https://o4511820262473728.ingest.de.sentry.io https://ingest.de.sentry.io https://ingest.sentry.io https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.googleadservices.com https://js.chariowcdn.com https://*.mychariow.shop https://*.r2.cloudflarestorage.com",
   // Google AdSense (Task 40) : les annonces se rendent dans des iframes
   // servies par googleads.g.doubleclick.net et tpc.googlesyndication.com.
   // Widgets Chariow (/billing) : iframe de checkout servie par le CDN widget

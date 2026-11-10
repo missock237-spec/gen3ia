@@ -68,6 +68,20 @@ describe("CSP principale — allowlist connect-src (Task 60)", () => {
     expect(sources).toContain("https://*.googleadservices.com");
   });
 
+  it("R2 Cloudflare : le téléversement DIRECT des pièces jointes (PUT présigné navigateur) est autorisé", () => {
+    // Incidence réelle 2026-11-10 : sans cette entrée, le fetch PUT vers
+    // l'URL présignée était bloqué PAR LA CSP (« Failed to fetch » AVANT le
+    // réseau) — chaque pièce jointe du chat échouait en « Erreur de
+    // génération », quel que soit le CORS du bucket.
+    expect(sources).toContain("https://*.r2.cloudflarestorage.com");
+    // Variante de token du domaine de base (le joker *.r2.cloudflarestorage.com
+    // de la CSP réelle couvre gen3ia-artifacts.<accountId>.r2.cloudflarestorage.com).
+    expect(cspAuthorizesAny(csp, "r2.cloudflarestorage.com")).toBe(true);
+    // Un domaine voisin piégé reste refusé (le joker est borné au TLD exact).
+    expect(cspAuthorizesAny(csp, "r2.cloudflarestorage.com.attacker.io")).toBe(false);
+    expect(cspAuthorizesAny(csp, "attacker-r2.cloudflarestorage.com.evil.example")).toBe(false);
+  });
+
   it("sondes csp-probe : les hôtes critiques restent vérifiables par token exact", () => {
     expect(cspHasToken(csp, "'self'")).toBe(true);
     // *.googleapis.com autorise les sous-domaines Firebase par variantes de token.
