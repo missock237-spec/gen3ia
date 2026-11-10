@@ -154,8 +154,9 @@ export interface ŒuvreProfesseur {
   meta: Record<string, unknown>;
 }
 
-/** Amélioration déterministe du prompt (sujet INTACT, rendu photo). */
-function durcirPromptImage(prompt: string): string {
+/** Amélioration déterministe du prompt (sujet INTACT, rendu photo). Exporté
+ *  pour la garde photoréaliste. */
+export function durcirPromptImage(prompt: string): string {
   const bas = prompt.toLowerCase();
   const déjàPhoto = /(photograph|photoreal|photor[eé]aliste|hyper[- ]?r[eé]aliste|ultra[- ]?r[eé]aliste|r[eé]aliste)/.test(bas);
   const noyaux = [
@@ -186,7 +187,11 @@ export async function professeurImage(params: {
       headers: enTetes(config),
       body: JSON.stringify({ prompt, size: taille }),
     },
-    55_000,
+    // 150 s (incidence réelle it.144, 2026-11-10) : la passerelle mesure
+    // 34 s en moyenne mais dépasse parfois 55 s — les échecs silencieux
+    // déclenchaient le repli composition abstraite et l'utilisateur
+    // recevait une scène plate au lieu d'un photoréalisme.
+    150_000,
   );
   if (!réponse.ok) {
     throw new Error(`Professeur image ${réponse.status}: ${(await réponse.text()).slice(0, 200)}`);
@@ -199,7 +204,7 @@ export async function professeurImage(params: {
   if (typeof premier.base64 === "string" && premier.base64.length > 0) {
     buffer = Buffer.from(premier.base64, "base64");
   } else if (premier.url) {
-    const téléchargement = await fetchAvecDélai(premier.url, {}, 55_000);
+    const téléchargement = await fetchAvecDélai(premier.url, {}, 120_000);
     if (!téléchargement.ok) throw new Error(`Professeur image : téléchargement ${téléchargement.status}`);
     buffer = Buffer.from(await téléchargement.arrayBuffer());
   } else {

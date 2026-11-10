@@ -39,8 +39,9 @@ export const generateImageNeuralTool: ToolDefinition<
   id: "image.generate",
   name: "image.generate",
   description:
-    "Génère une composition visuelle NEURONALE calculée depuis l'état réel du cerveau Gen3 " +
-    "(constellation synaptique apprise, palette dérivée du prompt). Moteur local : aucune IA externe.",
+    "Génère une IMAGE PHOTORÉALISTE RÉELLE via le professeur média temporaire quand la passerelle " +
+    "est configurée (échafaudage loi CONTRAINTE-ONDES — rendu photo, lumière naturelle, profondeur de champ). " +
+    "Sans passerelle : composition neuronale locale honnête (abstraite, JAMAIS photoréaliste — signalé).",
   category: "media",
   risk: "low",
   inputSchema: ImageGenerateInput,
@@ -53,13 +54,21 @@ export const generateImageNeuralTool: ToolDefinition<
       ratio: input.ratio ?? detectImageRatio(input.prompt),
     });
 
+    // HONNÊTETÉ par moteur : le label doit nommer le moteur RÉEL utilisé.
+    const moteur = String(result.meta.moteur ?? "gen3-snn-visuel-v1");
+    const details = moteur.startsWith("professeur")
+      ? `Image photoréaliste RÉELLE via le professeur média temporaire (${moteur}, ` +
+        `taille ${String(result.meta.taille ?? "?")}, ${Number(result.meta.octets ?? 0).toLocaleString("fr-FR")} octets) — ` +
+        `échafaudage loi CONTRAINTE-ONDES : le signal d'onde gen3 prendra le relais après distillation.`
+      : `Composition neuronale générée localement (${moteur}) — ` +
+        `${String(result.meta.nbNoeuds ?? "?")} nœuds / ${String(result.meta.nbAretes ?? "?")} arêtes issues des synapses réelles ` +
+        `(professeur média indisponible : rendu abstrait, PAS photoréaliste).`;
+
     return {
       url: result.url,
       storage: result.storage,
       mime: result.mime,
-      details:
-        `Composition neuronale générée localement (${String(result.meta.moteur ?? "gen3-snn-visuel-v1")}) — ` +
-        `${String(result.meta.nbNoeuds ?? "?")} nœuds / ${String(result.meta.nbAretes ?? "?")} arêtes issues des synapses réelles.`,
+      details,
     };
   },
 };

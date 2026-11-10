@@ -14,6 +14,7 @@ import { produceConversationImage } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import type { ConversationTurnResult } from "./engine-turn";
 import { randomUUID } from "node:crypto";
+import { professeurDisponible } from "@/lib/neural/professeur-media";
 
 /**
  * VIDÉO COURTE RÉALISTE (loi CONTRAINTE-ONDES) : une demande de vidéo
@@ -215,10 +216,13 @@ export async function runImageTurn(ctx: TurnBase): Promise<ConversationTurnResul
   const onEvent = safeEmitter(ctx.onEvent);
   try {
     // MÉDIA WEBGPU : demande photoréaliste → directive de génération
-    // LOCALE sur le GPU de l'utilisateur (SD 2.1 + LoRA photoréalisme,
-    // repo public gen3ia-media-engine). Le message persisté explique
-    // honnêtement la prise en charge et le repli automatique.
-    if (looksLikePhotorealRequest(ctx.message)) {
+    // LOCALE sur le GPU de l'utilisateur — UNIQUEMENT quand le professeur
+    // média est ABSENT (incidence réelle it.144, 2026-11-10 : le professeur
+    // serveur produit le photoréalisme RÉEL en 30-90 s ; le déléguer au
+    // GPU navigateur (téléchargement 1-2 Go) était une régression d'usage.
+    // Le WebGPU reste le chemin de repli quand la passerelle n'est pas
+    // configurée — son repli serveur lui-même passe par le professeur).
+    if (looksLikePhotorealRequest(ctx.message) && !professeurDisponible()) {
       const jobId = randomUUID();
       await onEvent({
         type: "webgpu_media",
