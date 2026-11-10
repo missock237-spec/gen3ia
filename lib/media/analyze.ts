@@ -195,6 +195,104 @@ function qualifierTemperature(hex: string): string {
   return "tons neutres";
 }
 
+/* ------------------------------------------------------------------ */
+/* VISION LINGUISTIQUE (parité Gemini — multimodal d'entrée honnête)   */
+/* ------------------------------------------------------------------ */
+/* Le moteur gen3 est un moteur TEXTE : il ne « voit » pas les pixels.  */
+/* La vision linguistique traduit les MESURES structurelles réelles     */
+/* (sharp : palette, luminance, contraste, entropie) en DESCRIPTION     */
+/* nommée que le moteur texte peut raisonner — comme Gemini décrit une  */
+/* image, mais avec l'honnêteté intégrale : cette description porte sur */
+/* la STRUCTURE de l'image (couleurs, ambiance, type de scène probable) */
+/* et JAMAIS sur des objets ou visages que l'analyse ne peut pas voir.  */
+
+const FAMILLES_COULEUR: Array<{ nom: string; test: (h: number, s: number, l: number) => boolean }> = [
+  { nom: "rouge", test: (h) => h < 15 || h >= 345 },
+  { nom: "brun", test: (h, s, l) => h >= 15 && h < 45 && l < 45 && s >= 8 },
+  { nom: "orange", test: (h, s) => h >= 15 && h < 45 && s >= 8 },
+  { nom: "jaune", test: (h, s) => h >= 45 && h < 70 && s >= 8 },
+  { nom: "vert", test: (h, s) => h >= 70 && h < 165 && s >= 8 },
+  { nom: "cyan", test: (h, s) => h >= 165 && h < 195 && s >= 8 },
+  { nom: "bleu", test: (h, s) => h >= 195 && h < 255 && s >= 8 },
+  { nom: "violet", test: (h, s) => h >= 255 && h < 300 && s >= 8 },
+  { nom: "rose/magenta", test: (h, s) => h >= 300 && h < 345 && s >= 8 },
+];
+
+/** Famille de couleur nommée en français (HSL) — pour la description linguistique. */
+function nomFamilleCouleur(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  const l01 = (max + min) / 2;
+  const l = Math.round(l01 * 100);
+  // HSL standard : S = d / (1 - |2L - 1|), L en 0..1 → pourcentage 0..100.
+  const s = d === 0 ? 0 : (d / (1 - Math.abs(2 * l01 - 1))) * 100;
+  // Achromatique d'abord (sinon un blanc pur serait classé par sa teinte nulle).
+  if (d === 0 || s < 8) return l < 10 ? "noir" : l > 92 ? "blanc" : "gris";
+  let h = 0;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h = Math.round(((h * 60) + 360) % 360);
+  const famille = FAMILLES_COULEUR.find((f) => f.test(h, s, l));
+  return famille?.nom ?? "teinte indéterminée";
+}
+
+/**
+ * Traduit les mesures structurelles d'une IMAGE en description linguistique
+ * riche pour le moteur texte : familles de couleurs nommées, ambiance, type
+ * de scène PROBABLE (inférence structurelle honnête). Ne décrit JAMAIS des
+ * objets/visages — l'analyse structurelle ne les voit pas.
+ */
+export function decrireVisionLinguistique(analyse: AnalyseMediaLocale): string | null {
+  if (analyse.kind !== "image") return null;
+  const details = analyse.details as {
+    orientation?: string;
+    luminanceMoyenne?: number;
+    ecartType?: number;
+    entropie?: number;
+    palette?: Array<{ hex: string; part: number }>;
+  } | null;
+  if (!details) return null;
+
+  const familles = (details.palette ?? [])
+    .slice(0, 3)
+    .map((c) => `${nomFamilleCouleur(c.hex)} (${c.part} %)`)
+    .filter((v, i, t) => t.indexOf(v) === i);
+
+  const luminance = details.luminanceMoyenne ?? 128;
+  const ambiance = luminance < 64
+    ? "ambiance sombre ou nocturne"
+    : luminance > 192
+      ? "ambiance très lumineuse, souvent extérieure ou sur fond clair"
+      : luminance > 160
+        ? "ambiance claire"
+        : "ambiance intermédiaire";
+
+  const entropie = details.entropie ?? 0;
+  const contraste = details.ecartType ?? 0;
+  const nbCouleurs = (details.palette ?? []).length;
+  const typeProbable = entropie >= 6 && contraste >= 24
+    ? "photographie ou scène détaillée probable (forte richesse de détails)"
+    : entropie < 4 && nbCouleurs <= 3
+      ? "graphique, logo, capture d'écran ou illustration plate probable (faible richesse, peu de couleurs)"
+      : "contenu visuel mixte (illustration, photo légère ou document)";
+
+  const parties = [
+    familles.length > 0 ? `couleurs dominantes perçues : ${familles.join(", ")}` : "palette indéterminée",
+    `image ${details.orientation ?? "format inconnu"} et ${ambiance}`,
+    typeProbable,
+  ];
+
+  return [
+    `${parties.join(" ; ")}.`,
+    "(vision structurelle gen3 : mesures réelles de l'image — aucune perception d'objets ou de visages, qui n'est pas disponible sur ce moteur)",
+  ].join(" ");
+}
+
 export async function analyserImageLocale(buffer: Buffer, mime: string): Promise<AnalyseMediaLocale> {
   const { default: sharp } = await import("sharp");
   const image = sharp(buffer, { failOn: "none" });
@@ -540,7 +638,12 @@ export async function construireContexteAnalyseMedias(params: {
         blocs.push(`— « ${nom} » : type non analysable localement (métadonnées seules).`);
         continue;
       }
-      blocs.push(`— « ${nom} » : ${analyse.resume}`);
+      // PARITÉ GEMINI — vision linguistique : pour les images, la description
+      // linguistique (couleurs nommées, ambiance, type de scène probable)
+      // donne au moteur TEXTE de quoi raisonner sur l'image jointe —
+      // honnêteté conservée (aucune perception d'objets annoncée).
+      const vision = decrireVisionLinguistique(analyse);
+      blocs.push(`— « ${nom} » : ${analyse.resume}${vision ? `\n  Vision linguistique : ${vision}` : ""}`);
     } catch (erreur) {
       const raison = erreur instanceof Error ? erreur.message.slice(0, 160) : "analyse impossible";
       blocs.push(`— « ${nom} » : analyse indisponible (${raison}).`);

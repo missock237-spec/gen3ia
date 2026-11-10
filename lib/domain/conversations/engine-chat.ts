@@ -32,11 +32,14 @@ import { imagesForModel } from "@/lib/ai/vision-input";
 import { appendMessage } from "@/lib/chat/repository";
 import type { ChatConversation, ChatMessage } from "@/lib/chat/repository";
 import { shouldSummarize, summarizeChatConversation } from "@/lib/memory/episodic";
+// PARITÉ GEMINI — safety : garde de contenu non fiable câblé dans le chat
+// principal (neutralisation/étiquetage AVANT injection au moteur).
+import { securiserContexteChat } from "@/lib/security/chat-content-guard";
 import type { WorkspaceProject } from "@/lib/domain/projects/repository";
 import { attachmentImageCandidates } from "@/lib/files/image-source";
 import type { TurnIntent } from "./engine-intent";
-import { CHAT_BUDGET_MS, CONTEXT_WINDOW_BUDGET_TOKENS, historyForModel, withTimeout } from "./engine-turn";
-import type { AgentTurnContext, ConversationTurnInput, ConversationTurnResult } from "./engine-turn";
+import { effortParameters, historyForModel, withTimeout } from "./engine-turn";
+import type { AgentTurnContext, ConversationTurnInput, ConversationTurnResult, ReasoningEffort } from "./engine-turn";
 
 /* ------------------------------------------------------------------ */
 /* Tour « chat » — réponse directe                                     */
@@ -61,6 +64,11 @@ export interface TurnBase extends ConversationTurnInput {
   complexityScore?: number;
   /** Skills auto-attribuées pour ce tour (sélection par la demande). */
   skillsSection?: string;
+  /** Directives système supplémentaires du tour (ex : Deep Research —
+   *  rapport de recherche structuré) — injectées en fin de systemParts. */
+  systemDirectiveAppendix?: string;
+  /** Parité Gemini — budget de raisonnement réel du tour (composer). */
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface TurnContext extends TurnBase {
@@ -115,6 +123,11 @@ function construireTelemetrie(
 export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   const streaming = Boolean(ctx.onEvent);
+  // PARITÉ GEMINI — budget de raisonnement RÉEL : le niveau choisi dans le
+  // composer pilote la fenêtre d'historique, le budget de contexte, le budget
+  // temps de génération, la relecture anti-désinformation et la directive de
+  // raisonnement (fail-safe : valeur absente/inconnue = équilibre historique).
+  const effort = effortParameters(ctx.reasoningEffort);
   // Task 141 — agent dédié : quand l'utilisateur a choisi un agent dans le
   // composer, la charte de CET agent prime sur l'identité universelle (nom,
   // mission, compétences, persona, garde-fous) — les règles de plateforme
@@ -144,6 +157,10 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     sectionConditionExecution(),
     // Compréhension exacte : répondre dans la LANGUE du dernier message.
     languageDirective(ctx.message),
+    // Parité Gemini — le budget de raisonnement choisi pilote la réponse.
+    effort.directive,
+    // Directives supplémentaires du tour (ex : rapport Deep Research).
+    ctx.systemDirectiveAppendix ?? "",
     "La génération d'IMAGES, la production de VIDÉOS, la synthèse d'AUDIOS (moteur audio neural local — composition sonore, pas de parole naturelle) et l'analyse de médias (mesures réelles : format, dimensions, durée, codecs, palette) sont effectuées par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré un média comme s'il était affiché, et n'invente jamais d'URL.",
     "POLITIQUE UNIVERSELLE (impérative) : la plateforme prend en charge TOUS les types de génération — ne dis JAMAIS qu'elle « ne prend en charge que les images », « ne fait pas d'audio » ou qu'une capacité manque. Si la production n'a pas été déclenchée automatiquement, demande les éléments manquants (ex : le TEXTE à faire entendre pour un audio) ou oriente vers la relance — ne propose JAMAIS un service externe ni un tutoriel à la place d'une capacité de la plateforme.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
@@ -151,10 +168,10 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     // Skills auto-attribuées (skills.sh + plateforme) : sélection déterministe
     // par la demande utilisateur — fail-soft, absent si aucune ne matche.
     ctx.skillsSection ?? "",
-    ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${ctx.filesContext}` : "",
+    ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${securiserContexteChat("Fichiers importés", ctx.filesContext, true)}` : "",
     ctx.mediaAnalysisContext ?? "",
-    ctx.webContext ? `Ces contenus proviennent de liens fournis par l'utilisateur — pages RÉELLEMENT récupérées par la plateforme au moment de la demande. Appuie-toi sur eux pour toute question les concernant, cite-les fidèlement, et ne complète JAMAIS par une invention de leur contenu :${ctx.webContext}` : "",
-    ctx.knowledgeContext ? `Ces extraits proviennent de la BASE DE CONNAISSANCES du projet (documents indexés par l'utilisateur) — cite-les fidèlement quand ils répondent à la demande et ne complète JAMAIS par une invention de leur contenu :${ctx.knowledgeContext}` : "",
+    ctx.webContext ? `Ces contenus proviennent de liens fournis par l'utilisateur — pages RÉELLEMENT récupérées par la plateforme au moment de la demande. Appuie-toi sur eux pour toute question les concernant, cite-les fidèlement, et ne complète JAMAIS par une invention de leur contenu :${securiserContexteChat("Pages web récupérées", ctx.webContext, false)}` : "",
+    ctx.knowledgeContext ? `Ces extraits proviennent de la BASE DE CONNAISSANCES du projet (documents indexés par l'utilisateur) — cite-les fidèlement quand ils répondent à la demande et ne complète JAMAIS par une invention de leur contenu :${securiserContexteChat("Base de connaissances", ctx.knowledgeContext, false)}` : "",
   ].filter(Boolean);
 
   // VISION : les images réellement jointes au message sont transmises aux
@@ -186,20 +203,20 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
   } catch {
     // Pas de mémoire ancienne disponible : le tour répond sans — honnête.
   }
-  const recentHistory = historyForModel(ctx.priorHistory);
+  const recentHistory = historyForModel(ctx.priorHistory, effort.historyLimit);
   const turnTokens =
     estimateTokens(systemContent) +
     estimateTokens(ctx.message) +
     recentHistory.reduce((somme, message) => somme + estimateTokens(message.content), 0);
   let historyMessages = recentHistory;
   let summaryPrefix: string | undefined;
-  if (turnTokens > CONTEXT_WINDOW_BUDGET_TOKENS) {
+  if (turnTokens > effort.contextBudgetTokens) {
     const window = buildContextWindow({
       systemPrompt: systemContent,
       history: ctx.priorHistory,
       // La place du message courant est réservée au budget de la fenêtre
       // (plancher 2 000 : un message très long ne doit pas vider la fenêtre).
-      budgetTokens: Math.max(2_000, CONTEXT_WINDOW_BUDGET_TOKENS - estimateTokens(ctx.message)),
+      budgetTokens: Math.max(2_000, effort.contextBudgetTokens - estimateTokens(ctx.message)),
     });
     historyMessages = window.messages.map((message) => ({ role: message.role, content: message.content }));
     summaryPrefix = window.summaryPrefix;
@@ -259,7 +276,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
             },
           },
         ),
-        CHAT_BUDGET_MS,
+        effort.chatBudgetMs,
         "réponse conversationnelle",
       );
       content = stripThinkTags(response.text);
@@ -291,7 +308,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
               knowledgeContext: knowledgeContextUnifie,
               metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
             }),
-            CHAT_BUDGET_MS,
+            effort.chatBudgetMs,
             "réponse conversationnelle",
           );
           content = stripThinkTags(response.text);
@@ -323,7 +340,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
           knowledgeContext: knowledgeContextUnifie,
           metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
         }),
-        CHAT_BUDGET_MS,
+        effort.chatBudgetMs,
         "réponse conversationnelle",
       );
       content = stripThinkTags(response.text);
@@ -363,7 +380,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
   // panne rend la proposition d'origine. En streaming, le message déjà
   // affiché est remplacé par la version retenue via « message_complete »
   // (contrat client : « remplace la version en cours »).
-  if (generationStatus === "complete") {
+  if (generationStatus === "complete" && effort.selfReview) {
     await onEvent({ type: "status", phase: "synthesis", label: "L'assistant relit sa réponse avant livraison…" });
     const sourcesNote = [
       ctx.filesContext ? "[Fichiers importés par l'utilisateur — fournis au modèle]" : "",

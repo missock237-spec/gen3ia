@@ -58,6 +58,14 @@ const BodySchema = z.object({
   // Fuseau horaire du client (IANA) : utilisé par les sous-services pilotés
   // en langage naturel (tâches planifiées).
   timezone: z.string().trim().max(100).optional(),
+  // Parité Gemini — budget de raisonnement réel (composer : rapide ⚡ /
+  // équilibré 🎯 / expert 🧠) : fenêtre, budgets temps/contexte, self-review
+  // et directive de raisonnement pilotés côté moteur (effortParameters).
+  reasoningEffort: z.enum(["rapide", "equilibre", "expert"]).optional(),
+  // Bouton « Recherche approfondie » (Deep Research gen3) : orchestration
+  // multi-axes réelle (plan → recherches web par axe → pages ouvertes →
+  // rapport structuré avec sources) déclenchée pour ce tour.
+  research: z.boolean().optional(),
 });
 
 /**
@@ -158,6 +166,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
               agentId: body.agentId,
               webSearch: body.webSearch,
               timezone: body.timezone,
+              reasoningEffort: body.reasoningEffort,
+              research: body.research,
               onEvent: send,
             });
             void result;
