@@ -283,7 +283,7 @@ export async function genererVisuelNeuralEtPersister(params: {
   // PROFESSEUR TEMPORAIRE (loi CONTRAINTE-ONDES) : médias photoréalistes
   // RÉELS tant que le signal d'onde gen3 n'a pas été distillé. Échec =
   // repli silencieux sur la composition neuronale abstraite (honnête).
-  const erreurProfesseur: string | null = null;
+  let erreurProfesseur: string | null = null;
   if (await professeurDisponibleAsync()) {
     try {
       const œuvre = await professeurImage({ prompt: params.prompt, ratio: params.ratio });
@@ -305,6 +305,7 @@ export async function genererVisuelNeuralEtPersister(params: {
         ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
       };
     } catch (erreur) {
+      erreurProfesseur = erreur instanceof Error ? erreur.message : String(erreur);
       console.warn("[media-neural] professeur image indisponible — composition neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
     }
   }
