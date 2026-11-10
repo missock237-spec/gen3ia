@@ -92,6 +92,8 @@ export async function GET(_request: NextRequest) {
           baseUrlHôte: (() => { try { return new URL(config.baseUrl).host; } catch { return "invalide"; } })(),
           apiKeyLongueur: config.apiKey.length,
           tokenLongueur: config.token?.length ?? 0,
+          hfTokenPrésent: typeof config.hfToken === "string" && config.hfToken.length > 0,
+          hfModel: config.hfModel ?? "stabilityai/stable-diffusion-3-medium-diffusers (défaut)",
           voix: config.voix ?? "tongtong",
         }
       : null,

@@ -77,10 +77,26 @@ export function normaliserConfigurationProfesseur(
   return null;
 }
 
-/** Lit la configuration du professeur (mise en cache, lecture unique). */
+/** Lit la configuration du professeur (mise en cache, lecture unique) —
+ *  chemin SYNC historique : env puis fichiers locaux (le canal R2 est
+ *  uniquement dans la résolution async). */
 export function configurationProfesseur(): ConfigurationProfesseur | null {
   if (cacheConfig !== undefined) return cacheConfig;
-  cacheConfig = chargerConfigurationProfesseur();
+  const brutEnv = process.env.ZAI_CONFIG_JSON;
+  if (brutEnv) {
+    try {
+      const config = normaliserConfigurationProfesseur(
+        JSON.parse(brutEnv) as Partial<ConfigurationProfesseur>,
+      );
+      if (config) {
+        cacheConfig = config;
+        return config;
+      }
+    } catch {
+      // env illisible → fichiers
+    }
+  }
+  cacheConfig = chargerFichiersProfesseur();
   return cacheConfig;
 }
 
@@ -97,25 +113,55 @@ const TTL_R2_POSITIF_MS = 6 * 60 * 60 * 1000;
 const TTL_R2_NEGATIF_MS = 10 * 60 * 1000;
 
 let cacheR2Config: { config: ConfigurationProfesseur | null; expiration: number } | null = null;
+let cacheResolue: { config: ConfigurationProfesseur | null; expiration: number } | null = null;
 
-/** Résolution ASYNC de la configuration : candidats locaux d'abord, puis le
- *  bucket R2 privé. Zéro throw — absent ⇒ null (repli neuronal honnête). */
+/** Résolution ASYNC de la configuration — ORDRE (constat it.144 : un
+ *  fichier héritage /opt/gen3ia/.z-ai-config SANS hfToken masquait la
+ *  livraison R2) : 1. env ZAI_CONFIG_JSON → 2. bucket R2 privé (canal CD,
+ *  source de vérité fraîche portée par le secret) → 3. fichiers locaux
+ *  (héritage SSH/dev). Zéro throw — absent ⇒ null (repli honnête). */
 export async function configurationProfesseurAsync(): Promise<ConfigurationProfesseur | null> {
-  const locale = configurationProfesseur();
-  if (locale) return locale;
   const maintenant = Date.now();
-  if (cacheR2Config && maintenant < cacheR2Config.expiration) return cacheR2Config.config;
-  try {
-    const brut = await downloadFromR2(CLE_R2_CONFIG_PROFESSEUR, 64 * 1024);
-    const parsed = JSON.parse(brut.toString("utf-8")) as Partial<ConfigurationProfesseur>;
-    const config = normaliserConfigurationProfesseur(parsed);
-    cacheR2Config = { config, expiration: maintenant + (config ? TTL_R2_POSITIF_MS : TTL_R2_NEGATIF_MS) };
-    return config;
-  } catch {
-    // clé absente / R2 indisponible / JSON illisible → absent (cache négatif)
-    cacheR2Config = { config: null, expiration: maintenant + TTL_R2_NEGATIF_MS };
-    return null;
+  if (cacheResolue && maintenant < cacheResolue.expiration) return cacheResolue.config;
+
+  // 1) env (premier candidat historique — contrat inchangé)
+  const brutEnv = process.env.ZAI_CONFIG_JSON;
+  if (brutEnv) {
+    try {
+      const parsed = JSON.parse(brutEnv) as Partial<ConfigurationProfesseur>;
+      const config = normaliserConfigurationProfesseur(parsed);
+      if (config) {
+        cacheResolue = { config, expiration: maintenant + TTL_R2_POSITIF_MS };
+        return config;
+      }
+    } catch {
+      // env illisible → candidats suivants
+    }
   }
+
+  // 2) R2 (canal CD — porte hfToken/métadonnées fraîches)
+  if (cacheR2Config && maintenant < cacheR2Config.expiration) {
+    // cache R2 déjà résolu pour cette fenêtre
+  } else {
+    try {
+      const brut = await downloadFromR2(CLE_R2_CONFIG_PROFESSEUR, 64 * 1024);
+      const parsed = JSON.parse(brut.toString("utf-8")) as Partial<ConfigurationProfesseur>;
+      const config = normaliserConfigurationProfesseur(parsed);
+      cacheR2Config = { config, expiration: maintenant + (config ? TTL_R2_POSITIF_MS : TTL_R2_NEGATIF_MS) };
+    } catch {
+      // clé absente / R2 indisponible / JSON illisible → absent (cache négatif)
+      cacheR2Config = { config: null, expiration: maintenant + TTL_R2_NEGATIF_MS };
+    }
+  }
+  if (cacheR2Config?.config) {
+    cacheResolue = { config: cacheR2Config.config, expiration: maintenant + TTL_R2_POSITIF_MS };
+    return cacheR2Config.config;
+  }
+
+  // 3) fichiers locaux (héritage SSH/dev)
+  const locale = chargerFichiersProfesseur();
+  cacheResolue = { config: locale, expiration: maintenant + (locale ? TTL_R2_POSITIF_MS : TTL_R2_NEGATIF_MS) };
+  return locale;
 }
 
 /** Disponibilité ASYNC du professeur (mêmes gardes d'environnement que la
@@ -138,16 +184,14 @@ export async function professeurImageDisponibleAsync(): Promise<boolean> {
   return Boolean(config.hfToken);
 }
 
-function chargerConfigurationProfesseur(): ConfigurationProfesseur | null {
+function chargerFichiersProfesseur(): ConfigurationProfesseur | null {
   // GEN3_PROFESSEUR_FICHIERS_LOCALS=0 : ignore les candidats FICHIERS
-  // (/etc, $HOME, cwd, /opt) — isolation de test et mode R2-seul. La var
-  // d'env ZAI_CONFIG_JSON reste le premier candidat (contrat inchangé).
+  // (/etc, $HOME, cwd, /opt) — isolation de test et mode R2-seul. L'env
+  // ZAI_CONFIG_JSON est traité AVANT (priorité 1) hors de cette fonction.
   const ignorerFichiers = process.env.GEN3_PROFESSEUR_FICHIERS_LOCALS === "0";
+  if (ignorerFichiers) return null;
   const candidats: Array<() => string | null> = [
-    () => process.env.ZAI_CONFIG_JSON ?? null,
-    ...(ignorerFichiers
-      ? []
-      : [
+    ...[
           () => lireFichier("/etc/.z-ai-config"),
           () => lireFichier(`${process.env.HOME ?? "/root"}/.z-ai-config`),
           () => lireFichier(`${process.cwd()}/.z-ai-config`),
@@ -156,7 +200,7 @@ function chargerConfigurationProfesseur(): ConfigurationProfesseur | null {
           // explicite + racine passée par variable d'environnement.
           () => lireFichier("/opt/gen3ia/.z-ai-config"),
           () => (process.env.GEN3IA_ROOT ? lireFichier(`${process.env.GEN3IA_ROOT}/.z-ai-config`) : null),
-        ]),
+        ],
   ];
   for (const lire of candidats) {
     const brut = lire();
