@@ -72,6 +72,7 @@ import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { ACCEPT_ATTRIBUTE } from "@/lib/storage/upload-policy";
 import { ATTACHMENT_MAX_FILES, ATTACHMENT_MAX_FILE_BYTES } from "@/lib/files/attachment-policy";
+import { instantaneFichiers } from "@/lib/files/instantane-fichiers";
 import { useVoiceInput } from "./use-voice-input";
 import { cancelSpeech, speakFr } from "./voice-speak";
 import { useWebGpuMedia } from "./use-webgpu-media";
@@ -1076,24 +1077,32 @@ export default function NovaChat() {
     (liste: FileList | File[]) => {
       const max = CFG.maxFichierOctets;
       const maxMo = Math.round(max / (1024 * 1024));
+      // INSTANTANÉ AVANT FILE D'ATTENTE (incidence réelle it.143, 2026-11-10,
+      // production) : FileList est une vue LIVE sur l'input — le handler
+      // appelle `e.target.value = ""` APRÈS cette mise en file, et React
+      // exécute l'updater au rendu, ALORS la vue est déjà vidée :
+      // Array.from(liste) ≡ [] → pièce jointe perdue SILENCIEUSEMENT (aucun
+      // toast, aucune puce, message envoyé sans fichier). On matérialise
+      // nom/taille/type/fichier AVANT la mise en file d'attente d'état —
+      // l'ajout redevient indépendant du calendrier de rendu.
+      const instantane = instantaneFichiers(liste);
       setFichiers((courants) => {
         const suivants = [...courants];
-        for (const f of Array.from(liste)) {
+        for (const f of instantane) {
           if (suivants.length >= CFG.maxFichiers) {
             afficherToast(`Maximum ${CFG.maxFichiers} fichiers par message.`);
             break;
           }
-          if (f.size > max) {
-            afficherToast(`« ${f.name} » dépasse ${maxMo} Mo.`);
+          if (f.taille > max) {
+            afficherToast(`« ${f.nom} » dépasse ${maxMo} Mo.`);
             continue;
           }
-          const image = f.type.startsWith("image/");
           suivants.push({
-            nom: f.name,
-            taille: f.size,
+            nom: f.nom,
+            taille: f.taille,
             type: f.type,
-            fichier: f,
-            apercu: image ? URL.createObjectURL(f) : null,
+            fichier: f.fichier,
+            apercu: f.image ? URL.createObjectURL(f.fichier) : null,
           });
         }
         return suivants;

@@ -183,18 +183,39 @@ def main() -> int:
 
         # 4) Attachement de l'artefact PDF — PARCOURS UTILISATEUR REEL :
         # clic sur le label « Joindre des fichiers » → sélecteur de fichiers.
+        # ROBUSTESSE (constat it.143) : sur une build FRAÎCHE (cache JS froid),
+        # l'hydratation React peut se terminer APRÈS le tir de l'événement
+        # `change` natif du file input — le gestionnaire onChange rate alors
+        # la pièce jointe (la puce n'apparaît jamais, le message part sans
+        # fichier). Le produit est sain : on ré-arme donc le sélecteur
+        # JUSQU'À ce que la puce soit visible (max 4 tentatives, 3 s d'écart) —
+        # si la 1re tentative a été prise en compte, la puce est déjà là et
+        # on ne ré-arme PAS (pas de doublon).
         n_inputs = page.locator('input[type="file"]').count()
         with page.expect_file_chooser(timeout=15000) as fc_info:
             page.click('label[title="Joindre des fichiers"]')
         fc_info.value.set_files(str(pdf))
         puce = page.get_by_text("artefact-e2e").first
         attache = True
-        try:
-            puce.wait_for(state="visible", timeout=15000)
-        except Exception:
-            attache = False
+        for tentative in range(4):
+            try:
+                puce.wait_for(state="visible", timeout=3000)
+                attache = True
+                break
+            except Exception:
+                attache = False
+                if tentative < 3:
+                    # re-arme le sélecteur : le change sera-t-il pris cette
+                    # fois par l'hydratation (idempotent si déjà pris — on ne
+                    # passe ici QUE si la puce est absente)
+                    try:
+                        with page.expect_file_chooser(timeout=10000) as fc_retry:
+                            page.click('label[title="Joindre des fichiers"]')
+                        fc_retry.value.set_files(str(pdf))
+                    except Exception:
+                        break
         verif("4. artefact PDF attache (puce visible dans la barre)", attache,
-              f"{n_inputs} input file sur la page")
+              f"{n_inputs} input file sur la page, tentatives={tentative + 1}")
         page.screenshot(path="/tmp/artefact-e2e-attache.png")
 
         # 5) Message + envoi -------------------------------------------------------
