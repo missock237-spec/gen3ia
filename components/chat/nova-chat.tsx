@@ -678,6 +678,9 @@ export default function NovaChat() {
   const [effort, setEffort] = React.useState<EffortId>("equilibre");
   const [outils, setOutils] = React.useState<string[]>([]);
   const [rechercheWeb, setRechercheWeb] = React.useState(false);
+  // Parité Gemini — Deep Research : orchestration multi-axes (plan →
+  // recherches → pages ouvertes → rapport structuré) activée pour un tour.
+  const [rechercheProfonde, setRechercheProfonde] = React.useState(false);
   const [fichiers, setFichiers] = React.useState<NovaPiece[]>([]);
   const [saisie, setSaisie] = React.useState("");
   const [recherche, setRecherche] = React.useState("");
@@ -756,6 +759,7 @@ export default function NovaChat() {
   const effortRef = React.useRef<EffortId>("equilibre");
   const outilsRef = React.useRef<Set<string>>(new Set());
   const rechercheWebRef = React.useRef(false);
+  const rechercheProfondeRef = React.useRef(false);
   const controleurRef = React.useRef<AbortController | null>(null);
   /* Chat voix : le tour courant a-t-il été initié par la voix (dictée) ?
    * Consumé à la réponse (événement done → TTS) puis réarmé. */
@@ -789,6 +793,13 @@ export default function NovaChat() {
   const basculerRechercheWeb = React.useCallback(() => {
     rechercheWebRef.current = !rechercheWebRef.current;
     setRechercheWeb(rechercheWebRef.current);
+  }, []);
+
+  // Parité Gemini — bascule du mode Deep Research (par message, comme la
+  // recherche web : le bouton s'arme pour le PROCHAIN message puis se désarme).
+  const basculerRechercheProfonde = React.useCallback(() => {
+    rechercheProfondeRef.current = !rechercheProfondeRef.current;
+    setRechercheProfonde(rechercheProfondeRef.current);
   }, []);
 
   const afficherToast = React.useCallback((texte: string, duree = 2400) => {
@@ -1297,11 +1308,16 @@ export default function NovaChat() {
       const corps: Record<string, unknown> = {
         message,
         timezone: safeClientTimezone(),
+        // Parité Gemini — le niveau d'effort choisi pilote de VRAIS budgets
+        // moteur (fenêtre, contexte, temps, self-review, directive).
+        reasoningEffort: effortRef.current,
         ...(piecesApi.length > 0 ? { attachments: piecesApi } : {}),
         ...(def.provider && def.model ? { provider: def.provider, model: def.model } : {}),
         ...(connecteurs.length > 0 ? { connectors: connecteurs } : {}),
         // Bouton « Recherche web » : la recherche réelle est FORCÉE côté serveur.
         ...(rechercheWebRef.current ? { webSearch: true } : {}),
+        // Bouton « Recherche approfondie » : Deep Research gen3 côté serveur.
+        ...(rechercheProfondeRef.current ? { research: true } : {}),
       };
 
       const streamId = idSuivant();
@@ -1526,6 +1542,9 @@ export default function NovaChat() {
       // La recherche web est une option PAR MESSAGE : elle se désactive après l'envoi.
       rechercheWebRef.current = false;
       setRechercheWeb(false);
+      // Idem pour la recherche approfondie (Deep Research) : option par message.
+      rechercheProfondeRef.current = false;
+      setRechercheProfonde(false);
       descendre(true);
 
       // L'API exige un message non vide : un envoi « fichiers seuls » porte
@@ -2563,6 +2582,20 @@ export default function NovaChat() {
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" /></svg>
                     <span className="txt-long">Recherche web</span>
+                  </button>
+
+                  {/* 5 bis) RECHERCHE APPROFONDIE (Deep Research gen3 — parité
+                      Gemini) : plan multi-axes → recherches web réelles par
+                      axe → pages ouvertes → rapport structuré avec sources. */}
+                  <button
+                    type="button"
+                    className={`nova-pill${rechercheProfonde ? " actif" : ""}`}
+                    aria-pressed={rechercheProfonde}
+                    onClick={basculerRechercheProfonde}
+                    title={rechercheProfonde ? "Recherche approfondie activée pour le prochain message" : "Activer la recherche approfondie (Deep Research) pour le prochain message"}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /><path d="M8 11h6M11 8v6" /></svg>
+                    <span className="txt-long">Recherche approfondie</span>
                   </button>
 
                   {/* 6) AGENT LIVE (sous le chat — demande du propriétaire :

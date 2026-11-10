@@ -45,6 +45,9 @@ import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, looksLikeVoi
 // messages « apprends que / retiens que / entraîne-toi » entraînent
 // réellement le cortex via l'outil brain.train.
 import { estIntentionEntrainement, runTrainingTurn } from "./engine-training";
+// PARITÉ GEMINI — Deep Research gen3 : plan déterministe multi-axes,
+// recherches web réelles par axe, pages ouvertes, rapport structuré sourcé.
+import { estDemandeRechercheApprofondie, runResearchTurn } from "./engine-research";
 import { runPlanTurn } from "./engine-plan";
 import { runAgentIntentTurn, runScheduleIntentTurn, runServiceControlTurn, runWorkflowIntentTurn } from "./engine-services";
 import { conversationToolCatalog } from "./engine-tools";
@@ -292,6 +295,23 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   if (estIntentionEntrainement(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Entraînement du cerveau en cours…" });
     const result = await runTrainingTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+  // PARITÉ GEMINI — DEEP RESEARCH gen3 : demande explicite (bouton « Recherche
+  // approfondie » du composer) ou préfixe dédié (« recherche approfondie sur… »,
+  // « deep research… ») → orchestration RÉELLE multi-axes (plan déterministe →
+  // recherches web par axe → pages ouvertes → rapport structuré sourcé).
+  // Détection déterministe : aucune variance LLM, priorité juste après
+  // l'entraînement explicite.
+  if (input.research === true || estDemandeRechercheApprofondie(input.message)) {
+    await onEvent({ type: "status", phase: "execution", label: "Recherche approfondie — préparation du plan de recherche…" });
+    const result = await runResearchTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, filesContext, webContext, knowledgeContext, mediaAnalysisContext });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
