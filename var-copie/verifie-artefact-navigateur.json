@@ -1,14 +1,14 @@
 {
   "demande": "En production dans le navigateur, corriger l'affichage à l'envoi d'un artefact puis tester la disparition réelle",
-  "quand": "2026-11-10T10:08:18.545954+00:00",
+  "quand": "2026-11-10T10:52:03.492946+00:00",
   "base": "https://www.gen3ia.online",
-  "compte_test": "artefact-e2e-1794305234@gen3ia.test",
+  "compte_test": "artefact-e2e-1794307854@gen3ia.test",
   "correctifs_verifies": [
     "45f351d (CORS auto-réparation R2)",
     "1599bea (CSP connect-src *.r2.cloudflarestorage.com)"
   ],
   "code_secret_pdf": "K7-ARKALIS",
-  "verdict_global": "PROBLEME ENCORE PRESENT",
+  "verdict_global": "PROBLEME DISPARU",
   "verifications": [
     {
       "n": 1,
@@ -20,7 +20,7 @@
       "n": 2,
       "label": "2. inscription UI + session serveur posée (redirection /dashboard)",
       "ok": true,
-      "detail": "artefact-e2e-1794305234@gen3ia.test"
+      "detail": "artefact-e2e-1794307854@gen3ia.test"
     },
     {
       "n": 3,
@@ -31,8 +31,8 @@
     {
       "n": 4,
       "label": "4. artefact PDF attache (puce visible dans la barre)",
-      "ok": false,
-      "detail": "1 input file sur la page, tentatives=4"
+      "ok": true,
+      "detail": "1 input file sur la page, tentatives=1"
     },
     {
       "n": 5,
@@ -61,7 +61,7 @@
     {
       "n": 9,
       "label": "8. PREUVE FORTE : code secret du PDF lu par Gen3",
-      "ok": false,
+      "ok": true,
       "detail": "attendu « K7-ARKALIS » dans la reponse"
     },
     {
@@ -74,12 +74,13 @@
       "n": 11,
       "label": "10. AUCUNE erreur console Failed to fetch / CSP",
       "ok": true,
-      "detail": "6 erreur(s) console au total, 0 suspecte(s)"
+      "detail": "7 erreur(s) console au total, 0 suspecte(s)"
     }
   ],
   "erreurs_console": [
     "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
@@ -88,6 +89,7 @@
   "echecs_reseau_4xx": [
     "401 https://www.gen3ia.online/api/auth/session",
     "401 https://www.gen3ia.online/api/auth/session",
+    "503 https://www.gen3ia.online/api/status",
     "403 https://www.gen3ia.online/status?_rsc=95XpWZDYBWq3k6mU",
     "403 https://www.gen3ia.online/api/essaim/ondes",
     "403 https://www.gen3ia.online/api/essaim/ondes",
