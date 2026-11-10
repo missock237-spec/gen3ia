@@ -118,9 +118,9 @@ describe("VERROUS STRUCTURELS (balayage des sources)", () => {
     expect(sourceMediaService.includes("professeurDisponible()")).toBe(false);
   });
 
-  it("routage photoréaliste : professeur async AVANT la branche WebGPU", () => {
+  it("routage photoréaliste : moteur image réel AVANT la branche WebGPU", () => {
     expect(sourceEngineMedia).toContain(
-      "looksLikePhotorealRequest(ctx.message) && !(await professeurDisponibleAsync())",
+      "looksLikePhotorealRequest(ctx.message) && !(await professeurImageDisponibleAsync())",
     );
   });
 
@@ -157,5 +157,75 @@ describe("VERROUS STRUCTURELS (balayage des sources)", () => {
     expect(source).toContain("downloadFromR2(CLE_R2_CONFIG_PROFESSEUR, 64 * 1024)");
     expect(source).toContain("TTL_R2_POSITIF_MS");
     expect(source).toContain("TTL_R2_NEGATIF_MS");
+  });
+});
+
+describe("ÉCHELLE D'IMAGES — passerelle puis Hugging Face (réseau réel it.144)", () => {
+  it("hfToken/hfModel traversent le normalisateur", async () => {
+    const { mod } = await moduleFraisAvecR2("erreur");
+    const config = mod.normaliserConfigurationProfesseur({
+      baseUrl: "https://passerelle.exemple",
+      apiKey: "cle",
+      hfToken: "hf_test_fictif",
+      hfModel: "org/modele",
+    });
+    expect(config?.hfToken).toBe("hf_test_fictif");
+    expect(config?.hfModel).toBe("org/modele");
+  });
+
+  it("professeurImage : passerelle injoignable + hfToken → moteur HF (POST router.huggingface.co, image RAW)", async () => {
+    vi.stubEnv("ZAI_CONFIG_JSON", JSON.stringify({
+      baseUrl: "https://passerelle.exemple",
+      apiKey: "cle",
+      hfToken: "hf_test_fictif",
+    }));
+    vi.stubEnv("GEN3_PROFESSEUR_MEDIA", "");
+    vi.stubEnv("GEN3_PROFESSEUR_FICHIERS_LOCALS", "0");
+    let corpsHf: Record<string, unknown> | null = null;
+    let urlHf = "";
+    // passerelle : toujours injoignable (sonde → fetch failed)
+    // HF : répond une image RAW > 1 Ko
+    vi.stubGlobal("fetch", (async (url: string | URL, init?: RequestInit) => {
+      const cible = String(url);
+      if (cible === "https://passerelle.exemple") throw new TypeError("fetch failed");
+      if (cible.startsWith("https://router.huggingface.co/")) {
+        urlHf = cible;
+        corpsHf = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        return new Response(Buffer.alloc(4096, 9), {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      }
+      throw new Error(`URL inattendue : ${cible}`);
+    }) as unknown as typeof fetch);
+    vi.resetModules();
+    const { professeurImage } = await import("@/lib/neural/professeur-media");
+    const œuvre = await professeurImage({ prompt: "un homme sur un arbre", ratio: "4:3" });
+    expect(œuvre.meta["moteur"]).toBe("professeur-image-hf");
+    expect(urlHf).toBe("https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-3-medium-diffusers");
+    expect(String(corpsHf!["inputs"])).toContain("un homme sur un arbre");
+    expect((corpsHf!["parameters"] as Record<string, number>)).toEqual({ width: 1152, height: 864 });
+    expect(œuvre.buffer.length).toBeGreaterThan(1024);
+  });
+
+  it("professeurImage : aucun moteur → erreur honnête CITANT les deux échecs (jamais de média faux)", async () => {
+    vi.stubEnv("ZAI_CONFIG_JSON", JSON.stringify({ baseUrl: "https://passerelle.exemple", apiKey: "cle" }));
+    vi.stubEnv("GEN3_PROFESSEUR_MEDIA", "");
+    vi.stubEnv("GEN3_PROFESSEUR_FICHIERS_LOCALS", "0");
+    vi.stubGlobal("fetch", (async () => {
+      throw new TypeError("fetch failed");
+    }) as unknown as typeof fetch);
+    vi.resetModules();
+    const { professeurImage } = await import("@/lib/neural/professeur-media");
+    await expect(professeurImage({ prompt: "test" })).rejects.toThrow(/Aucun moteur d'image disponible.*injoignable/s);
+  });
+
+  it("source : l'échelle est codée (passerelle → hfToken → erreur honnête) et la sonde cache 10 min", () => {
+    const source = lire("neural/professeur-media.ts");
+    expect(source).toContain("professeurGatewayAtteignable");
+    expect(source).toContain("router.huggingface.co/hf-inference/models/");
+    expect(source).toContain("Aucun moteur d'image disponible");
+    expect(source).toContain("professeurImageDisponibleAsync");
+    expect(source).toContain("hfToken");
   });
 });

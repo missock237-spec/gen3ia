@@ -105,14 +105,16 @@ describe("professeurImage — contrat gateway (fetch mocké)", () => {
     expect(œuvre.meta["moteur"]).toBe("professeur-image-temporaire");
   });
 
-  it("erreur gateway → exception honnête (le repli local reste la responsabilité de l'appelant)", async () => {
+  it("gateway 503 + pas de hfToken → erreur honnête agrégée (jamais de média faux)", async () => {
     vi.stubGlobal(
       "fetch",
       (async () =>
         new Response(JSON.stringify({ error: "surcharge" }), { status: 503 })) as unknown as typeof fetch,
     );
     const { professeurImage } = await professeurFrais();
-    await expect(professeurImage({ prompt: "test" })).rejects.toThrow(/503/);
+    // 503 = passerelle injoignable (sonde) → échelle épuisée sans hfToken :
+    // l'erreur honnête liste les moteurs essayés.
+    await expect(professeurImage({ prompt: "test" })).rejects.toThrow(/Aucun moteur d'image disponible/);
   });
 });
 
@@ -128,9 +130,9 @@ describe("VERROUS STRUCTURELS (balayage des sources)", () => {
     expect(sourceProfesseur).toContain("incidence réelle it.144");
   });
 
-  it("routage : photoréaliste → professeur d'abord (WebGPU seulement sans professeur)", () => {
+  it("routage : photoréaliste → professeur d'abord (WebGPU seulement sans moteur image réel)", () => {
     expect(sourceEngineMedia).toContain(
-      "looksLikePhotorealRequest(ctx.message) && !(await professeurDisponibleAsync())",
+      "looksLikePhotorealRequest(ctx.message) && !(await professeurImageDisponibleAsync())",
     );
     expect(sourceEngineMedia).toContain('from "@/lib/neural/professeur-media"');
   });

@@ -1,8 +1,8 @@
 {
   "demande": "Gen3 doit générer des images PHOTORÉALISTES en production (correctif 4c523b4)",
-  "quand": "2026-11-10T17:14:57.482928+00:00",
+  "quand": "2026-11-10T17:56:41.902306+00:00",
   "base": "https://www.gen3ia.online",
-  "compte_test": "image-e2e-1794330839@gen3ia.test",
+  "compte_test": "image-e2e-1794333355@gen3ia.test",
   "requête": "Génère une image photoréaliste d'un homme assis sur une branche d'arbre, en forêt, lumière naturelle du matin.",
   "verifications": [
     {
@@ -13,7 +13,7 @@
     {
       "label": "2. inscription UI + session posée (redirection /dashboard)",
       "ok": true,
-      "detail": "image-e2e-1794330839@gen3ia.test"
+      "detail": "image-e2e-1794333355@gen3ia.test"
     },
     {
       "label": "3. chat authentifié (zone de saisie visible)",
@@ -28,7 +28,7 @@
     {
       "label": "5. image générée apparue dans le fil",
       "ok": true,
-      "detail": "21 s"
+      "detail": "9 s"
     },
     {
       "label": "6. source de l'image extraite",
@@ -61,7 +61,7 @@
   "erreurs_console": [
     "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
-    "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)",
     "Failed to load resource: the server responded with a status of 403 (Forbidden)"
@@ -69,10 +69,10 @@
   "echecs_reseau_4xx": [
     "401 https://www.gen3ia.online/api/auth/session",
     "401 https://www.gen3ia.online/api/auth/session",
+    "503 https://www.gen3ia.online/api/status",
     "403 https://www.gen3ia.online/status?_rsc=95XpWZDYBWq3k6mU",
-    "403 https://www.gen3ia.online/api/essaim/ondes",
     "403 https://www.gen3ia.online/api/essaim/ondes",
     "403 https://www.gen3ia.online/api/essaim/ondes"
   ],
-  "texte_fil_final": "u · 5/12 domaine(s) maîtrisé(s)\n\nLa boucle tourne jusqu'à maîtrise complète du catalogue (mesures réelles).\n\nDomaines (5/12 maîtrisés · 41 évaluation(s))\nHistorique des évaluations\nHugging Face ✓\nKaggle ✓\n\n780 cycles exécutés\n\n7084 paires · 22950 échantillons · 94 datasets\n\nDernier cycle : echec — Domaine « Langues & traduction » : 0 dataset(s) ingéré(s), 0 paire(s), 0 échantillon(s) ; pas assez de matière pour une évaluation comptable. Progression : 5/12 domaine(s) maîtrisé(s).\n\nLancer un cycle maintenant\nParamètres\nÉtat du service\nGen3 · Équilibré\nPrête — demandez-lui tout\nMoteur Gen3 opérationnel\n35 s max · repli garanti\nSe connecter\nGénère une image photoréaliste d'un homme assis sur une branche d'arbre, en forêt, lumière naturelle du matin.\n17:14\nCopier\nG\n\nVoici l'image que j'ai générée pour vous. Elle est également enregistrée dans les artefacts de la conversation.\n\ngen3-snn-visuel-v2-scene\n17:14\nCopier\nRégénérer\nRésume en 3 points\nDonne-moi un exemple concret\nQuelle est la prochaine étape ?\nOutils\n🎯\nÉquilibré\nRecherche web\nAgent Live\nEntrée pour envoyer · Maj + Entrée pour aller à la ligne · Gen3ia pilote toute la plateforme : agents, automatisations, médias, documents.\nHaut"
+  "texte_fil_final": "ntinu · 5/12 domaine(s) maîtrisé(s)\n\nLa boucle tourne jusqu'à maîtrise complète du catalogue (mesures réelles).\n\nDomaines (5/12 maîtrisés · 41 évaluation(s))\nHistorique des évaluations\nHugging Face ✓\nKaggle ✓\n\n782 cycles exécutés\n\n7084 paires · 22950 échantillons · 94 datasets\n\nDernier cycle : echec — Domaine « Émotions & sentiments » : 0 dataset(s) ingéré(s), 0 paire(s), 0 échantillon(s) ; pas assez de matière pour une évaluation comptable. Progression : 5/12 domaine(s) maîtrisé(s).\n\nLancer un cycle maintenant\nParamètres\nÉtat du service\nGen3 · Équilibré\nPrête — demandez-lui tout\nMoteur Gen3 dégradé\n35 s max · repli garanti\nSe connecter\nGénère une image photoréaliste d'un homme assis sur une branche d'arbre, en forêt, lumière naturelle du matin.\n17:56\nCopier\nG\n\nVoici l'image que j'ai générée pour vous. Elle est également enregistrée dans les artefacts de la conversation.\n\ngen3-snn-visuel-v2-scene\n17:56\nCopier\nRégénérer\nRésume en 3 points\nDonne-moi un exemple concret\nQuelle est la prochaine étape ?\nOutils\n🎯\nÉquilibré\nRecherche web\nAgent Live\nEntrée pour envoyer · Maj + Entrée pour aller à la ligne · Gen3ia pilote toute la plateforme : agents, automatisations, médias, documents.\nHaut"
 }

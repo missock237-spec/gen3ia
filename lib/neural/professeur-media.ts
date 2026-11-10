@@ -45,6 +45,14 @@ export interface ConfigurationProfesseur {
   token?: string;
   /** Voix TTS (défaut : tongtong — français correct). */
   voix?: string;
+  /** Jeton Hugging Face (Inference Providers) — demande propriétaire :
+   *  « Utilise Hugging Face pour générer des ressources multimodales :
+   *  images photoréalistes ». La passerelle interne est injoignable depuis
+   *  un VPS public (adresses privées 172.25/16, constat it.144) — HF est
+   *  public et le chemin de production. */
+  hfToken?: string;
+  /** Modèle text-to-image HF (défaut : SD3-medium — hf-inference vivant). */
+  hfModel?: string;
 }
 
 let cacheConfig: ConfigurationProfesseur | null | undefined;
@@ -62,6 +70,8 @@ export function normaliserConfigurationProfesseur(
       ...(typeof parsed.userId === "string" && parsed.userId ? { userId: parsed.userId } : {}),
       ...(typeof parsed.token === "string" && parsed.token ? { token: parsed.token } : {}),
       ...(typeof parsed.voix === "string" && parsed.voix ? { voix: parsed.voix } : {}),
+      ...(typeof parsed.hfToken === "string" && parsed.hfToken ? { hfToken: parsed.hfToken } : {}),
+      ...(typeof parsed.hfModel === "string" && parsed.hfModel ? { hfModel: parsed.hfModel } : {}),
     };
   }
   return null;
@@ -116,6 +126,18 @@ export async function professeurDisponibleAsync(): Promise<boolean> {
   return (await configurationProfesseurAsync()) !== null;
 }
 
+/** Le professeur peut-il produire une image ICI, MAINTENANT ? — config
+ *  présente ET (passerelle joignable OU jeton HF configuré). Utilisé par le
+ *  routage chat : photoréaliste → serveur si oui, WebGPU navigateur sinon. */
+export async function professeurImageDisponibleAsync(): Promise<boolean> {
+  if (process.env.GEN3_PROFESSEUR_MEDIA === "0") return false;
+  if (process.env.NODE_ENV === "test") return false;
+  const config = await configurationProfesseurAsync();
+  if (!config) return false;
+  if (await professeurGatewayAtteignable()) return true;
+  return Boolean(config.hfToken);
+}
+
 function chargerConfigurationProfesseur(): ConfigurationProfesseur | null {
   // GEN3_PROFESSEUR_FICHIERS_LOCALS=0 : ignore les candidats FICHIERS
   // (/etc, $HOME, cwd, /opt) — isolation de test et mode R2-seul. La var
@@ -141,17 +163,8 @@ function chargerConfigurationProfesseur(): ConfigurationProfesseur | null {
     if (!brut) continue;
     try {
       const parsed = JSON.parse(brut) as Partial<ConfigurationProfesseur>;
-      if (typeof parsed.baseUrl === "string" && typeof parsed.apiKey === "string"
-        && parsed.baseUrl.length > 0 && parsed.apiKey.length > 0) {
-        return {
-          baseUrl: parsed.baseUrl.replace(/\/$/, ""),
-          apiKey: parsed.apiKey,
-          ...(typeof parsed.chatId === "string" && parsed.chatId ? { chatId: parsed.chatId } : {}),
-          ...(typeof parsed.userId === "string" && parsed.userId ? { userId: parsed.userId } : {}),
-          ...(typeof parsed.token === "string" && parsed.token ? { token: parsed.token } : {}),
-          ...(typeof parsed.voix === "string" && parsed.voix ? { voix: parsed.voix } : {}),
-        };
-      }
+      const config = normaliserConfigurationProfesseur(parsed);
+      if (config) return config;
     } catch {
       // Config illisible → candidat suivant.
     }
@@ -240,13 +253,67 @@ export function durcirPromptImage(prompt: string): string {
   return noyaux.join(", ").slice(0, 1200);
 }
 
-/** Génère une image PHOTORÉALISTE via le professeur (échafaudage). */
+/** Génère une image PHOTORÉALISTE via le professeur (échafaudage).
+ *  ÉCHELLE DE MOTEURS (constat réseau it.144) : la passerelle interne
+ *  (adresses privées 172.25/16) est injoignable depuis un VPS public —
+ *  Hugging Face (Inference Providers, token du propriétaire) est le chemin
+ *  de production ; la passerelle reste le chemin de l'environnement
+ *  d'exécution intégré (sandbox/dev). */
 export async function professeurImage(params: {
   prompt: string;
   ratio?: string;
 }): Promise<ŒuvreProfesseur> {
   const config = await configurationProfesseurAsync();
   if (!config) throw new Error("Professeur média absent (configuration manquante).");
+  const erreurs: string[] = [];
+  // 1) passerelle interne (sandbox/dev — réseau privé)
+  if (await professeurGatewayAtteignable()) {
+    try {
+      return await professeurImagePasserelle(params, config);
+    } catch (erreur) {
+      erreurs.push(`passerelle : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
+    }
+  } else {
+    erreurs.push("passerelle : injoignable depuis ce réseau (adresses privées)");
+  }
+  // 2) Hugging Face Inference Providers (public — chemin de production)
+  if (config.hfToken) {
+    try {
+      return await professeurImageHf(params, config);
+    } catch (erreur) {
+      erreurs.push(`hugging face : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
+    }
+  }
+  throw new Error(`Aucun moteur d'image disponible — ${erreurs.join(" · ")}`);
+}
+
+/** Sonde d'ATTEIGNABILITÉ de la passerelle interne (cache 10 min) — permet
+ *  au routage chat d'envoyer les demandes photoréalistes vers WebGPU quand
+ *  le serveur ne peut pas joindre la passerelle (VPS public). */
+let cacheAtteignable: { valeur: boolean; expiration: number } | null = null;
+
+export async function professeurGatewayAtteignable(): Promise<boolean> {
+  const maintenant = Date.now();
+  if (cacheAtteignable && maintenant < cacheAtteignable.expiration) return cacheAtteignable.valeur;
+  const config = await configurationProfesseurAsync();
+  let valeur = false;
+  if (config) {
+    try {
+      const r = await fetchAvecDélai(config.baseUrl, { method: "GET" }, 4_000);
+      valeur = r.status < 500; // 301/302/4xx = réseau OK (c'est le routage qui compte)
+    } catch {
+      valeur = false;
+    }
+  }
+  cacheAtteignable = { valeur, expiration: maintenant + 10 * 60 * 1000 };
+  return valeur;
+}
+
+/** Moteur 1 — passerelle interne (POST /images/generations, réseau privé). */
+async function professeurImagePasserelle(
+  params: { prompt: string; ratio?: string },
+  config: ConfigurationProfesseur,
+): Promise<ŒuvreProfesseur> {
   const taille = TAILLES_IMAGE[params.ratio ?? "1:1"] ?? "1024x1024";
   const prompt = durcirPromptImage(params.prompt);
 
@@ -293,6 +360,56 @@ export async function professeurImage(params: {
       taille,
       octets: buffer.length,
       note: "Œuvre du professeur temporaire — le signal d'onde gen3 prendra le relais après distillation.",
+    },
+  };
+}
+
+/** Moteur 2 — Hugging Face Inference Providers (public, chemin de production).
+ *  POST https://router.huggingface.co/hf-inference/models/{model} avec le
+ *  token du propriétaire ; la réponse est l'image RAW (bytes). */
+async function professeurImageHf(
+  params: { prompt: string; ratio?: string },
+  config: ConfigurationProfesseur,
+): Promise<ŒuvreProfesseur> {
+  const taille = (TAILLES_IMAGE[params.ratio ?? "1:1"] ?? "1024x1024").split("x");
+  const largeur = Math.min(1536, Math.max(256, Number(taille[0]) || 1024));
+  const hauteur = Math.min(1536, Math.max(256, Number(taille[1]) || 1024));
+  const prompt = durcirPromptImage(params.prompt);
+  const modèle = config.hfModel ?? "stabilityai/stable-diffusion-3-medium-diffusers";
+
+  const réponse = await fetchAvecDélai(
+    `https://router.huggingface.co/hf-inference/models/${modèle}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.hfToken}`,
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: { width: largeur, height: hauteur },
+      }),
+    },
+    150_000,
+  );
+  if (!réponse.ok) {
+    const corps = (await réponse.text()).slice(0, 200);
+    throw new Error(`HF ${réponse.status} (${modèle}) : ${corps}`);
+  }
+  const buffer = Buffer.from(await réponse.arrayBuffer());
+  if (buffer.length < 1024) throw new Error("HF : image trop petite.");
+  return {
+    buffer,
+    mime: mimeDepuisOctets(buffer, "image/jpeg"),
+    meta: {
+      moteur: "professeur-image-hf",
+      echafaudage: true,
+      loi: "CONTRAINTE-ONDES",
+      professeurSupprimable: true,
+      hfModel: modèle,
+      taille: `${largeur}x${hauteur}`,
+      octets: buffer.length,
+      note: "Œuvre du professeur temporaire (Hugging Face, demande propriétaire) — le signal d'onde gen3 prendra le relais après distillation.",
     },
   };
 }
