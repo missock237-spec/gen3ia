@@ -149,8 +149,8 @@ def main() -> None:
         # 5 bis. CLASSIFICATION DU ROUTAGE (texte final du fil)
         #   it.144 bis : une img servie par le moteur serveur est un SUCCÈS
         #   potentiel — le photoréalisme se JUGE visuellement sur les octets
-        #   (var-copie/image-photorealiste-prod.jpg). Une img « scène plate »
-        #   porte la surcharge « Gen3 v2 scène » incrustée dans les octets.
+        #   (var-copie/image-photorealiste-prod.jpg).
+        data: bytes | None = None
         texte_fil = page.inner_text("body")[-1600:]
         if "Génération photoréaliste lancée" in texte_fil and "WebGPU" in texte_fil and not img_ok:
             routage = "webgpu-navigateur"
