@@ -2043,7 +2043,7 @@ export default function NovaChat() {
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
         />
-        <nav className="nova-liste" aria-label="Conversations">
+        <nav className="nova-liste" aria-label="Conversations" tabIndex={0}>
           {/* RECHERCHE GLOBALE (LOT 13) : résultats serveur (sémantique ou
            * texte) au-dessus de l'historique local — on retrouve une
            * conversation par le SENS de son contenu, pas seulement par son
@@ -2264,6 +2264,9 @@ export default function NovaChat() {
           aria-live="polite"
           aria-label="Conversation"
           aria-busy={enCours}
+          // A11y (axe scrollable-region-focusable) : le fil défile au clavier
+          // dès qu'il déborde — la région scrollable doit être focusable.
+          tabIndex={0}
           onScroll={onScrollMessages}
         >
           {messages.length === 0 ? (
