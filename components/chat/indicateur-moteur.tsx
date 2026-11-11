@@ -117,6 +117,10 @@ export default function IndicateurMoteur() {
         aria-hidden="true"
       />
       <span className="nova-moteur-libelle">{rendu.libelle}</span>
+      {/* a11y (axe label-content-name-mismatch) : SANS cet espace réel, le DOM
+       * concatène « opérationnel35 s max » et le nom accessible (« … 35 s max
+       * … ») ne contient plus le texte visible — violation WCAG 2.1 AA. */}
+      {" "}
       <span className="nova-moteur-temps">{TEMPS_ANNONCE_S} s max · repli garanti</span>
     </Link>
   );
