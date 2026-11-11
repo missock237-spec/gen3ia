@@ -104,9 +104,18 @@ export interface RapportEntrainement {
   historiqueErreur: number[];
 }
 
-/** Fabrique un rapport depuis un historique d'erreurs (jamais vide). */
-export function rapportDepuisHistorique(historique: number[]): RapportEntrainement {
-  const erreurInitiale = historique[0] ?? 0;
+/**
+ * Fabrique un rapport depuis l'historique post-pas.
+ *
+ * `erreurAvantEntrainement`, lorsqu'elle est fournie, est mesurée AVANT le
+ * premier pas. Sans cette valeur, le comportement historique est conservé
+ * pour les appelants qui ne disposent que de l'historique.
+ */
+export function rapportDepuisHistorique(
+  historique: number[],
+  erreurAvantEntrainement?: number,
+): RapportEntrainement {
+  const erreurInitiale = erreurAvantEntrainement ?? historique[0] ?? 0;
   const erreurFinale = historique[historique.length - 1] ?? 0;
   return {
     epoques: historique.length,
@@ -149,3 +158,55 @@ export function borner(valeur: number, min: number, max: number): number {
  * Float32Array, les tests des deux).
  */
 export type OndeCible = readonly number[] | Float32Array;
+
+/** Contrat partagé CPU/GPU : paramètres numériques RPIA valides. */
+export function validerConfigRPIA(config: ConfigRPIA): void {
+  if (
+    !config ||
+    typeof config !== "object" ||
+    !Number.isFinite(config.tauxApprentissage) ||
+    !Number.isFinite(Math.fround(config.tauxApprentissage)) ||
+    config.tauxApprentissage < 0 ||
+    !Number.isFinite(config.pasDeTemps) ||
+    !Number.isFinite(Math.fround(config.pasDeTemps)) ||
+    config.pasDeTemps <= 0 ||
+    Math.fround(config.pasDeTemps) <= 0
+  ) {
+    throw new Error(
+      "Configuration RPIA invalide : les paramètres doivent être finis et représentables en float32 ; le taux doit être positif ou nul et le pas de temps strictement positif.",
+    );
+  }
+}
+
+/** Refuse toute cible dont la dimension ou les valeurs ne sont pas valides. */
+export function validerCibleRPIA(cible: OndeCible, nbNoeuds: number): void {
+  if (!cible || typeof cible.length !== "number" || cible.length !== nbNoeuds) {
+    throw new Error(
+      `Cible incompatible : ${cible?.length ?? "absente"} valeurs reçues, ${nbNoeuds} nœuds.`,
+    );
+  }
+  for (let i = 0; i < cible.length; i++) {
+    if (!Number.isFinite(cible[i]) || !Number.isFinite(Math.fround(cible[i]))) {
+      throw new Error(`Cible non finie ou hors plage float32 à l'index ${i}.`);
+    }
+  }
+}
+
+/**
+ * Horloge absolue du pas courant. L'API reçoit le pas temporel Δt,
+ * mais le calcul ondulatoire doit être évalué à t = Δt × pasTotal.
+ * Le résultat est quantifié en float32, comme l'uniforme WGSL, afin que
+ * la référence CPU et le shader reçoivent le même instant de simulation.
+ */
+export function calculerTempsGlobalRPIA(config: ConfigRPIA, pasTotaux: number): number {
+  validerConfigRPIA(config);
+  if (!Number.isSafeInteger(pasTotaux) || pasTotaux < 0) {
+    throw new Error(`Compteur de pas RPIA invalide : ${pasTotaux} (entier sûr ≥ 0 requis).`);
+  }
+  const temps = config.pasDeTemps * pasTotaux;
+  const tempsFloat32 = Math.fround(temps);
+  if (!Number.isFinite(temps) || !Number.isFinite(tempsFloat32)) {
+    throw new Error("Temps global RPIA non fini ou hors plage float32.");
+  }
+  return tempsFloat32;
+}

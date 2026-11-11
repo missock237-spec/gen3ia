@@ -52,6 +52,10 @@ const DEUX_PI = Math.PI * 2;
  * répartie sur la bande utile, la phase sur le cercle complet.
  */
 export function signatureMot(mot: string, dim: number): SignatureOnde {
+  verifierDimensionGrille(dim);
+  if (typeof mot !== "string" || mot.trim().length === 0) {
+    throw new Error("Mot invalide : une chaîne non vide est requise pour calculer une signature d'onde.");
+  }
   const h1 = fnv1a(mot);
   const h2 = fnv1a(`ondes·${mot}`);
   const h3 = fnv1a(`phase·${mot}`);
@@ -78,6 +82,13 @@ export function amplitudeMot(mot: string): number {
  * de multiplier les paquets). Ordre stable = propagation reproductible.
  */
 export function encoderTexte(texte: string, dim: number, maxImpulsions = 64): Impulsion[] {
+  verifierDimensionGrille(dim);
+  if (typeof texte !== "string") {
+    throw new Error("Texte invalide : une chaîne est requise pour encoder des impulsions.");
+  }
+  if (!Number.isInteger(maxImpulsions) || maxImpulsions < 0 || maxImpulsions > 4096) {
+    throw new Error(`Limite d'impulsions invalide : ${maxImpulsions} (entier entre 0 et 4096 requis).`);
+  }
   const mots = tokenizeTexte(texte);
   const uniques: string[] = [];
   const force = new Map<string, number>();
@@ -107,12 +118,14 @@ export function encoderTexte(texte: string, dim: number, maxImpulsions = 64): Im
  * grille sans conflit (les clés incluent la dimension).
  */
 export class CarteInverse {
-  private readonly positions = new Map<string, { mot: string; x: number; y: number }>();
+  // La dimension fait partie de la clé : une coordonnée (x, y) sur une
+  // grille 128×128 n'est pas la même adresse que sur une grille 256×256.
+  private readonly positions = new Map<string, { mot: string; x: number; y: number; dim: number }>();
 
   /** Enregistre la position d'un mot pour la grille courante. */
   enregistrer(mot: string, dim: number): void {
     const sig = signatureMot(mot, dim);
-    this.positions.set(`${sig.x}:${sig.y}`, { mot, x: sig.x, y: sig.y });
+    this.positions.set(`${dim}:${sig.x}:${sig.y}`, { mot, x: sig.x, y: sig.y, dim });
   }
 
   /** Nombre de mots enregistrés (vocabulaire actif du champ). */
@@ -125,10 +138,18 @@ export class CarteInverse {
    * n'habite le voisinage (rayon en cellules, proportionnel à la grille).
    */
   motLePlusProche(x: number, y: number, dim: number, rayonCellules?: number): string | null {
+    verifierDimensionGrille(dim);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= dim || y >= dim) {
+      throw new Error(`Coordonnées invalides : (${x}, ${y}) hors de la grille ${dim}×${dim}.`);
+    }
     const rayon = rayonCellules ?? Math.max(3, Math.round(dim * 0.035));
+    if (!Number.isInteger(rayon) || rayon < 0 || rayon > dim * 2) {
+      throw new Error(`Rayon de recherche invalide : ${rayon} (entier entre 0 et ${dim * 2} requis).`);
+    }
     let meilleur: string | null = null;
     let distanceMin = rayon * rayon + 1;
     for (const entree of this.positions.values()) {
+      if (entree.dim !== dim) continue;
       const dx = entree.x - x;
       const dy = entree.y - y;
       const d2 = dx * dx + dy * dy;
@@ -143,5 +164,12 @@ export class CarteInverse {
   /** Vider la carte (nouvelle session de champ). */
   reinitialiser(): void {
     this.positions.clear();
+  }
+}
+
+/** Garde-fou commun pour éviter les coordonnées négatives ou hors grille. */
+function verifierDimensionGrille(dim: number): void {
+  if (!Number.isInteger(dim) || dim < 1 || dim > 8192) {
+    throw new Error(`Dimension de grille invalide : ${dim} (entier entre 1 et 8192 requis).`);
   }
 }
