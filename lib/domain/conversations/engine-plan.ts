@@ -22,6 +22,12 @@ import { AUTO_APPROVAL_AUDIT_REASON, isAutoApprovable } from "@/lib/security/aut
 import { isExternalAppConnected } from "@/lib/security/connected-apps";
 import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 import { executeTool } from "@/lib/tools/executor";
+
+// RECHERCHE WEB TEMPS RÉEL (vérification propriétaire 2026-11-11) : la
+// sortie RÉELLE de l'outil web.search rejoint le canal knowledge de la
+// synthèse finale — le pont connaissances cite alors les sources web
+// (titre + URL) au lieu d'une méthode générique sans sources.
+import { blocContexteDepuisSortieRecherche } from "./synthese-recherche-web";
 import { VIDEO_ASPECT_RATIOS, sanitizeProductionOptions } from "@/lib/tools/media/create-video";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -207,6 +213,9 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
 
   let executedSomething = false;
   let anyFailure = false;
+  /** Sortie RÉELLE d'une étape web.search réussie : rejoint le canal
+   *  knowledge de la synthèse finale (sources citées avec URL). */
+  let sortieRechercheWeb: unknown = undefined;
   /** Image générée pendant ce tour (affichée sur le message final). */
   let turnImageUrl: string | undefined;
   /** Task 143 — connecteurs Composio requis mais NON connectés par
@@ -612,6 +621,11 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
         step.status = "done";
         step.output = condenseToolOutput(result.output);
         executedSomething = true;
+        if (toolName === "web.search") {
+          // La matière réelle de la recherche est conservée pour la synthèse
+          // (le condensé d'étape ne suffit pas à citer les sources).
+          sortieRechercheWeb = result.output;
+        }
         if (TOOL_OUTPUT_ARTIFACTS.has(toolName)) {
           const artifact = await artifactFromToolOutput({
             userId: ctx.userId,
@@ -671,7 +685,7 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
 
   // 5) Synthèse finale de l'assistant (en flux quand le client suit le tour).
   await onEvent({ type: "status", phase: "synthesis", label: "Rédaction du résultat…" });
-  const summary = await summarizePlanTurn(ctx, run, steps, artifacts, approvals, hasPending, streaming ? (delta) => onEvent({ type: "message_delta", delta }) : undefined);
+  const summary = await summarizePlanTurn(ctx, run, steps, artifacts, approvals, hasPending, streaming ? (delta) => onEvent({ type: "message_delta", delta }) : undefined, sortieRechercheWeb);
 
   if (hasPending) {
     await updateRunSteps(ctx.userId, run.id, steps);
@@ -727,7 +741,14 @@ async function summarizePlanTurn(
   approvals: ConversationApproval[],
   hasPending: boolean,
   onDelta?: (delta: string) => Promise<void> | void,
+  sortieRechercheWeb?: unknown,
 ): Promise<string> {
+  // RECHERCHE WEB TEMPS RÉEL : la sortie réelle de web.search devient le
+  // canal knowledge de la synthèse — le pont connaissances (seul canal que
+  // le moteur neuronal lit) cite alors les sources RÉELLES avec URL.
+  const blocRecherche = blocContexteDepuisSortieRecherche(sortieRechercheWeb);
+  const knowledgeContext =
+    [ctx.knowledgeContext, blocRecherche].filter(Boolean).join("\n\n---\n\n") || undefined;
   const deterministic = [
     `**${run.objective}**`,
     "",
@@ -738,6 +759,8 @@ async function summarizePlanTurn(
         return `${mark} ${s.title}${s.output ? ` — ${s.output.slice(0, 300)}` : ""}`;
       })
       .join("\n"),
+    // Repli déterministe honnête : les sources RÉELLES y figurent aussi.
+    blocRecherche ? `\nSources web réelles trouvées :\n${blocRecherche}` : "",
     artifacts.length > 0
       ? `\nArtefacts produits (téléchargement direct) :\n${artifacts
           .map((a) => `- [${a.title}](/api/files/artifacts/${a.id}?redirect=1)`)
@@ -775,6 +798,7 @@ async function summarizePlanTurn(
       ],
       preferFree: preferFreeForVisibleAnswers(),
       maxTokens: 1200,
+      knowledgeContext,
       metadata: { userId: ctx.userId, conversationId: ctx.conversationId },
     };
     if (onDelta) {
