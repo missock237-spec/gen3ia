@@ -53,7 +53,7 @@ import { estIntentionEntrainement, runTrainingTurn } from "./engine-training";
 // PARITÉ GEMINI — Deep Research gen3 : plan déterministe multi-axes,
 // recherches web réelles par axe, pages ouvertes, rapport structuré sourcé.
 import { estDemandeRechercheApprofondie, runResearchTurn } from "./engine-research";
-import { runPlanTurn } from "./engine-plan";
+import { forcePlanDocumentaireSiExplicite, runPlanTurn } from "./engine-plan";
 import { runAgentIntentTurn, runScheduleIntentTurn, runServiceControlTurn, runWorkflowIntentTurn } from "./engine-services";
 import { conversationToolCatalog } from "./engine-tools";
 import { INTENT_BUDGET_MS, attachmentsContext, loadTurnAgent, withTimeout } from "./engine-turn";
@@ -88,7 +88,7 @@ export {
 } from "./engine-intent";
 export type { TurnIntent, ExplicitToolIntent, IntentPromptMeta } from "./engine-intent";
 export type { ConversationTurnInput, AgentTurnContext, ConversationTurnResult } from "./engine-turn";
-export { planFailureAppendix, inferArtifactType } from "./engine-plan";
+export { planFailureAppendix, inferArtifactType, forcePlanDocumentaireSiExplicite } from "./engine-plan";
 export { executeApprovedStep, rejectApprovalStep } from "./engine-approvals";
 export type { ApprovedStepOutcome } from "./engine-approvals";
 export { runAI as conversationRunAI };
@@ -714,34 +714,11 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
       ].slice(0, 8),
     };
   }
-  if (intent.mode === "plan" && !(intent.steps ?? []).some((s) => s.toolName === "artifact.create")) {
-    // Moteur documentaire — garde déterministe miroir du mode chat : une
-    // demande EXPLICITE de livrable document (« crée un PDF », « prépare un
-    // rapport ») ne peut pas finir en plan générique sans outil — la
-    // classification LLM choisit parfois le mode plan avec des étapes sans
-    // artifact.create (sondage production : texte méta, aucun livrable).
-    // Le même détecteur déterministe force alors le plan documentaire
-    // canonique (rédaction du contenu + création du fichier réel).
-    const expliciteDocument = detectExplicitToolIntent(input.message, catalog, customApis);
-    if (expliciteDocument?.toolName === "artifact.create" && expliciteDocument.document) {
-      intent = {
-        mode: "plan",
-        understanding: "Demande explicite d'un livrable document téléchargeable.",
-        objective: input.message.slice(0, 400),
-        steps: [
-          {
-            title: `Rédaction du contenu (${expliciteDocument.document.format})`,
-            detail: "Rédige un contenu structuré et complet pour le document demandé.",
-          },
-          {
-            title: `Création du document « ${expliciteDocument.document.title} »`,
-            detail: "Génère le fichier téléchargeable et le range dans les livrables de la conversation.",
-            toolName: "artifact.create",
-            toolInput: { title: expliciteDocument.document.title, format: expliciteDocument.document.format },
-          },
-        ],
-      };
-    }
+  if (intent.mode === "plan") {
+    // Moteur documentaire — garde déterministe : une demande explicite de
+    // livrable document ne peut pas finir en plan générique sans outil
+    // (voir forcePlanDocumentaireSiExplicite dans engine-plan.ts).
+    intent = forcePlanDocumentaireSiExplicite(input.message, intent, catalog, customApis);
   }
   const result = await runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, complexityScore: complexity.score });
   await onEvent({

@@ -49,7 +49,9 @@ export type ExplicitToolIntent =
   | { toolName: "custom_api.call"; query: string }
   | { toolName: "web.api"; url: string }
   | { toolName: "web.api.write"; url: string; method: "POST" | "PUT" | "PATCH" | "DELETE"; body?: string }
-  | { toolName: "artifact.create"; document: { title: string; format: "pdf" | "docx" | "xlsx" | "pptx" | "md" } }
+  // Moteur documentaire — toute la matrice création (formats libres et
+  // données structurées inclus) ; formats historiques inchangés.
+  | { toolName: "artifact.create"; document: { title: string; format: "pdf" | "docx" | "xlsx" | "pptx" | "csv" | "md" | "txt" | "json" | "html" | "odt" | "ods" | "odp" | "rtf" | "yaml" } }
   | { toolName: "email.send"; to: string; subject: string; text: string };
 
 const EMAIL_ADDRESS_RE = /[\w.+-]+@[\w-]+\.[\w.-]{2,}/;
@@ -90,7 +92,10 @@ export function detectExplicitToolIntent(message: string, catalog: ToolCatalogEn
   const catalogNames = new Set(catalog.map((t) => t.name));
 
   // 1) Recherche web explicite (« fais une recherche web », « search the web »).
-  const webMarkers = /(recherche[s]? (web|internet)|cherche[rz]? (sur )?(le |la )?(web|internet)|fais[ez]? une recherche|search (the )?web|web search|sur (le|internet))\b/i;
+  //    « sur (le web|internet) » — JAMAIS « sur le » seul : n'importe quel
+  //    « note sur le café » français routait vers web.search (sondage moteur
+  //    documentaire : un livrable « …points sur le café » partait en recherche).
+  const webMarkers = /(recherche[s]? (web|internet)|cherche[rz]? (sur )?(le |la )?(web|internet)|fais[ez]? une recherche|search (the )?web|web search|sur (le web|internet))\b/i;
   if (webMarkers.test(lower) && catalogNames.has("web.search")) {
     return { toolName: "web.search", query: extractSearchQuery(message) };
   }
@@ -186,13 +191,20 @@ export function extractDocumentTitle(message: string): string {
   return (cleaned || message.trim()).slice(0, 80);
 }
 
-/** Format de document demandé — déduction prudente, PDF par défaut. */
-export function extractDocumentFormat(message: string): "pdf" | "docx" | "xlsx" | "pptx" | "md" {
+/** Format de document demandé — déduction prudente, PDF par défaut.
+ *  Les formats libres sont vérifiés AVANT leurs équivalents Microsoft :
+ *  « crée un ODS » doit produire un ODS réel, pas un XLSX. */
+export function extractDocumentFormat(message: string): "pdf" | "docx" | "xlsx" | "pptx" | "csv" | "md" | "txt" | "json" | "html" | "odt" | "ods" | "odp" | "rtf" | "yaml" {
   const lower = message.toLowerCase();
-  if (/\b(pr[ée]sentation|diaporama|slides?|powerpoint|pptx)\b/i.test(lower)) return "pptx";
-  if (/\b(excel|xlsx|tableau de bord|feuille de calcul)\b/i.test(lower)) return "xlsx";
-  if (/\b(word|docx)\b/i.test(lower)) return "docx";
+  if (/\b(odp)\b/i.test(lower)) return "odp";
+  if (/\b(ods)\b/i.test(lower)) return "ods";
+  if (/\b(odt)\b/i.test(lower)) return "odt";
+  if (/\b(pr[ée]sentation|diaporama|slides?|powerpoint|pptx|impress)\b/i.test(lower)) return "pptx";
+  if (/\b(excel|xlsx|tableau de bord|feuille de calcul|calc)\b/i.test(lower)) return "xlsx";
+  if (/\b(word|docx|writer|opendocument)\b/i.test(lower)) return "docx";
   if (/\b(markdown|\.md)\b/i.test(lower)) return "md";
+  if (/\b(yaml|yml)\b/i.test(lower)) return "yaml";
+  if (/\b(rtf|texte riche|wordpad)\b/i.test(lower)) return "rtf";
   return "pdf";
 }
 

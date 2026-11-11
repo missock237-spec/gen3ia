@@ -6,6 +6,8 @@ import "server-only";
 
 import { appendPreviewLinks } from "./artefact-apps";
 import { safeEmitter } from "./stream-events";
+import { detectExplicitToolIntent, type TurnIntent } from "./engine-intent";
+import type { ToolCatalogEntry } from "./engine-tools";
 import type { ConversationApproval, ConversationArtifact, ConversationRun, RunStep } from "./types";
 import { INTERNAL_ACTION_TOOLS } from "@/lib/agents/approval-policy";
 import { recordRunOutcome } from "@/lib/ai/auto-improvement";
@@ -45,12 +47,58 @@ import type { ConversationTurnResult } from "./engine-turn";
 export const TOOL_OUTPUT_ARTIFACTS: ReadonlySet<string> = new Set(["artifact.create", "file.create", "zip.create", "voice.speak"]);
 
 /* ------------------------------------------------------------------ */
+/* Garde documentaire déterministe (mode plan)                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Garde MOTEUR DOCUMENTAIRE : une demande EXPLICITE de livrable document
+ * (« crée un PDF », « prépare un rapport », « génère un ODS ») ne peut pas
+ * finir en plan générique sans outil. La classification LLM choisit parfois
+ * le mode plan avec des étapes sans artifact.create (sondage production :
+ * texte méta rendu à l'utilisateur, aucun livrable, aucun événement
+ * artifact_created) — ce garde force alors le plan documentaire canonique
+ * (rédaction du contenu → création du fichier réel), miroir exact de la
+ * garde web.search du composer. Déterministe, zéro variance LLM.
+ */
+export function forcePlanDocumentaireSiExplicite(
+  message: string,
+  intent: TurnIntent,
+  catalog: ToolCatalogEntry[],
+  customApis: Parameters<typeof detectExplicitToolIntent>[2],
+): TurnIntent {
+  if (intent.mode !== "plan") return intent;
+  if ((intent.steps ?? []).some((s) => s.toolName === "artifact.create")) return intent;
+  const explicite = detectExplicitToolIntent(message, catalog, customApis);
+  if (explicite?.toolName !== "artifact.create" || !explicite.document) return intent;
+  return {
+    mode: "plan",
+    understanding: "Demande explicite d'un livrable document téléchargeable.",
+    objective: message.slice(0, 400),
+    steps: [
+      {
+        title: `Rédaction du contenu (${explicite.document.format})`,
+        detail: "Rédige un contenu structuré et complet pour le document demandé.",
+      },
+      {
+        title: `Création du document « ${explicite.document.title} »`,
+        detail: "Génère le fichier téléchargeable et le range dans les livrables de la conversation.",
+        toolName: "artifact.create",
+        toolInput: { title: explicite.document.title, format: explicite.document.format },
+      },
+    ],
+  } as TurnIntent;
+}
+
+/* ------------------------------------------------------------------ */
 /* Completion du contenu des livrables (artifact.create)               */
 /* ------------------------------------------------------------------ */
 
 const DocumentBlocksSchema = z.object({
   title: z.string().min(1).max(300),
-  format: z.enum(["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"]),
+  // Moteur documentaire : mêmes formats que lib/documents/types.ts
+  // (ArtifactFormatSchema) — un plan demandant odt/ods/odp/rtf/yaml doit
+  // passer la completion comme les formats historiques.
+  format: z.enum(["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html", "odt", "ods", "odp", "rtf", "yaml"]),
   blocks: z.array(
     z.object({
       type: z.enum(["title", "heading", "paragraph", "list", "table", "code", "quote", "pageBreak"]),

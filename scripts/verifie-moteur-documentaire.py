@@ -9,6 +9,7 @@ TÉLÉCHARGEMENT RÉEL du fichier → signature %PDF- vérifiée sur les octets.
 Même squelette durci que la sonde recherche-web (hydration-proof, POST
 réseau prouvés, valeurs DOM revérifiées).
 """
+import json
 import re
 import sys
 import time
@@ -183,12 +184,28 @@ try:
 
     # 3bis) Analyse du flux : étapes exécutées + artefact créé côté serveur.
     evenements = re.findall(r'"type":"([a-z_]+)"', corps_flux)
-    artifact_json = re.search(
-        r'\{[^{}]*"type":"artifact_created"[^{}]*\}', corps_flux)
     nom_fichier_flux = re.search(r'"filename":"([^"]+)"', corps_flux)
     print(f"[flux] événements: {sorted(set(evenements))}", flush=True)
     if nom_fichier_flux:
         print(f"[flux] artefact annoncé: {nom_fichier_flux.group(1)}", flush=True)
+    # Traçage des étapes : titre, outil, statut, sortie (diagnostic honnête).
+    for ligne in corps_flux.split("\n"):
+        if not ligne.startswith("data:"):
+            continue
+        brut = ligne[5:].strip()
+        if not brut or brut == "[DONE]":
+            continue
+        m_step = re.search(r'"type":"step_update","step":(\{.*\})', brut)
+        if m_step:
+            try:
+                step = json.loads(m_step.group(1))
+                print(
+                    f"[étape] {step.get('status')} | {str(step.get('title'))[:55]} "
+                    f"| outil={step.get('toolName')} | sortie={str(step.get('output'))[:130]}",
+                    flush=True,
+                )
+            except Exception:
+                pass
 
     # 4) Réponse complète
     dernier = ""

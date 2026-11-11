@@ -7,8 +7,10 @@ import {
   dataScopeForTool,
   detectExplicitToolIntent,
   estimatedCostForTool,
+  extractDocumentFormat,
   extractEmailSubject,
   extractSearchQuery,
+  forcePlanDocumentaireSiExplicite,
   inferArtifactType,
   stepRequiresApproval,
 } from "./engine";
@@ -273,6 +275,64 @@ describe("moteur conversationnel — garde-fou d'intention explicite", () => {
     // une simple réponse, sans données réelles ni fichier.
     expect(detectExplicitToolIntent("Analyse mes ventes du mois et rédige un compte rendu", catalog)?.toolName).toBe("artifact.create");
     expect(detectExplicitToolIntent("Quel est le ton officiel de notre marque ?", catalog)).toBeNull();
+  });
+});
+
+describe("moteur conversationnel — garde documentaire du mode plan (moteur documentaire)", () => {
+  const catalog = conversationToolCatalog();
+
+  it("force le plan documentaire canonique quand la classification LLM choisit un plan sans artifact.create", () => {
+    const planGenérique = {
+      mode: "plan" as const,
+      understanding: "Création d'un document.",
+      objective: "Crée un document PDF sur le café.",
+      steps: [{ title: "Réflexion sur le plan", detail: "Décompose l'objectif en étapes." }],
+    };
+    const forcé = forcePlanDocumentaireSiExplicite(
+      'Crée un document PDF intitulé "Rapport café" avec un titre et trois points sur le café.',
+      planGenérique,
+      catalog,
+      [],
+    );
+    expect(forcé.steps?.map((s) => s.toolName)).toContain("artifact.create");
+    const étapeDocument = forcé.steps?.find((s) => s.toolName === "artifact.create");
+    expect(étapeDocument?.toolInput).toMatchObject({ format: "pdf" });
+    expect(String(étapeDocument?.title)).toContain("Rapport café");
+  });
+
+  it("ne touche pas à un plan qui contient déjà artifact.create", () => {
+    const planAvecOutil = {
+      mode: "plan" as const,
+      understanding: "ok",
+      objective: "doc",
+      steps: [{ title: "Créer", detail: "x", toolName: "artifact.create", toolInput: { title: "T", format: "docx" } }],
+    };
+    expect(forcePlanDocumentaireSiExplicite("Crée un document Word", planAvecOutil, catalog, [])).toBe(planAvecOutil);
+  });
+
+  it("laisse inchangés les modes chat et les messages sans intention document", () => {
+    const chat = { mode: "chat" as const, understanding: "salut" };
+    expect(forcePlanDocumentaireSiExplicite("Bonjour !", chat, catalog, [])).toBe(chat);
+    const planNonDoc = {
+      mode: "plan" as const,
+      understanding: "ok",
+      objective: "analyser",
+      steps: [{ title: "Analyse", detail: "x" }],
+    };
+    expect(forcePlanDocumentaireSiExplicite("Analyse cette situation en général", planNonDoc, catalog, [])).toBe(planNonDoc);
+  });
+
+  it("les formats libres sont reconnus AVANT leurs équivalents Microsoft", () => {
+    expect(extractDocumentFormat("Crée un ODS des ventes")).toBe("ods");
+    expect(extractDocumentFormat("Génère un ODP de lancement")).toBe("odp");
+    expect(extractDocumentFormat("Produis un ODT propre")).toBe("odt");
+    expect(extractDocumentFormat("Fais un fichier YAML de config")).toBe("yaml");
+    expect(extractDocumentFormat("Écris un RTF")).toBe("rtf");
+    // Les formats Microsoft restent reconnus.
+    expect(extractDocumentFormat("Fais un tableau Excel des ventes")).toBe("xlsx");
+    expect(extractDocumentFormat("Crée un document Word")).toBe("docx");
+    expect(extractDocumentFormat("Crée une présentation PowerPoint")).toBe("pptx");
+    expect(extractDocumentFormat("Un rapport quelconque")).toBe("pdf");
   });
 });
 
