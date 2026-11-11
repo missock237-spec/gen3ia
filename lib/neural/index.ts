@@ -14,3 +14,6 @@ export * from "./core";
 export * from "./encoding/text-encoder";
 export * from "./decoding/response-decoder";
 export * from "./effectors";
+
+// Cerveau CPU ondulatoire expérimental (API pure, sans dépendance serveur).
+export * from "./brain/cerveau-ondulatoire";

@@ -28,7 +28,7 @@ struct NoeudOnde {
 struct ParametresEntrainement {
   tauxApprentissage : f32,
   interfCible : f32,
-  pasDeTemps : f32,
+  tempsGlobal : f32,
   pad0 : f32,
 };
 
@@ -39,11 +39,12 @@ struct ParametresEntrainement {
 @compute @workgroup_size(256)
 fn principal(@builtin(global_invocation_id) id : vec3<u32>) {
   let idx = id.x;
+  if (idx >= arrayLength(&noeuds)) { return; }
   var noeud = noeuds[idx];
   let cible = ondeCible[idx];
 
   // 1. Propagation de l'onde avant (Forward Wave Pass).
-  let ondeAvant = noeud.amplitude * cos(noeud.frequence * parametres.pasDeTemps + noeud.phase);
+  let ondeAvant = noeud.amplitude * cos(noeud.frequence * parametres.tempsGlobal + noeud.phase);
 
   // 2. Zone d'interférence (onde produite vs cible).
   let interference = ondeAvant - cible;
