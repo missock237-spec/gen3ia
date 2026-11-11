@@ -714,6 +714,35 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
       ].slice(0, 8),
     };
   }
+  if (intent.mode === "plan" && !(intent.steps ?? []).some((s) => s.toolName === "artifact.create")) {
+    // Moteur documentaire — garde déterministe miroir du mode chat : une
+    // demande EXPLICITE de livrable document (« crée un PDF », « prépare un
+    // rapport ») ne peut pas finir en plan générique sans outil — la
+    // classification LLM choisit parfois le mode plan avec des étapes sans
+    // artifact.create (sondage production : texte méta, aucun livrable).
+    // Le même détecteur déterministe force alors le plan documentaire
+    // canonique (rédaction du contenu + création du fichier réel).
+    const expliciteDocument = detectExplicitToolIntent(input.message, catalog, customApis);
+    if (expliciteDocument?.toolName === "artifact.create" && expliciteDocument.document) {
+      intent = {
+        mode: "plan",
+        understanding: "Demande explicite d'un livrable document téléchargeable.",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: `Rédaction du contenu (${expliciteDocument.document.format})`,
+            detail: "Rédige un contenu structuré et complet pour le document demandé.",
+          },
+          {
+            title: `Création du document « ${expliciteDocument.document.title} »`,
+            detail: "Génère le fichier téléchargeable et le range dans les livrables de la conversation.",
+            toolName: "artifact.create",
+            toolInput: { title: expliciteDocument.document.title, format: expliciteDocument.document.format },
+          },
+        ],
+      };
+    }
+  }
   const result = await runPlanTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, complexityScore: complexity.score });
   await onEvent({
     type: "done",
