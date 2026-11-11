@@ -182,8 +182,19 @@ jobs:
           done
           exit 1
 
-      - name: Navigateur Chromium (Playwright)
-        run: npx playwright install --with-deps chromium
+      # Résilience (constat 2026-11-11, deux échecs consécutifs) : `--with-deps`
+      # passe par apt (archive.ubuntu.com) — brownouts DNS des runners GitHub
+      # tuent l'étape avant tout scan (« Temporary failure resolving »). 5
+      # tentatives espacées : ne masque aucun échec de code (le scan suivant
+      # échoue toujours franc).
+      - name: Navigateur Chromium (Playwright, 5 tentatives)
+        run: |
+          for i in 1 2 3 4 5; do
+            if npx playwright install --with-deps chromium; then exit 0; fi
+            echo "::warning::playwright install tentative $i/5 échouée — nouvelle tentative dans 60 s"
+            sleep 60
+          done
+          exit 1
 
       - name: Build production
         run: npm run build
