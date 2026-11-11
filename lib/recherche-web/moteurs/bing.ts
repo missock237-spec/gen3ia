@@ -13,6 +13,7 @@
 import * as cheerio from "cheerio";
 
 import type { ResultatRecherche } from "../types";
+import { resultatsPertinents } from "../verification/pertinence";
 import { markupToText } from "@/lib/content/html-text";
 
 const BROWSER_UA =
@@ -93,9 +94,12 @@ export async function chercherBing(query: string, maxResults = 8): Promise<Resul
     });
     if (!reponse.ok) throw new Error(`Bing a répondu ${reponse.status}.`);
     const html = await reponse.text();
-    const resultats = parserBingHtml(html, maxResults);
+    // Garde de pertinence : le mur anti-bot de Bing sert parfois une SERP
+    // HTTP 200 structurellement valide mais CANNED et hors sujet — sans la
+    // garde, ces résultats poubelle entreraient dans le contexte du chat.
+    const resultats = resultatsPertinents(parserBingHtml(html, maxResults), query);
     if (resultats.length > 0) return resultats;
-    raisonHttp.push("HTTP : aucun résultat parsable (challenge probable)");
+    raisonHttp.push("HTTP : aucun résultat pertinent (challenge ou SERP canned)");
   } catch (erreur) {
     raisonHttp.push(`HTTP : ${erreur instanceof Error ? erreur.message : "échec"}`);
   }
@@ -105,9 +109,9 @@ export async function chercherBing(query: string, maxResults = 8): Promise<Resul
   try {
     const { rendreHtmlAvecChromium } = await import("@/lib/recherche-web/extraction/navigation-playwright");
     const htmlRendu = await rendreHtmlAvecChromium(urlSerp, 25_000);
-    const resultats = parserBingHtml(htmlRendu, maxResults);
+    const resultats = resultatsPertinents(parserBingHtml(htmlRendu, maxResults), query);
     if (resultats.length > 0) return resultats;
-    raisonHttp.push("Chromium : page rendue sans résultats");
+    raisonHttp.push("Chromium : page rendue sans résultats pertinents");
   } catch {
     raisonHttp.push("Chromium indisponible");
   }

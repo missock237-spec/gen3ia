@@ -9,6 +9,7 @@
 import * as cheerio from "cheerio";
 
 import type { ResultatRecherche } from "../types";
+import { resultatsPertinents } from "../verification/pertinence";
 import { markupToText } from "@/lib/content/html-text";
 
 const BROWSER_UA =
@@ -65,7 +66,9 @@ export async function chercherDuckDuckGo(query: string, maxResults = 8): Promise
   if (!response.ok) throw new Error(`DuckDuckGo a répondu ${response.status}.`);
   const html = await response.text();
   if (!html.includes("result")) throw new Error("DuckDuckGo : challenge anti-robot.");
-  const resultats = parserDuckDuckGoHtml(html, maxResults);
-  if (resultats.length === 0) throw new Error("DuckDuckGo : aucun résultat parsable.");
+  // Garde de pertinence : un SERP hors sujet (mur anti-bot canned) ne doit
+  // jamais alimenter le contexte sourcé du chat — échec propre pour la cascade.
+  const resultats = resultatsPertinents(parserDuckDuckGoHtml(html, maxResults), query);
+  if (resultats.length === 0) throw new Error("DuckDuckGo : aucun résultat pertinent parsable.");
   return resultats;
 }

@@ -2,12 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { agregerMoteurs } from "./agregateur";
 
-/** SERP minimaux pour stuber fetch sans réseau. */
+/** SERP minimaux pour stuber fetch sans réseau — structure réaliste
+ *  (chaque résultat DDG vit dans un div.result__body, comme sur la vraie
+ *  page : sans lui, les snippets ne s'associent pas aux titres). */
 const SERP_DDG = `
-<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fcommun.com%2Fa&amp;rut=x">Résultat commun DDG</a>
+<div class="result__body">
+<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fcommun.com%2Fa&amp;rut=x">Résultat commun DDG test</a>
 <a class="result__snippet" href="#">Extrait commun aux deux moteurs de test.</a>
-<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fseul-ddg.com%2Fb&amp;rut=x">Seul chez DDG</a>
+</div>
+<div class="result__body">
+<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fseul-ddg.com%2Fb&amp;rut=x">Seul chez DDG dans ce test</a>
 <a class="result__snippet" href="#">Extrait propre à DuckDuckGo dans ce test.</a>
+</div>
 `;
 const SERP_BING = `
 <li class="b_algo"><h2><a href="https://commun.com/a">Résultat commun Bing</a></h2>
