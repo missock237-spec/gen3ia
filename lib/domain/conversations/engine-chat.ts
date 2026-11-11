@@ -238,8 +238,14 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
   // importés (loadImportedFilesContext) y est désormais UNI à celui de la
   // base de connaissances : « lis ce fichier joint » reçoit la teneur du
   // fichier dans le TEXTE de la réponse, pas seulement dans l'encodage.
+  // RECHERCHE WEB TEMPS RÉEL (vérification propriétaire 2026-11-11) : le
+  // bloc SOURCÉ (résultats réels du moteur multi-moteurs + pages lues) et
+  // le contenu des liens de l'utilisateur subissaient la MÊME cécité —
+  // injectés dans le system prompt seulement, jamais lus par le moteur.
+  // Ils rejoignent le canal : le pont connaissances cite alors les sources
+  // web RÉELLES (titre + URL) — zéro invention, la preuve est en ligne.
   const knowledgeContextUnifie =
-    [ctx.filesContext, ctx.knowledgeContext].filter(Boolean).join("\n\n---\n\n") || undefined;
+    [ctx.filesContext, ctx.knowledgeContext, ctx.webContext].filter(Boolean).join("\n\n---\n\n") || undefined;
 
   let content: string;
   let provider: string | undefined;

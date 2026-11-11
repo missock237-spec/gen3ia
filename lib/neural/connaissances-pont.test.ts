@@ -168,3 +168,71 @@ La charte impose 25 jours de congés payés annuels et un télétravail maximum 
     expect(composition!.texte).toContain("PONG-0B34AA4D");
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* SOURCES WEB TEMPS RÉEL — le bloc du moteur de recherche (produit par */
+/* blocContexteSource) doit atteindre la réponse CITÉE avec URL réelle. */
+/* ------------------------------------------------------------------ */
+
+const BLOC_WEB = `[RECHERCHE WEB TEMPS RÉEL gen3ia — résultats RÉELS obtenus à l'instant. Moteurs interrogés : duckduckgo, bing ; moteurs ayant répondu : bing ; 3 source(s) unique(s) après dédoublonnage (1 doublon(s) retiré(s)).]
+
+[1] L'actualité de l'intelligence artificielle en novembre 2026
+URL : https://exemple-actu.com/ia-novembre-2026
+Extrait : Le marché de l'intelligence artificielle connaît une accélération notable cette semaine avec de nouvelles annonces.
+Publié : 2026-11-10
+Moteur(s) : bing — crédibilité moyenne
+[2] Cours du Bitcoin : la crypto repart à la hausse
+URL : https://exemple-crypto.com/cours
+Extrait : Le prix du Bitcoin évolue de 2,4 % depuis ce matin.
+Moteur(s) : bing — crédibilité moyenne
+
+CONTENU RÉEL DES PAGES LUES :
+Page « L'actualité de l'intelligence artificielle en novembre 2026 » (méthode : http, publiée : 2026-11-10, auteur : Rédaction) :
+Les modèles d'intelligence artificielle multimodaux dominent l'actualité technologique de novembre 2026, avec une progression mesurée des usages industriels.`;
+
+describe("sources web temps réel — pont web (vérification navigateur intégré)", () => {
+  it("le parser reconnaît les sources numérotées du bloc web avec leur URL", () => {
+    const fragments = parserFragmentsConnaissances(BLOC_WEB);
+    const sources = fragments.filter((f) => f.origine === "web");
+    expect(sources.length).toBeGreaterThanOrEqual(2);
+    expect(sources[0].documentId).toBe("https://exemple-actu.com/ia-novembre-2026");
+    expect(sources[0].titreSource).toContain("actualité de l'intelligence artificielle");
+    expect(sources[0].texte).toContain("Extrait :");
+  });
+
+  it("la réponse cite la source web MOT POUR MOT avec son URL réelle", () => {
+    const composition = composerDepuisConnaissances(
+      "cherche sur le web les dernières actualités intelligence artificielle",
+      BLOC_WEB,
+    );
+    expect(composition).not.toBeNull();
+    expect(composition!.texte).toContain("recherche web temps réel gen3ia");
+    expect(composition!.texte).toContain("intelligence artificielle");
+    expect(composition!.texte).toContain("https://exemple-actu.com/ia-novembre-2026");
+    expect(composition!.texte).toContain("— Source web :");
+  });
+
+  it("une question sans rapport avec les sources web retourne null (repli honnête)", () => {
+    const composition = composerDepuisConnaissances(
+      "quelle est la recette du gâteau au chocolat ?",
+      BLOC_WEB,
+    );
+    expect(composition).toBeNull();
+  });
+
+  it("un bloc web mélangé à la connaissance projet et aux fichiers joints reste cité", () => {
+    const mixte = `${BLOC_WEB}
+
+---
+
+- [document doc_charte, fragment 3, score 0.62]
+La charte impose 25 jours de congés payés annuels et un télétravail maximum de 3 jours par semaine.`;
+    const composition = composerDepuisConnaissances(
+      "cherche sur le web les dernières actualités intelligence artificielle",
+      mixte,
+    );
+    expect(composition).not.toBeNull();
+    expect(composition!.texte).toContain("recherche web temps réel gen3ia");
+    expect(composition!.texte).toContain("exemple-actu.com");
+  });
+});

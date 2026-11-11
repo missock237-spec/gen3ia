@@ -68,8 +68,12 @@ export interface FragmentConnaissance {
   score: number;
   texte: string;
   /** "knowledge" = base de connaissances projet ; "fichier-importe" = pièce
-   *  jointe réelle du tour (loadImportedFilesContext). */
-  origine?: "knowledge" | "fichier-importe";
+   *  jointe réelle du tour (loadImportedFilesContext) ; "web" = source de la
+   *  RECHERCHE WEB TEMPS RÉEL (moteur multi-moteurs réel, pages réellement
+   *  lues) — citée avec son URL : zéro invention, la preuve est en ligne. */
+  origine?: "knowledge" | "fichier-importe" | "web";
+  /** Pour les fragments d'origine "web" : titre humain de la source. */
+  titreSource?: string;
 }
 
 /**
@@ -89,7 +93,14 @@ export function parserFragmentsConnaissances(knowledgeContext: string): Fragment
   const commenceBlocKnowledge = (ligne: string) => ligne.startsWith("- [document ");
   const enTeteFichier = (ligne: string) =>
     /^(?:Fichier importé|Fichier importe) « (.+?) » \([^)]*\) :\s*$/.exec(ligne);
-  const estDebutBloc = (ligne: string) => commenceBlocKnowledge(ligne) || enTeteFichier(ligne) !== null;
+  // Bloc de RECHERCHE WEB TEMPS RÉEL (produit par blocContexteSource,
+  // lib/recherche-web) : sources numérotées `[n] titre` + `URL : …`, puis
+  // éventuellement `Page « … » (méthode : …) :` (pages réellement lues).
+  const sourceWeb = (ligne: string) => /^\[(\d+)\]\s+(.*)$/.exec(ligne);
+  const pageLue = (ligne: string) => /^Page « (.+?) » \((.*)\) :\s*$/.exec(ligne);
+  const finDeBlocWeb = (ligne: string) =>
+    Boolean(sourceWeb(ligne)) || Boolean(pageLue(ligne)) || commenceBlocKnowledge(ligne) || enTeteFichier(ligne) !== null || ligne.startsWith("CONTENU RÉEL DES PAGES LUES") || ligne.startsWith("[RECHERCHE WEB TEMPS RÉEL");
+  const debutDeBloc = (ligne: string) => commenceBlocKnowledge(ligne) || enTeteFichier(ligne) !== null || Boolean(sourceWeb(ligne)) || Boolean(pageLue(ligne));
   for (let index = 0; index < lignes.length; index += 1) {
     const ligne = lignes[index];
     if (commenceBlocKnowledge(ligne)) {
@@ -98,7 +109,7 @@ export function parserFragmentsConnaissances(knowledgeContext: string): Fragment
       // Le texte du fragment : les lignes suivantes jusqu'au prochain bloc.
       const texte: string[] = [];
       let suite = index + 1;
-      while (suite < lignes.length && !estDebutBloc(lignes[suite])) {
+      while (suite < lignes.length && !debutDeBloc(lignes[suite])) {
         texte.push(lignes[suite]);
         suite += 1;
       }
@@ -112,12 +123,11 @@ export function parserFragmentsConnaissances(knowledgeContext: string): Fragment
         origine: "knowledge",
       });
       index = suite - 1; // la boucle externe reprend au prochain bloc
-    } else {
+    } else if (enTeteFichier(ligne)) {
       const match = enTeteFichier(ligne);
-      if (!match) continue;
       const texte: string[] = [];
       let suite = index + 1;
-      while (suite < lignes.length && !estDebutBloc(lignes[suite])) {
+      while (suite < lignes.length && !debutDeBloc(lignes[suite])) {
         texte.push(lignes[suite]);
         suite += 1;
       }
@@ -127,13 +137,62 @@ export function parserFragmentsConnaissances(knowledgeContext: string): Fragment
       // — le pont n'invente pas, il ignore et laisse le repli parler.
       if (/^(contenu non chargé|contenu non charge|\(aucun contenu texte\))/.test(contenu)) continue;
       fragments.push({
-        documentId: match[1],
+        documentId: match![1],
         chunkIndex: 0,
         score: 1, // fichier joint DANS ce message : pertinence maximale
         texte: contenu,
         origine: "fichier-importe",
       });
       index = suite - 1;
+    } else {
+      // SOURCE WEB : `[n] titre` puis `URL : …`, `Extrait : …`, `Publié : …`,
+      // `Moteur(s) : …` — chaque source est un fragment citable AVEC son URL.
+      const matchSource = sourceWeb(ligne);
+      if (matchSource) {
+        const texte: string[] = [];
+        let url = "";
+        let suite = index + 1;
+        while (suite < lignes.length && !finDeBlocWeb(lignes[suite])) {
+          const ligneSuite = lignes[suite];
+          const matchUrl = /^URL\s*:\s*(\S+)/.exec(ligneSuite);
+          if (matchUrl && !url) url = matchUrl[1];
+          texte.push(ligneSuite);
+          suite += 1;
+        }
+        const contenu = texte.join("\n").trim();
+        if (contenu.length < 20) continue;
+        fragments.push({
+          documentId: url || `source ${matchSource[1]}`,
+          chunkIndex: Number.parseInt(matchSource[1], 10) || 0,
+          score: 1, // source trouvée POUR cette question : pertinence maximale
+          texte: contenu,
+          origine: "web",
+          titreSource: matchSource[2].trim(),
+        });
+        index = suite - 1;
+        continue;
+      }
+      // PAGE RÉELLEMENT LUE par le moteur de recherche : texte intégral.
+      const matchPage = pageLue(ligne);
+      if (matchPage) {
+        const texte: string[] = [];
+        let suite = index + 1;
+        while (suite < lignes.length && !finDeBlocWeb(lignes[suite])) {
+          texte.push(lignes[suite]);
+          suite += 1;
+        }
+        const contenu = texte.join("\n").trim();
+        if (contenu.length < 20) continue;
+        fragments.push({
+          documentId: matchPage[1],
+          chunkIndex: 0,
+          score: 0.9,
+          texte: contenu,
+          origine: "web",
+          titreSource: matchPage[1],
+        });
+        index = suite - 1;
+      }
     }
   }
   return fragments;
@@ -194,19 +253,28 @@ export function composerDepuisConnaissances(
     if (parDocument.size >= PONT_MAX_FRAGMENTS) break;
   }
 
-  const blocs = [...parDocument.values()].map(({ fragment }) =>
-    fragment.origine === "fichier-importe"
+  const blocs = [...parDocument.values()].map(({ fragment }) => {
+    if (fragment.origine === "web") {
+      const titre = fragment.titreSource ? `« ${fragment.titreSource} »` : "source web";
+      return `« ${citer(fragment.texte)} »\n— Source web : ${titre} — ${fragment.documentId}`;
+    }
+    return fragment.origine === "fichier-importe"
       ? `« ${citer(fragment.texte)} »\n— Source : votre fichier importé « ${fragment.documentId} »`
-      : `« ${citer(fragment.texte)} »\n— Source : document ${fragment.documentId}, fragment ${fragment.chunkIndex}`,
-  );
+      : `« ${citer(fragment.texte)} »\n— Source : document ${fragment.documentId}, fragment ${fragment.chunkIndex}`;
+  });
 
   const avecFichier = [...parDocument.values()].some(({ fragment }) => fragment.origine === "fichier-importe");
-  const avecKnowledge = [...parDocument.values()].some(({ fragment }) => fragment.origine !== "fichier-importe");
-  const titre = avecFichier && avecKnowledge
-    ? "D'après vos documents et vos fichiers joints :"
-    : avecFichier
-      ? "D'après le contenu RÉEL de votre fichier joint :"
-      : "D'après vos documents (base de connaissances) :";
+  const avecWeb = [...parDocument.values()].some(({ fragment }) => fragment.origine === "web");
+  const avecKnowledge = [...parDocument.values()].some(({ fragment }) => fragment.origine === "knowledge");
+  const titre = avecWeb && (avecFichier || avecKnowledge)
+    ? "D'après la recherche web temps réel gen3ia et vos sources :"
+    : avecWeb
+      ? "D'après la recherche web temps réel gen3ia (sources RÉELLES obtenues à l'instant) :"
+      : avecFichier && avecKnowledge
+        ? "D'après vos documents et vos fichiers joints :"
+        : avecFichier
+          ? "D'après le contenu RÉEL de votre fichier joint :"
+          : "D'après vos documents (base de connaissances) :";
 
   const texte =
     blocs.length === 1
