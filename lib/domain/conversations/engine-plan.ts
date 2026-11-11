@@ -126,10 +126,10 @@ async function ensureArtifactInput(
   ctx: TurnContext,
   planned: { title: string; detail?: string },
   toolInput: Record<string, unknown>,
-): Promise<Record<string, unknown> | null> {
+): Promise<{ ok: true; plan: Record<string, unknown> } | { ok: false; raison: string }> {
   const hasTitle = typeof toolInput.title === "string" && toolInput.title.trim().length > 0;
   const blocks = Array.isArray(toolInput.blocks) ? (toolInput.blocks as unknown[]) : [];
-  if (hasTitle && blocks.length > 0) return toolInput;
+  if (hasTitle && blocks.length > 0) return { ok: true, plan: toolInput };
 
   /**
    * Rédaction via le chemin STREAMING (le même qui produit les applications
@@ -184,10 +184,13 @@ async function ensureArtifactInput(
     // Première tentative : budget généreux, sortie complète.
     const generated = await draft(6000, 60_000);
     return {
-      ...toolInput,
-      title: hasTitle ? String(toolInput.title) : generated.title,
-      format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
-      blocks: generated.blocks,
+      ok: true,
+      plan: {
+        ...toolInput,
+        title: hasTitle ? String(toolInput.title) : generated.title,
+        format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
+        blocks: generated.blocks,
+      },
     };
   } catch (error) {
     console.error(JSON.stringify({
@@ -200,10 +203,13 @@ async function ensureArtifactInput(
     try {
       const generated = await draft(3500, 45_000);
       return {
-        ...toolInput,
-        title: hasTitle ? String(toolInput.title) : generated.title,
-        format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
-        blocks: generated.blocks,
+        ok: true,
+        plan: {
+          ...toolInput,
+          title: hasTitle ? String(toolInput.title) : generated.title,
+          format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
+          blocks: generated.blocks,
+        },
       };
     } catch (error2) {
       // TROISIÈME tentative — appel STRUCTURÉ facturé au wallet du
@@ -243,20 +249,26 @@ async function ensureArtifactInput(
           maxAttempts: 2,
         });
         return {
-          ...toolInput,
-          title: hasTitle ? String(toolInput.title) : generated.title,
-          format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
-          blocks: generated.blocks,
+          ok: true,
+          plan: {
+            ...toolInput,
+            title: hasTitle ? String(toolInput.title) : generated.title,
+            format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
+            blocks: generated.blocks,
+          },
         };
       } catch (error3) {
+        const raison = error3 instanceof Error ? error3.message : String(error3);
         console.error(JSON.stringify({
           event: "artifact.redaction_echec_final",
-          reason: error3 instanceof Error ? error3.message : String(error3),
+          reason: raison,
           format: toolInput.format ?? "pdf",
         }));
         // Rédaction réellement indisponible : l'étape sera ignorée
-        // proprement avec un message clair pour l'utilisateur.
-        return null;
+        // proprement et la RAISON réelle est remontée au détail d'étape
+        // (l'utilisateur et la sonde E2E voient POURQUOI, jamais un
+        // « rédaction impossible » muet).
+        return { ok: false, raison };
       }
     }
   }
@@ -695,15 +707,15 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
         // Le contenu du livrable est finalisé juste avant la génération du
         // fichier : jamais de document vide ni d'échec zod opaque.
         const completed = await ensureArtifactInput(ctx, planned, toolInput);
-        if (!completed) {
+        if (!completed.ok) {
           step.status = "skipped";
-          step.detail = `${step.detail ? `${step.detail}\n` : ""}Contenu du livrable indisponible (rédaction impossible pour le moment) — aucun fichier créé.`.trim();
+          step.detail = `${step.detail ? `${step.detail}\n` : ""}Contenu du livrable indisponible (rédaction impossible pour le moment) — aucun fichier créé. Raison technique : ${completed.raison.slice(0, 300)}`.trim();
           step.finishedAt = new Date().toISOString();
           await onEvent({ type: "step_update", runId: run.id, step });
       await persistSteps();
           continue;
         }
-        toolInput = completed;
+        toolInput = completed.plan;
       }
       const result = await executeTool({
         userId: ctx.userId,

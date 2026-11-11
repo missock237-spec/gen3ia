@@ -34,7 +34,7 @@ def verif(label: str, ok: bool, detail: str = "") -> None:
           + (f" - {detail}" if detail else ""), flush=True)
 
 
-MESSAGE = ('Crée un document PDF intitulé "Rapport café" avec un titre, '
+MESSAGE = (f'Crée un document PDF intitulé "Rapport café {STAMP[-4:]}" avec un titre, '
            "un paragraphe et une liste de trois points sur la production "
            "mondiale de café.")
 # Livrable : URL d'artifact réelle (route inline authentifiée) ou lien R2
@@ -189,23 +189,24 @@ try:
     if nom_fichier_flux:
         print(f"[flux] artefact annoncé: {nom_fichier_flux.group(1)}", flush=True)
     # Traçage des étapes : titre, outil, statut, sortie (diagnostic honnête).
+    # Format réel : ndjson (une ligne = un événement JSON, sans préfixe data:).
     for ligne in corps_flux.split("\n"):
-        if not ligne.startswith("data:"):
+        candidat = ligne[5:].strip() if ligne.startswith("data:") else ligne.strip()
+        if not candidat or candidat == "[DONE]":
             continue
-        brut = ligne[5:].strip()
-        if not brut or brut == "[DONE]":
+        try:
+            ev = json.loads(candidat)
+        except Exception:
             continue
-        m_step = re.search(r'"type":"step_update","step":(\{.*\})', brut)
-        if m_step:
-            try:
-                step = json.loads(m_step.group(1))
-                print(
-                    f"[étape] {step.get('status')} | {str(step.get('title'))[:55]} "
-                    f"| outil={step.get('toolName')} | sortie={str(step.get('output'))[:130]}",
-                    flush=True,
-                )
-            except Exception:
-                pass
+        if ev.get("type") != "step_update":
+            continue
+        step = ev.get("step") or {}
+        if step.get("toolName"):
+            print(
+                f"[étape] {step.get('status')} | {str(step.get('title'))[:50]} "
+                f"| outil={step.get('toolName')} | détail={str(step.get('detail'))[:400]}",
+                flush=True,
+            )
 
     # 4) Réponse complète
     dernier = ""
