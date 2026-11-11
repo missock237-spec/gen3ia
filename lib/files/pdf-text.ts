@@ -35,13 +35,34 @@ export function pdfToText(buffer: Buffer): { text: string; pageCount: number } {
       if (token[0] === "T*" || token[0] === "Td" || token[0] === "TD" || token[0] === "ET") {
         textParts.push("\n");
       } else if (token[1] !== undefined) {
-        // Chaîne hexadécimale (UTF-16BE fréquent dans les PDF générés)
+        // Chaîne hexadécimale — DEUX encodages réels existent :
+        //  - UTF-16BE (4 chiffres hex/codepoint) : PDFs CID/Identity-H ;
+        //  - 1 octet/codepoint (2 chiffres hex) : WinAnsi — pdf-lib, Word,
+        //    la quasi-totalité des générateurs bureautiques.
+        // On décode les deux et on garde celui dont le ratio de caractères
+        // imprimables (ASCII + latin étendu) est le meilleur — un PDF latin
+        // décodé en UTF-16BE produit des CJK illisibles, et inversement.
         const hex = token[1].replace(/\s+/g, "");
-        let decoded = "";
+        let utf16 = "";
         for (let i = 0; i + 3 < hex.length + 1; i += 4) {
           const code = Number.parseInt(hex.slice(i, i + 4), 16);
-          if (!Number.isNaN(code) && code >= 32) decoded += String.fromCharCode(code);
+          if (!Number.isNaN(code) && code >= 32) utf16 += String.fromCharCode(code);
         }
+        let latin = "";
+        for (let i = 0; i + 1 < hex.length + 1; i += 2) {
+          const code = Number.parseInt(hex.slice(i, i + 2), 16);
+          if (!Number.isNaN(code) && code >= 32) latin += String.fromCharCode(code);
+        }
+        const ratioImprimable = (s: string): number => {
+          if (!s) return 0;
+          let ok = 0;
+          for (const c of s) {
+            const n = c.codePointAt(0) ?? 0;
+            if ((n >= 32 && n < 127) || (n >= 0xa0 && n <= 0x24f)) ok += 1;
+          }
+          return ok / s.length;
+        };
+        const decoded = ratioImprimable(latin) >= ratioImprimable(utf16) ? latin : utf16;
         if (decoded) textParts.push(decoded);
       } else {
         const literal = token[0].slice(1, -1)

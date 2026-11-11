@@ -6,7 +6,7 @@ import { storeArtifactBuffer } from "@/lib/documents/artifact-store";
 
 const inputSchema = z.object({
   title: z.string().min(1).max(300),
-  format: z.enum(["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"]),
+  format: z.enum(["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html", "odt", "ods", "odp", "rtf", "yaml"]),
   blocks: z.array(
     z.object({
       type: z.enum(["title", "heading", "paragraph", "list", "table", "code", "quote", "image", "pageBreak"]),
@@ -30,12 +30,20 @@ const FORMAT_ALIASES: Record<string, string> = {
   markdown: "md",
   text: "txt", texte: "txt", plain: "txt",
   web: "html",
+  // Moteur documentaire — formats libres / données structurées : mêmes
+  // alias que lib/documents/types.ts (sanitizeArtifactToolInput), les deux
+  // listes DOIVENT rester synchronisées.
+  opendocument: "odt", writer: "odt", odt: "odt",
+  calc: "ods", ods: "ods",
+  impress: "odp", odp: "odp",
+  wordpad: "rtf", richtext: "rtf", "texte riche": "rtf", rtf: "rtf",
+  yml: "yaml",
 };
 
 function formatCanonique(value: unknown): string {
   const s = String(value ?? "pdf").trim().toLowerCase().replace(/^\./, "");
   if (FORMAT_ALIASES[s]) return FORMAT_ALIASES[s];
-  return ["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"].includes(s) ? s : "pdf";
+  return ["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html", "odt", "ods", "odp", "rtf", "yaml"].includes(s) ? s : "pdf";
 }
 
 export const createArtifactTool: ToolDefinition = {

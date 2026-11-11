@@ -11,6 +11,14 @@ export const ArtifactFormatSchema = z.enum([
   "json",
   "html",
   "zip",
+  // Moteur documentaire — formats libres et données structurées : le
+  // modèle doit pouvoir CRÉER dans la même matrice qu'il sait LIRE
+  // (odt/ods/odp via generators/odf, rtf natif, yaml structuré).
+  "odt",
+  "ods",
+  "odp",
+  "rtf",
+  "yaml",
 ]);
 
 export type ArtifactFormat = z.infer<typeof ArtifactFormatSchema>;
@@ -199,12 +207,18 @@ const FORMAT_ALIASES: Record<string, string> = {
   markdown: "md",
   text: "txt", texte: "txt", plain: "txt",
   web: "html",
+  // Moteur documentaire : alias des formats libres / données structurées.
+  opendocument: "odt", writer: "odt", odt: "odt",
+  calc: "ods", ods: "ods",
+  impress: "odp", odp: "odp",
+  wordpad: "rtf", richtext: "rtf", "texte riche": "rtf", rtf: "rtf",
+  yml: "yaml",
 };
 
 function formatCanonique(value: unknown): string {
   const s = String(value ?? "pdf").trim().toLowerCase().replace(/^\./, "");
   if (FORMAT_ALIASES[s]) return FORMAT_ALIASES[s];
-  return ["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html"].includes(s) ? s : "pdf";
+  return ["pdf", "docx", "xlsx", "pptx", "csv", "md", "txt", "json", "html", "odt", "ods", "odp", "rtf", "yaml"].includes(s) ? s : "pdf";
 }
 
 /**

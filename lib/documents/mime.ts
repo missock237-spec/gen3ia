@@ -9,6 +9,11 @@ export const EXTENSIONS = {
   json: "json",
   html: "html",
   zip: "zip",
+  odt: "odt",
+  ods: "ods",
+  odp: "odp",
+  rtf: "rtf",
+  yaml: "yaml",
 } as const;
 
 export const MIME_TYPES = {
@@ -22,6 +27,11 @@ export const MIME_TYPES = {
   json: "application/json",
   html: "text/html",
   zip: "application/zip",
+  odt: "application/vnd.oasis.opendocument.text",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odp: "application/vnd.oasis.opendocument.presentation",
+  rtf: "application/rtf",
+  yaml: "application/yaml",
 } as const;
 
 export type ArtifactFormatKey = keyof typeof EXTENSIONS;

@@ -16,6 +16,9 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "zip.create": { name: "zip.create", risk: "write", requiredPermissions: ["tool.write", "file.write"], filesystemRead: true, filesystemWrite: true },
   "zip.extract": { name: "zip.extract", risk: "write", requiredPermissions: ["tool.write", "file.write", "file.create"], filesystemRead: true, filesystemWrite: true },
   "artifact.create": { name: "artifact.create", risk: "write", requiredPermissions: ["tool.write", "file.write"], filesystemRead: true, filesystemWrite: true },
+  // Moteur documentaire — artifact.convert : conversion réelle d'un
+  // document (lecture de la source + génération d'un nouveau livrable).
+  "artifact.convert": { name: "artifact.convert", risk: "write", requiredPermissions: ["tool.read", "tool.write", "file.read", "file.write"], filesystemRead: true, filesystemWrite: true },
   // it.58 : l'alias artifact.download est supprimé — l'ID réel est artifact.get.
   "composio.execute": { name: "composio.execute", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   "mcp.call": { name: "mcp.call", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },

@@ -4,11 +4,21 @@ import {
 
 import {
   formatFromFilename,
+  MIME_TYPES,
 } from "./mime";
 
 import {
   analyzeZip,
 } from "./zip";
+
+// Moteur documentaire — cœur d'extraction unifié : l'analyse d'un artifact
+// renvoie désormais le TEXTE RÉEL (pdf, docx, odt/ods/odp, pptx, rtf, epub,
+// xlsx, csv, json/yaml/xml, code) et les métadonnées mesurées (pages,
+// feuilles, dimensions d'image, entrées d'archive) au lieu d'un simple
+// « analyzable: true ».
+import {
+  extraireContenuDocument,
+} from "./extraction";
 
 import type {
   ArtifactAnalysis,
@@ -46,20 +56,49 @@ export async function analyzeArtifact(
   }
 
   if (format !== "zip") {
-    return {
-      artifactId,
-      filename: input.filename,
-      format,
-      mimeType:
-        getMimeType(format),
-      sizeBytes: input.data.length,
-      safe: true,
-      warnings: [],
-      errors: [],
-      metadata: {
-        analyzable: true,
-      },
-    };
+    // Extraction RÉELLE — jamais d'échec silencieux : en cas d'erreur de
+    // lecture, l'analyse reste safe:true (le fichier est stocké) et l'erreur
+    // est nommée honnêtement.
+    try {
+      const contenu = await extraireContenuDocument(input.data, input.filename);
+      return {
+        artifactId,
+        filename: input.filename,
+        format,
+        mimeType: getMimeType(format),
+        sizeBytes: input.data.length,
+        safe: true,
+        warnings: [],
+        errors: [],
+        extractedText: contenu.texte || undefined,
+        metadata: {
+          analyzable: true,
+          kind: contenu.kind,
+          note: contenu.note,
+          pages: contenu.pages,
+          feuilles: contenu.feuilles,
+          dimensions: contenu.dimensions,
+          entreesArchive: contenu.entrees?.length,
+          caracteresExtraits: contenu.texte.length,
+        },
+      };
+    } catch (error) {
+      return {
+        artifactId,
+        filename: input.filename,
+        format,
+        mimeType: getMimeType(format),
+        sizeBytes: input.data.length,
+        safe: true,
+        warnings: [],
+        errors: [
+          `Analyse impossible : ${error instanceof Error ? error.message : String(error)}`,
+        ],
+        metadata: {
+          analyzable: false,
+        },
+      };
+    }
   }
 
   const result =
@@ -111,26 +150,8 @@ export async function analyzeArtifact(
 function getMimeType(
   format: ArtifactFormat,
 ): string {
-  const mimeTypes: Record<
-    string,
-    string
-  > = {
-    pdf: "application/pdf",
-    docx:
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    xlsx:
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    pptx:
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    csv: "text/csv",
-    md: "text/markdown",
-    txt: "text/plain",
-    json: "application/json",
-    html: "text/html",
-  };
-
   return (
-    mimeTypes[String(format)] ??
+    MIME_TYPES[format] ??
     "application/octet-stream"
   );
 }

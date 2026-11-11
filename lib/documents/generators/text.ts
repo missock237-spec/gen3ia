@@ -1,5 +1,6 @@
 import type { DocumentPlan } from "../types";
 import { neutralizeCsvCell } from "./safe-cell";
+import * as jsYaml from "js-yaml";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -37,11 +38,56 @@ export function generateTextArtifact(
     case "html":
       return generateHtml(plan);
 
+    case "yaml":
+      return generateYaml(plan);
+
     default:
       throw new Error(
         `Unsupported text format: ${plan.format}`,
       );
   }
+}
+
+/**
+ * YAML structuré : le plan devient un objet { titre, contenu } où les
+ * tableaux deviennent des listes d'objets (colonnes = clés), les listes des
+ * tableaux YAML, le reste des chaînes — document à la fois lisible par un
+ * humain et rechargeable par yaml.load.
+ */
+function generateYaml(plan: DocumentPlan): Buffer {
+  const contenu: unknown[] = [];
+  for (const block of plan.blocks) {
+    if (block.type === "heading") {
+      contenu.push({ type: "section", titre: block.text ?? "", niveau: block.level ?? 2 });
+      continue;
+    }
+    if (block.type === "list") {
+      contenu.push({ type: "liste", ordonnée: Boolean(block.ordered), éléments: block.items ?? [] });
+      continue;
+    }
+    if (block.type === "table") {
+      const colonnes = block.columns ?? [];
+      const lignes = (block.rows ?? []).map((row) => {
+        const objet: Record<string, string> = {};
+        colonnes.forEach((colonne, index) => {
+          objet[colonne] = row[index] ?? "";
+        });
+        return objet;
+      });
+      contenu.push({ type: "table", colonnes, lignes });
+      continue;
+    }
+    if (block.type === "code") {
+      contenu.push({ type: "code", texte: block.text ?? "", langage: block.language ?? "" });
+      continue;
+    }
+    if (block.text) contenu.push({ type: block.type, texte: block.text });
+  }
+  const yaml = jsYaml.dump(
+    { titre: plan.title, description: plan.description ?? "", contenu },
+    { lineWidth: 120, noRefs: true },
+  );
+  return Buffer.from(yaml, "utf8");
 }
 
 function generateCsv(plan: DocumentPlan): Buffer {

@@ -13,6 +13,10 @@ import {
 } from "@/lib/files/office-text";
 import { pdfToText } from "@/lib/files/pdf-text";
 import { docxToText, htmlToText } from "@/lib/knowledge/ingestion";
+import { markupToText } from "@/lib/content/html-text";
+import { metadonneesImage } from "@/lib/files/image-meta";
+import { estArchive7z, lireTar } from "@/lib/files/tar-text";
+import * as jsYaml from "js-yaml";
 import { mapWithConcurrency } from "@/lib/video/concurrency";
 import { downloadFromR2, isR2Configured, uploadToR2 } from "@/lib/storage/r2";
 
@@ -49,7 +53,7 @@ export const IMPORT_MAX_TEXT_CHARS = 600_000;
 /** Nombre maximal de lignes structurées stockées (aperçu complet conservé via texte). */
 export const IMPORT_MAX_STRUCTURED_ROWS = 500;
 
-export type ImportedFileKind = "text" | "markdown" | "csv" | "json" | "html" | "docx" | "xlsx" | "pdf" | "image" | "audio" | "video" | "rtf" | "odt" | "odp" | "ods" | "pptx" | "epub" | "binary";
+export type ImportedFileKind = "text" | "markdown" | "csv" | "json" | "html" | "docx" | "xlsx" | "pdf" | "image" | "audio" | "video" | "rtf" | "odt" | "odp" | "ods" | "pptx" | "epub" | "zip" | "tar" | "7z" | "xml" | "yaml" | "binary";
 
 export interface ImportedFileRecord {
   id: string;
@@ -174,9 +178,15 @@ export async function convertFileBuffer(
   const name = filename.toLowerCase();
   const extension = name.includes(".") ? name.split(".").pop()! : "";
 
-  // Images : métadonnées réelles, pas de « conversion » texte illusoire.
+  // Images : métadonnées RÉELLES lues depuis les octets (dimensions, format
+  // réel par signature) — l'ancien chemin renvoyait une note muette sans
+  // aucune mesure, interdite par la demande moteur documentaire.
   if (contentType.startsWith("image/") || ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
-    return { kind: "image", text: "", conversion: "metadata-only", note: "Image importée : métadonnées stockées (pas de contenu texte)." };
+    const meta = metadonneesImage(buffer);
+    const note = meta
+      ? `Image ${meta.format.toUpperCase()} importée : ${meta.largeur}×${meta.hauteur} px (ratio ${(meta.largeur / meta.hauteur).toFixed(2)}), ${Math.round(sizeBytes / 1024)} Ko. L'analyse visuelle du contenu est disponible — demandez « analyse cette image ».`
+      : "Image importée : métadonnées stockées (format non reconnu par signature).";
+    return { kind: "image", text: "", conversion: "metadata-only", note };
   }
 
   // Audios : kind dédié (audit multimodal) — l'ancien chemin tombait en
@@ -264,6 +274,72 @@ export async function convertFileBuffer(
     return { kind: "epub", text, conversion: text ? "full" : "metadata-only" };
   }
 
+  // Archives ZIP : listing complet + lecture réelle des fichiers texte
+  // (l'archive tombait en « binaire » muet avant le moteur documentaire).
+  if (extension === "zip" || contentType === "application/zip") {
+    const { analyzeZip } = await import("@/lib/documents/zip");
+    const resultat = await analyzeZip(buffer);
+    const text = resultat.textFiles
+      .map((f) => `===== ${f.path} =====\n${f.content}`)
+      .join("\n\n");
+    return {
+      kind: "zip",
+      text,
+      conversion: text ? "full" : "metadata-only",
+      note: `Archive ZIP : ${resultat.fileCount} entrée(s), ${resultat.textFiles.length} fichier(s) texte lu(s).`,
+    };
+  }
+
+  // Archives TAR : lecteur natif (en-têtes 512 o, checksum vérifiée) →
+  // listing + extraction texte.
+  if (extension === "tar") {
+    const lecture = lireTar(buffer);
+    const text = lecture.fichiersTexte
+      .map((f) => `===== ${f.chemin} =====\n${f.contenu}`)
+      .join("\n\n");
+    return {
+      kind: "tar",
+      text,
+      conversion: text ? "full" : "metadata-only",
+      note: `Archive TAR : ${lecture.entrees.length} entrée(s), ${lecture.fichiersTexte.length} fichier(s) texte lu(s).${lecture.avertissements.length ? " " + lecture.avertissements.join(" ") : ""}`,
+    };
+  }
+
+  // Archives 7z : signature réelle reconnue, décompression LZMA non incluse
+  // dans le moteur local — message honnête et actionnable.
+  if (extension === "7z" || estArchive7z(buffer)) {
+    return {
+      kind: "7z",
+      text: "",
+      conversion: "metadata-only",
+      note: `Archive 7z reconnue (${Math.round(sizeBytes / 1024)} Ko), mais la décompression LZMA n'est pas incluse dans le moteur local. Convertissez-la en .zip ou .tar pour que Gen3ia liste et lise son contenu.`,
+    };
+  }
+
+  // XML : texte lisible (balises dépouillées par la même machine que le XML
+  // OpenDocument) — le XML brut reste dans le texte si le dépouillement est
+  // vide (document d'attributs).
+  if (extension === "xml") {
+    const texte = buffer.toString("utf8");
+    const lisible = markupToText(texte).replace(/\n{3,}/g, "\n\n").trim();
+    return { kind: "xml", text: lisible || texte, conversion: "full" };
+  }
+
+  // YAML : structure parsée réellement (js-yaml) + texte intégral.
+  if (extension === "yaml" || extension === "yml") {
+    const texte = buffer.toString("utf8");
+    try {
+      return { kind: "yaml", text: texte, structured: jsYaml.load(texte), conversion: "full" };
+    } catch (error) {
+      return {
+        kind: "yaml",
+        text: texte,
+        conversion: "full",
+        note: `YAML invalide (${error instanceof Error ? error.message : String(error)}) : conservé en texte brut.`,
+      };
+    }
+  }
+
   if (["xlsx", "xlsm"].includes(extension) || contentType.includes("spreadsheetml")) {
     const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
@@ -338,7 +414,7 @@ export async function convertFileBuffer(
       kind: "binary",
       text: "",
       conversion: "metadata-only",
-      note: "Fichier binaire : métadonnées stockées sans conversion. Formats texte, bureautique (docx/odt/ods/pptx/rtf/epub), PDF, CSV/JSON, images, audio et vidéo sont analysables.",
+      note: "Fichier binaire : métadonnées stockées sans conversion. Formats analysables : texte, bureautique (docx/odt/ods/odp/pptx/rtf/epub), PDF, CSV/JSON/YAML/XML, images (dimensions réelles), archives zip/tar (7z reconnu, message dédié), audio et vidéo.",
     };
   }
   return { kind: "text", text, conversion: "full" };

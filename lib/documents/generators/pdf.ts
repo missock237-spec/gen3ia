@@ -311,5 +311,10 @@ export async function generatePdf(plan: DocumentPlan): Promise<Buffer> {
     }
   }
 
-  return Buffer.from(await pdf.save());
+  // useObjectStreams:false — les objets sont écrits CLASSIQUES (pas d'ObjStm
+  // compressés) : pdfToText (notre extracteur) compte ainsi les pages
+  // réellement (/Type /Page visible) et la boucle création → analyse du
+  // moteur documentaire est vraie de bout en bout. Le PDF reste 100 % valide
+  // pour tous les lecteurs.
+  return Buffer.from(await pdf.save({ useObjectStreams: false }));
 }

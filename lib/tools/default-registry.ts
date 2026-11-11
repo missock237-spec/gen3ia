@@ -5,6 +5,9 @@ import { terminalRunTool } from "./terminal/run";
 import { knowledgeSearchTool } from "./knowledge/search";
 import { getArtifactTool } from "./files/get-artifact";
 import { createArtifactTool } from "./files/create-artifact";
+// Moteur documentaire — conversion réelle d'un document d'un format vers
+// un autre (extraction → reconstruction en blocs → génération → stockage).
+import { convertDocumentTool } from "./files/convert-document";
 import { createFileTool } from "./files/create";
 import { readFileTool } from "./files/read-file";
 import { deleteFileTool } from "./files/delete";
@@ -107,6 +110,7 @@ export function createDefaultToolRegistry(): ToolRegistry {
     knowledgeSearchTool,
     getArtifactTool,
     createArtifactTool,
+    convertDocumentTool,
     createFileTool,
     // file.read RÉEL : lecture des pièces jointes du stockage permanent du
     // propriétaire (conversion texte réelle) et des fichiers de workspace —

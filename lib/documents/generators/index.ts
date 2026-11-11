@@ -31,6 +31,7 @@ export async function generateDocument(
     case "csv":
     case "json":
     case "html":
+    case "yaml":
       return generateTextArtifact(plan);
 
     case "pdf": {
@@ -51,6 +52,21 @@ export async function generateDocument(
     case "pptx": {
       const { generatePptx } = await loadGenerator("pptx", () => import("./pptx"));
       return generatePptx(plan);
+    }
+
+    // Moteur documentaire — formats libres : un seul module ODF pour les
+    // trois familles (mimetype différent + corps content.xml différent),
+    // RTF natif. Chargement dynamique comme les autres générateurs lourds.
+    case "odt":
+    case "ods":
+    case "odp": {
+      const { generateOdf } = await loadGenerator("odf", () => import("./odf"));
+      return generateOdf(plan);
+    }
+
+    case "rtf": {
+      const { generateRtf } = await loadGenerator("rtf", () => import("./rtf"));
+      return generateRtf(plan);
     }
 
     case "zip":
