@@ -9,7 +9,7 @@ import {
   transcriptionViaProfesseurAvec,
   type ConfigurationProfesseur,
 } from "@/lib/neural/professeur-media";
-import { VOIX_PROFESSEUR } from "@/lib/neural/professeur-media";
+import { VOIX_PROFESSEUR, choisirVoixSelonPersonnage } from "@/lib/neural/professeur-media";
 import { voiceSpeakTool } from "@/lib/tools/media/voice-speak";
 import { analyzeMediaTool } from "@/lib/tools/media/analyze-media";
 import { toolLabel } from "@/lib/tools/labels";
@@ -92,12 +92,9 @@ describe("it.140 — roster de voix du professeur (capacité réelle)", () => {
 
   it("professeurVoix transmet la voix choisie et la vitesse bornée (mock fetch)", async () => {
     const pm = await professeurFrais();
-    const appels: Array<{ url: string; corps: Record<string, unknown> }> = [];
+    const appels: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
-      appels.push({
-        url: String(url),
-        corps: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
-      });
+      appels.push({ url: String(url), init });
       return new Response(wavCanonique(2), { status: 200 });
     });
     try {
@@ -106,8 +103,11 @@ describe("it.140 — roster de voix du professeur (capacité réelle)", () => {
         voix: "chuichui",
         vitesse: 1.4,
       });
-      expect(appels[0]?.url).toBe("https://passerelle.exemple/audio/tts");
-      expect(appels[0]?.corps).toMatchObject({
+      // CASCADE : sonde d'atteignabilité de la passerelle, PUIS le TTS réel.
+      const tts = appels.find((a) => a.url === "https://passerelle.exemple/audio/tts");
+      expect(tts).toBeTruthy();
+      const corps = JSON.parse(String(tts?.init?.body ?? "{}")) as Record<string, unknown>;
+      expect(corps).toMatchObject({
         input: "Bonjour Gen3",
         voice: "chuichui",
         speed: 1.4,
@@ -126,19 +126,107 @@ describe("it.140 — roster de voix du professeur (capacité réelle)", () => {
 
   it("professeurVoix borne la vitesse hors bornes et retombe sur la voix par défaut (défense en profondeur)", async () => {
     const pm = await professeurFrais();
-    const appels: Array<Record<string, unknown>> = [];
-    vi.stubGlobal("fetch", async (_url: string | URL, init?: RequestInit) => {
-      appels.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    const appels: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      appels.push({ url: String(url), init });
       return new Response(wavCanonique(1), { status: 200 });
     });
     try {
       await pm.professeurVoix({ texte: "Test", voix: "voix-fantome", vitesse: 99 });
-      expect(appels[0]?.voice).toBe("tongtong");
-      expect(appels[0]?.speed).toBe(2);
+      const tts = appels.find((a) => a.url === "https://passerelle.exemple/audio/tts");
+      const corps = JSON.parse(String(tts?.init?.body ?? "{}")) as Record<string, unknown>;
+      expect(corps.voice).toBe("tongtong");
+      expect(corps.speed).toBe(2);
     } finally {
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();
     }
+  });
+
+  it("CASCADE VOIX : passerelle INJOIGNABLE → espace public Edge-TTS avec la voix mappée sur le même genre", async () => {
+    const pm = await professeurFrais();
+    const appels: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      const cible = String(url);
+      appels.push({ url: cible, init });
+      if (cible === "https://passerelle.exemple") {
+        return new Response("réseau privé injoignable", { status: 500 });
+      }
+      if (cible === "https://innoai-edge-tts-text-to-speech.hf.space/gradio_api/call/tts_interface") {
+        return Response.json({ event_id: "ev-1" });
+      }
+      if (cible.includes("/call/tts_interface/ev-1")) {
+        return new Response(
+          "event: complete\ndata: [{\"url\":\"https://innoai-edge-tts-text-to-speech.hf.space/gradio_api/file=/tmp/audio.mp3\"}]\n\n",
+          { status: 200 },
+        );
+      }
+      if (cible.includes("/gradio_api/file=")) {
+        return new Response(Buffer.concat([Buffer.from("ID3", "ascii"), Buffer.alloc(2048, 1)]), { status: 200 });
+      }
+      throw new Error("URL inattendue : " + cible);
+    });
+    try {
+      const œuvre = await pm.professeurVoix({ texte: "Bonjour la voix", voix: "jam" });
+      // La voix masculin « jam » est mappée sur la voix masculine Edge (Henri).
+      expect(œuvre.meta.moteur).toBe("professeur-voix-espace-edge-tts");
+      expect(œuvre.meta.voix).toBe("fr-FR-HenriNeural - fr-FR (Male)");
+      expect(œuvre.meta.echafaudage).toBe(true);
+      expect(œuvre.mime).toBe("audio/mpeg");
+      const lancement = appels.find((a) => a.url.endsWith("/gradio_api/call/tts_interface"));
+      const corps = JSON.parse(String(lancement?.init?.body ?? "{}")) as { data?: unknown[] };
+      expect(corps.data?.[0]).toBe("Bonjour la voix");
+      expect(corps.data?.[1]).toBe("fr-FR-HenriNeural - fr-FR (Male)");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("CASCADE VOIX : voix de l'espace demandée explicitement → espace D'ABORD (la passerelle ne connaît pas ces voix)", async () => {
+    const pm = await professeurFrais();
+    const appels: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      const cible = String(url);
+      appels.push({ url: cible, init });
+      if (cible === "https://innoai-edge-tts-text-to-speech.hf.space/gradio_api/call/tts_interface") {
+        return Response.json({ event_id: "ev-2" });
+      }
+      if (cible.includes("/call/tts_interface/ev-2")) {
+        return new Response(
+          "event: complete\ndata: [{\"url\":\"https://innoai-edge-tts-text-to-speech.hf.space/gradio_api/file=/tmp/femme.mp3\"}]\n\n",
+          { status: 200 },
+        );
+      }
+      if (cible.includes("/gradio_api/file=")) {
+        return new Response(Buffer.concat([Buffer.from("ID3", "ascii"), Buffer.alloc(2048, 1)]), { status: 200 });
+      }
+      throw new Error("URL inattendue : " + cible);
+    });
+    try {
+      const œuvre = await pm.professeurVoix({ texte: "Bonjour", voix: "fr-FR-DeniseNeural - fr-FR (Female)" });
+      expect(œuvre.meta.moteur).toBe("professeur-voix-espace-edge-tts");
+      // AUCUN appel à la passerelle (ni sonde ni TTS) — la voix Edge est hors roster passerelle.
+      expect(appels.some((a) => a.url.startsWith("https://passerelle.exemple"))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("choisirVoixSelonPersonnage : genre et accent régionaux DÉTERMINISTES (zéro LLM)", () => {
+    const femme = choisirVoixSelonPersonnage("Crée un message vocal d'une femme qui se présente");
+    expect(femme.genre).toBe("féminin");
+    expect(femme.voixEspace).toBe("fr-FR-DeniseNeural - fr-FR (Female)");
+    const homme = choisirVoixSelonPersonnage("un homme qui mange du poulet et dit qu'il veut une eau pétillante");
+    expect(homme.genre).toBe("masculin");
+    expect(homme.voixEspace).toBe("fr-FR-HenriNeural - fr-FR (Male)");
+    const quebec = choisirVoixSelonPersonnage("voix d'un homme avec un accent québécois");
+    expect(quebec.voixEspace).toBe("fr-CA-AntoineNeural - fr-CA (Male)");
+    const belge = choisirVoixSelonPersonnage("une femme belge présente le produit");
+    expect(belge.voixEspace).toBe("fr-BE-CharlineNeural - fr-BE (Female)");
+    const neutre = choisirVoixSelonPersonnage("un message vocal de bienvenue");
+    expect(neutre.voixEspace).toBe("fr-FR-DeniseNeural - fr-FR (Female)");
   });
 
   it("dureeWavSecondes mesure la durée RÉELLE dans l'en-tête RIFF", () => {
@@ -219,10 +307,11 @@ describe("it.140 — le contrat des outils raconte la capacité réelle", () => 
     });
     expect(valide.success).toBe(true);
     const codeSource = lire("tools/media/voice-speak.ts");
-    // Câblage : l'outil passe voix + vitesse au service média réel.
+    // Câblage : l'outil passe voix (résolue selon le personnage) + vitesse au service média réel.
     expect(codeSource).toContain("genererAudioNeuralEtPersister");
-    expect(codeSource).toContain("voix: input.voix");
+    expect(codeSource).toContain("voix: voixRésolue");
     expect(codeSource).toContain("vitesse: input.vitesse");
+    expect(codeSource).toContain("choisirVoixSelonPersonnage");
     expect(codeSource).toContain("VOIX_PROFESSEUR");
   });
 

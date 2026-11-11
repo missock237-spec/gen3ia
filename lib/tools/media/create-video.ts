@@ -114,7 +114,8 @@ export interface CreateVideoToolOutput {
   stage: ProductionStage;
   /** Mode de continuation effectif du job (file de ticks R2 si configurée, sinon sondage). */
   queueMode: "queue" | "poll";
-  /** Atelier vidéo du projet (timeline, versions, exports, révisions). */
+  /** Identifiant de projet honnête (la page studio a été supprimée — la
+   *  vidéo finie est livrée dans le fil de conversation). */
   studioUrl: string;
   /** Paramètres de production réellement retenus (traçabilité chat). */
   appliedOptions: Record<string, unknown>;
@@ -202,7 +203,7 @@ export const createVideoTool: ToolDefinition<
       status: job.status,
       stage: job.stage,
       queueMode: job.queueMode,
-      studioUrl: `/studio/video/${job.projectId}`,
+      studioUrl: `Projet vidéo : ${job.projectId} (la vidéo finie est livrée dans ce fil)`,
       appliedOptions,
     };
   },

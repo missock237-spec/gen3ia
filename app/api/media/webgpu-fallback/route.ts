@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       prompt?: string;
       ratio?: string;
       durationSeconds?: number;
+      voix?: string;
       raison?: string;
     };
     const { conversationId, kind, prompt } = body;
@@ -82,7 +83,11 @@ export async function POST(request: NextRequest) {
     // CONTRAINTE-ONDES) ; sans professeur, explication honnête.
     if (kind === "voice" && prompt) {
       try {
-        const audio = await genererAudioNeuralEtPersister({ userId, prompt });
+        // DEMANDE PROPRIÉTAIRE (2026-11-11) : la voix respecte le PERSONNAGE
+        // décrit (féminine/masculine) — la voix choisie par le tour (Edge
+        // neural) est relayée au professeur (cascade passerelle → espace).
+        const voix = typeof body.voix === "string" && body.voix.length > 0 && body.voix.length < 80 ? body.voix : undefined;
+        const audio = await genererAudioNeuralEtPersister({ userId, prompt, ...(voix ? { voix } : {}) });
         const prof = audio.meta?.echafaudage === true;
         const message = await appendMessage({
           conversationId,

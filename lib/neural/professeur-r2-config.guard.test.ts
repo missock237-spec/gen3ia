@@ -113,9 +113,12 @@ describe("VERROUS STRUCTURELS (balayage des sources)", () => {
   const sourceScript = readFileSync(
     path.join(RACINE, "..", "scripts/publie-professeur-r2.mjs"), "utf8");
 
-  it("media-service attend le professeur ASYNC aux 3 sites (image/audio/vidéo)", () => {
-    expect((sourceMediaService.match(/professeurDisponibleAsync\(\)/g) ?? []).length).toBe(3);
+  it("media-service attend le professeur ASYNC aux 4 sites (image/voix humaine/audio/vidéo)", () => {
+    // 4e site (demande propriétaire 2026-11-11) : genererVoixHumaineProfesseurEtPersister
+    // — la voix humaine RÉELLE (sans repli nappe) attend le professeur async.
+    expect((sourceMediaService.match(/professeurDisponibleAsync\(\)/g) ?? []).length).toBe(4);
     expect(sourceMediaService.includes("professeurDisponible()")).toBe(false);
+    expect(sourceMediaService).toContain("genererVoixHumaineProfesseurEtPersister");
   });
 
   it("routage photoréaliste : moteur image réel AVANT la branche WebGPU", () => {

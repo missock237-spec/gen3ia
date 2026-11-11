@@ -115,7 +115,6 @@ describe("POST /api/tools/execute — politique console étendue aux outils méd
         "file.create",
         // …étendus des outils médias réels (audit 2026-10-07).
         "voice.speak",
-        "voice.list",
         "image.generate",
         "video.create",
       ]),

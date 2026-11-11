@@ -44,6 +44,8 @@ export interface VideoStatusToolOutput {
   renderJobId?: string;
   /** URL de lecture présignée du master (si le rendu est terminé). */
   playbackUrl?: string;
+  /** Identifiant de projet honnête (la page studio a été supprimée — la
+   *  vidéo finie est livrée dans le fil de conversation). */
   studioUrl?: string;
   error?: string;
 }
@@ -108,7 +110,7 @@ export const videoStatusTool: ToolDefinition<
       ...(job.warnings?.length ? { warnings: job.warnings.slice(-8) } : {}),
       ...(job.renderJobId ? { renderJobId: job.renderJobId } : {}),
       ...(job.error ? { error: job.error } : {}),
-      studioUrl: `/studio/video/${job.projectId}`,
+      studioUrl: `Projet vidéo : ${job.projectId} (la vidéo finie est livrée dans ce fil)`,
       message: "",
     };
 

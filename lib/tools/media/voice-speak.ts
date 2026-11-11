@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
 import { genererAudioNeuralEtPersister } from "@/lib/neural/media-service";
-import { VOIX_PROFESSEUR } from "@/lib/neural/professeur-media";
+import { VOIX_PROFESSEUR, estVoixEspace, choisirVoixSelonPersonnage } from "@/lib/neural/professeur-media";
 
 /**
  * Outil voice.speak — SYNTHÈSE VOCALE PARLÉE RÉELLE (deux modes honnêtes).
@@ -40,9 +40,14 @@ const VoiceSpeakInput = z.object({
     "Durée souhaitée en secondes (défaut dérivé du texte, borné 4–30 s). " +
       "Mode voix humaine réelle : la durée suit le texte (ce paramètre est indicatif).",
   ),
-  voix: z.enum(VOIX_PROFESSEUR).optional().describe(
-    "Voix humaine du professeur (mode voix réelle). Défaut : tongtong. " +
-      "Roster : tongtong, chuichui, xiaochen, jam, kazi, douji, luodo.",
+  voix: z.string().optional().refine(
+    (v) => v === undefined || (VOIX_PROFESSEUR as readonly string[]).includes(v) || estVoixEspace(v),
+    { message: "Voix inconnue — rosters admis : passerelle (tongtong, chuichui, xiaochen, jam, kazi, douji, luodo) et espace public Edge-TTS (fr-FR-DeniseNeural, fr-FR-HenriNeural…)." },
+  ).describe(
+    "Voix humaine du mode voix réelle. Défaut : selon le PERSONNAGE décrit dans le texte " +
+      "(« une femme… » → Denise, « un homme… » → Henri). Rosters : passerelle " +
+      "(tongtong, chuichui, xiaochen, jam, kazi, douji, luodo) et espace public Edge-TTS " +
+      "(13 voix françaises : Denise, Éloïse, Vivienne, Henri, Rémy + variantes BE/CA/CH).",
   ),
   vitesse: z.number().min(0.5).max(2).optional().describe(
     "Vitesse de parole en mode voix humaine réelle (0.5 = lent, 2 = rapide, défaut 1).",
@@ -59,7 +64,7 @@ interface VoiceSpeakToolOutput {
   audioDataUri?: string;
   /** URL signée d'écoute immédiate (expire — le handle durable est url). */
   ecouterUrl: string;
-  mimeType: "audio/wav";
+  mimeType: "audio/wav" | "audio/mpeg";
   dureeSecondes: number;
   moteur: string;
   /** Note d'honnêteté : mode voix humaine réelle vs repli local. */
@@ -80,7 +85,8 @@ export const voiceSpeakTool: ToolDefinition<
   name: "voice.speak",
   description:
     "Synthétise un AUDIO PARLÉ à partir d'un texte. VOIX HUMAINE RÉELLE via le professeur média " +
-    "temporaire quand il est configuré (loi CONTRAINTE-ONDES) : voix au choix (tongtong, chuichui, " +
+    "temporaire quand il est configuré (loi CONTRAINTE-ONDES) : voix féminine/masculine selon le " +
+    "personnage (Denise/Henri — espace public Edge-TTS ; roster passerelle : tongtong, chuichui, " +
     "xiaochen, jam, kazi, douji, luodo), vitesse 0.5–2, archivage permanent. " +
     "Repli local honnête quand le professeur est absent : composition harmonique neuronale " +
     "déterministe — ce n'est PAS de la parole, et le résultat le signale.",
@@ -88,12 +94,15 @@ export const voiceSpeakTool: ToolDefinition<
   risk: "low",
   inputSchema: VoiceSpeakInput,
   async execute(input, context): Promise<VoiceSpeakToolOutput> {
+    // Défaut INTELLIGENT : la voix suit le personnage décrit dans le texte
+    // (féminine/masculine, déterministe) quand aucune voix n'est imposée.
+    const voixRésolue = input.voix ?? choisirVoixSelonPersonnage(input.text).voixEspace;
     const rendu = await genererAudioNeuralEtPersister({
       userId: context.userId,
       prompt: input.text.trim(),
       dureeSecondes: input.dureeSecondes ?? dureeDuTexte(input.text),
       frequenceEchantillonnage: 22050,
-      ...(input.voix !== undefined ? { voix: input.voix } : {}),
+      voix: voixRésolue,
       ...(input.vitesse !== undefined ? { vitesse: input.vitesse } : {}),
     });
 
@@ -107,7 +116,7 @@ export const voiceSpeakTool: ToolDefinition<
       // Repli inline : data URI lisible par le lecteur embarqué (bornée).
       ...(rendu.storage === "inline" ? { audioDataUri: rendu.url } : {}),
       ecouterUrl: rendu.url,
-      mimeType: "audio/wav",
+      mimeType: rendu.mime === "audio/mpeg" ? "audio/mpeg" : "audio/wav",
       dureeSecondes: typeof rendu.meta.duree === "number" ? rendu.meta.duree : 0,
       moteur: String(rendu.meta.moteur ?? "gen3-snn-audio-v1"),
       note: estProfesseur

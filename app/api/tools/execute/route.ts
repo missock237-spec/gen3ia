@@ -47,7 +47,6 @@ import {
  */
 const CONSOLE_MEDIA_TOOLS = [
   "voice.speak",
-  "voice.list",
   "image.generate",
   "video.create",
 ] as const;

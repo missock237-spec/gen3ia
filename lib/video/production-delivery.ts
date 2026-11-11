@@ -63,22 +63,21 @@ export function buildVideoDeliveryMessage(params: VideoDeliveryMessageParams): s
       lines.push("Points d'attention pendant la production :");
       for (const warning of warnings) lines.push(`- ${warning}`);
     }
-    lines.push(params.masterUrl ? `Regardez votre vidéo ici : ${params.masterUrl}` : "La lecture est disponible dans la carte vidéo ci-dessous.");
-    lines.push(`Le projet complet (timeline, versions, exports) est disponible dans l'atelier vidéo : /studio/video/${params.projectId}`);
-    lines.push("Demandez-moi des modifications (musique, rythme, visuels…) : je relance une passe de révision (video.revise) sur ce projet.");
+    lines.push(params.masterUrl ? `Regardez votre vidéo ici : ${params.masterUrl}` : "La lecture est disponible via la carte vidéo de ce fil.");
+    lines.push(`Projet vidéo : ${params.projectId} — demandez « où en est ma vidéo ? » ou des modifications (musique, rythme, visuels…) : je relance une passe de révision (video.revise) sur ce projet.`);
     return lines.join("\n");
   }
   if (params.status === "failed") {
     lines.push("Votre production vidéo n'a pas abouti.", "");
     const label = DELIVERY_STAGE_LABELS[params.stage] ?? params.stage;
     const error = params.error?.trim().slice(0, 200);
-    lines.push(`Étape : ${label}${error ? ` — ${error}` : "."}`);
-    lines.push(`Les étapes déjà produites restent consultables dans l'atelier vidéo : /studio/video/${params.projectId}`);
+    lines.push(`Étape : ${label}${error ? " — " + error : "."}`);
+    lines.push(`Projet vidéo : ${params.projectId} — les étapes déjà produites sont conservées.`);
     lines.push("Demandez-moi une relance ou des ajustements (video.revise) : la production repart du dernier point sauvegardé.");
     return lines.join("\n");
   }
   lines.push("Votre production vidéo a bien été annulée.", "");
-  lines.push(`Le projet reste accessible dans l'atelier vidéo : /studio/video/${params.projectId} — vous pouvez relancer la production à tout moment.`);
+  lines.push(`Projet vidéo : ${params.projectId} — vous pouvez relancer la production à tout moment (video.revise).`);
   return lines.join("\n");
 }
 
@@ -118,11 +117,11 @@ export async function deliverJobToConversation(job: VideoProductionJob): Promise
     const { createArtifact, listArtifacts } = await import("@/lib/domain/artifacts/repository");
 
     // 1) ANTI-DOUBLON par lecture du fil : le message de livraison contient
-    // toujours le lien studio du projet + une phrase-marker déterministe
-    // (l'URL présignée varie, le reste non). Les 40 derniers messages
-    // suffisent largement (la livraison suit de près la fin du tour).
+    // toujours le marqueur déterministe « Projet vidéo : {projectId} » + la
+    // phrase-marker (l'URL présignée varie, le reste non). Les 40 derniers
+    // messages suffisent largement (la livraison suit de près la fin du tour).
     const recent = await listRecent(job.userId, job.conversationId, 40, { order: "recent" }).catch(() => []);
-    const studioLink = `studio/video/${job.projectId}`;
+    const studioLink = `Projet vidéo : ${job.projectId}`;
     const phrase =
       job.status === "completed"
         ? "Votre vidéo est prête"

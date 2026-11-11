@@ -6,7 +6,7 @@ import "server-only";
 
 import { safeEmitter } from "./stream-events";
 import { detectImageRatio } from "@/lib/ai/image-intent";
-import { extractVideoParams, extractVideoTitle } from "@/lib/ai/video-intent";
+import { extractVideoParams, extractVideoTitle, extractTargetDurationSec, dureeAutomatiqueSelonBesoin } from "@/lib/ai/video-intent";
 import { appendMessage } from "@/lib/chat/repository";
 import { createArtifact } from "@/lib/domain/artifacts/repository";
 import { attachmentImageCandidates, resolveEditableImageSources } from "@/lib/files/image-source";
@@ -14,7 +14,7 @@ import { produceConversationImage } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import type { ConversationTurnResult } from "./engine-turn";
 import { randomUUID } from "node:crypto";
-import { professeurImageDisponibleAsync } from "@/lib/neural/professeur-media";
+import { professeurImageDisponibleAsync, choisirVoixSelonPersonnage } from "@/lib/neural/professeur-media";
 
 /**
  * VIDÉO COURTE RÉALISTE (loi CONTRAINTE-ONDES) : une demande de vidéo
@@ -133,13 +133,27 @@ export function looksLikePhotorealRequest(message: string): boolean {
  * VOLONTAIREMENT SERRÉE : il faut le mot VOIX + un verbe de création ou
  * « qui dit/disant » — jamais les agents téléphoniques (« standardiste »)
  * ni la lecture vocale native de l'interface.
+ *
+ * FIX production (capture 2026-11-11 19:12 : « Crée une message vocal
+ * d'une femme qui se présente devant un homme » restait SANS chemin
+ * exécutable — le noyau répondait « intention TRAITEMENT_REQUETE que je
+ * ne sais pas encore exécuter ») : « message vocal », « note vocale » et
+ * « vocal(e)(aux) » + verbe de création sont désormais des marqueurs voix.
+ * Une pure question méta (« c'est quoi un message vocal ? ») ne déclenche
+ * RIEN (garde interrogative). Exclusions téléphoniques inchangées.
  */
+const VERBE_CRÉATION_VOIX = /\b(g[eé]n[eè]re|g[eé]n[eé]ration|fais|fait|cr[ée]\p{L}*|produi\p{L}*|synth[ée]tis\p{L}*|enregistre|dire|dit|disant)\b/iu;
+
 export function looksLikeVoixHumaineRequest(message: string): boolean {
   const motVoix = /\b(voix humaine|voix\s+(?:de|qui|d'un|d'une)|synth[eè]se vocale|voice ?over|voix off)\b/iu.test(message)
-    || /\bvoix\b/iu.test(message) && /\b(g[eé]n[eè]re|g[eé]n[eé]ration|fais|fait|cr[ée]\p{L}*|produi\p{L}*|synth[ée]tis\p{L}*|enregistre|dire|dit|disant)\b/iu.test(message);
+    || /\bvoix\b/iu.test(message) && VERBE_CRÉATION_VOIX.test(message)
+    || /\b(messages?|note|notes) vocal(?:e|es|aux)?\b/iu.test(message)
+    || /\bvocal(?:e|es|aux)?\b/iu.test(message) && VERBE_CRÉATION_VOIX.test(message);
   if (!motVoix) return false;
   // Exclusions strictes : agents téléphoniques / standard / cloches…
   if (/\b(standardiste|standard t[eé]l[eé]phonique|agent (?:t[eé]l[eé]phonique|vocal)|r[eé]pondeur)\b/i.test(message)) return false;
+  // Pure question méta : aucun produit demandé.
+  if (/^\s*(c[''’]est quoi|qu[''’]est[- ]ce que|comment (?:ça|c[a])?\s*marche)\b/i.test(message.trim())) return false;
   return true;
 }
 
@@ -176,9 +190,98 @@ export function intentionMédiaÉtiquetée(message: string): "image" | "voix" | 
   return "image";
 }
 
+/**
+ * Texte À FAIRE DIRE (déterministe + IA centrale) : une citation explicite
+ * (« …dit : "Bonjour" ») est prise littéralement. Un SCÉNARIO sans citation
+ * (« une femme qui se présente devant un homme ») est RÉALISÉ par le
+ * moteur neuronal : il écrit le texte parlé (jamais l'instruction lue
+ * telle quelle — « Crée un message vocal de… » ne doit PAS être énoncé).
+ * Échec IA → dernier recours honnête : la demande entière (comportement
+ * historique), jamais de texte inventé silencieusement.
+ */
+export async function texteÀFaireDire(demande: string): Promise<string> {
+  const citation = extrairePhraseÀDire(demande);
+  if (citation !== demande.trim()) return citation;
+  try {
+    const { generate } = await import("@/lib/ai/router");
+    const réponse = await generate({
+      task: "reasoning",
+      system:
+        "Tu écris le TEXTE À FAIRE DIRE à voix haute pour un message vocal. La demande décrit une scène ou un personnage : écris UNIQUEMENT les mots à énoncer (1 à 6 phrases naturelles), en français, sans titre, sans guillemets, sans explication, sans mention de la demande elle-même.",
+      messages: [{ role: "user", content: demande.slice(0, 1500) }],
+      temperature: 0.7,
+      maxTokens: 700,
+    });
+    const brut = (réponse.text ?? "").trim()
+      .replace(/^(?:voici|texte|voix)\s*[:：-]\s*/i, "")
+      .replace(/^[«"'\u201c]+/, "")
+      .replace(/[»"'\u201d]+$/, "")
+      .trim();
+    if (brut.length >= 2 && !/^(?:cr[ée]\p{L}*|g[ée]n[èe]re|fais)\b/iu.test(brut)) {
+      return brut.slice(0, 2000);
+    }
+  } catch {
+    // IA indisponible → dernier recours ci-dessous.
+  }
+  return demande.trim().slice(0, 2000);
+}
+
 export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   const phrase = extrairePhraseÀDire(ctx.message);
+  // FIX production (capture 19:12) — VOIX SERVEUR D'ABORD : la voix humaine
+  // réelle ne doit PAS dépendre du GPU du navigateur (mobile sans WebGPU,
+  // headless, GPU faible). Cascade : passerelle interne → espace public
+  // Edge-TTS (voix neuronale réelle, féminine/masculine selon le personnage
+  // décrit). Succès → audio livré IMMÉDIATEMENT dans le fil (message +
+  // artefact). Échec → cascade WebGPU navigateur (chemin historique).
+  const choix = choisirVoixSelonPersonnage(ctx.message);
+  try {
+    const { genererVoixHumaineProfesseurEtPersister } = await import("@/lib/neural/media-service");
+    const texte = await texteÀFaireDire(ctx.message);
+    const rendu = await genererVoixHumaineProfesseurEtPersister({
+      userId: ctx.userId,
+      texte,
+      voix: choix.voixEspace,
+    });
+    if (rendu) {
+      const moteur = String(rendu.meta?.moteur ?? "");
+      const assistantMessage = await appendMessage({
+        conversationId: ctx.conversationId,
+        userId: ctx.userId,
+        role: "assistant",
+        content:
+          `Voici votre message vocal — voix ${choix.genre} réelle (${String(rendu.meta?.voix ?? "neuronale")}, ` +
+          `${moteur === "professeur-voix-espace-edge-tts" ? "espace public Edge-TTS" : "professeur média temporaire"}, ` +
+          "échafaudage — loi CONTRAINTE-ONDES). Écoutez ici : " + rendu.url,
+        provider: "professeur-temporaire",
+        model: moteur || "professeur-voix",
+        generationStatus: "complete",
+      });
+      const artifact = await createArtifact({
+        userId: ctx.userId,
+        conversationId: ctx.conversationId,
+        projectId: ctx.projectId,
+        type: "audio",
+        title: ctx.message.slice(0, 80),
+        url: rendu.url,
+        storagePath: rendu.cleStockage,
+        note: `Voix ${choix.genre} réelle — professeur temporaire (${moteur})`,
+      });
+      await onEvent({ type: "message_complete", message: assistantMessage });
+      await onEvent({ type: "artifact_created", artifact });
+      return {
+        conversationId: ctx.conversationId,
+        userMessage: ctx.userMessage,
+        assistantMessage,
+        artifacts: [artifact],
+        approvals: [],
+        intent: { mode: "chat", understanding: `Message vocal réel (voix ${choix.genre}) servi par le serveur.` },
+      };
+    }
+  } catch {
+    // Cascade WebGPU ci-dessous (jamais de faux succès serveur).
+  }
   const jobId = randomUUID();
   await onEvent({
     type: "webgpu_media",
@@ -186,6 +289,7 @@ export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult
     conversationId: ctx.conversationId,
     kind: "voice",
     prompt: phrase.slice(0, 2000),
+    voix: choix.voixEspace,
     engine: { repo: WEBGPU_MEDIA_REPO, manifest: "MANIFEST.json" },
   });
   const messageVoix = await appendMessage({
@@ -434,7 +538,15 @@ export async function runVideoTurn(
     // Task 106-a — production OPTIMALE : durée, cadrage, plateforme et
     // formats dérivés sont lus DÉTERMINISTEMENT dans la demande (zéro LLM)
     // et relayés à la file de production (options validées côté pipeline).
+    // DEMANDE PROPRIÉTAIRE (2026-11-11) : « la durée dépend de la demande
+    // de l'utilisateur ou du besoin de l'utilisateur en cas où
+    // l'utilisateur ne précise pas la durée » — sans durée explicite, le
+    // BESOIN est estimé déterministement (dureeAutomatiqueSelonBesoin :
+    // clip court ~15 s, séquences +6 s chacune, formats longs 60-90 s).
     const params = extractVideoParams(promptText);
+    if (params.targetDurationSec === undefined) {
+      params.targetDurationSec = dureeAutomatiqueSelonBesoin(promptText);
+    }
     const job = await createVideoProductionJob({
       userId: ctx.userId,
       prompt: promptText.trim().slice(0, 4000),
@@ -445,9 +557,8 @@ export async function runVideoTurn(
       conversationId: ctx.conversationId,
       ...(Object.keys(params).length > 0 ? { options: params } : {}),
     });
-    const studioUrl = `/studio/video/${job.projectId}`;
     const paramsSummary = [
-      params.targetDurationSec ? `durée cible ${Math.floor(params.targetDurationSec / 60) > 0 ? `${Math.floor(params.targetDurationSec / 60)} min ${params.targetDurationSec % 60 || ""}`.trim() : `${params.targetDurationSec} s`}` : null,
+      params.targetDurationSec ? `durée cible ${Math.floor(params.targetDurationSec / 60) > 0 ? `${Math.floor(params.targetDurationSec / 60)} min ${params.targetDurationSec % 60 || ""}`.trim() : `${params.targetDurationSec} s`}${extractTargetDurationSec(promptText) ? "" : " (estimée selon votre besoin — précisez une durée pour l'ajuster)"}` : null,
       params.aspectRatio ? `cadrage ${params.aspectRatio}` : null,
       params.platform ? `plateforme ${params.platform}` : null,
       params.derivedTargets?.length ? `formats dérivés (${params.derivedTargets.join(", ")})` : null,
@@ -468,7 +579,7 @@ export async function runVideoTurn(
         "4. Rendu final avec contrôle qualité automatique (durée, audio, sous-titres)",
         params.derivedTargets?.length ? "5. Formats dérivés pour vos plateformes (TikTok/Shorts/Reels…)." : "",
         "",
-        "Demandez-moi « où en est ma vidéo ? » à tout moment, ou des modifications (musique, rythme, pause…). Le cadre ci-dessous affiche la progression RÉELLE en temps réel — il se met à jour tout seul jusqu'à la vidéo finie. Le projet complet (timeline, versions, exports) est disponible dans l'atelier vidéo : " + studioUrl,
+        "Demandez-moi « où en est ma vidéo ? » à tout moment. La vidéo terminée sera livrée DIRECTEMENT dans ce fil (message + lien de lecture + artefact), même si vous fermez la page.",
       ].filter(Boolean).join("\n"),
       generationStatus: "complete",
     });

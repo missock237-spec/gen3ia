@@ -183,10 +183,11 @@ export function deliverablesSection(deliverables: MissionDeliverable[]): string 
     const detail = [item.filename, item.format?.toUpperCase(), item.sizeBytes !== undefined ? `${Math.max(1, Math.round(item.sizeBytes / 1024))} Ko` : undefined]
       .filter(Boolean)
       .join(" · ");
-    // Chemin/accès : vidéo → atelier studio (projectId) ; audio → clé R2
+    // Chemin/accès : vidéo → identifiant de projet (la page studio a été
+    // supprimée — la vidéo finie est livrée dans le fil) ; audio → clé R2
     // permanente ; autres livrables → clé de stockage brute si connue.
     let access: string | undefined;
-    if (item.kind === "video" && item.storageKey) access = `studio : /studio/video/${item.storageKey}`;
+    if (item.kind === "video" && item.storageKey) access = `projet vidéo : ${item.storageKey} (livrée dans le fil de conversation)`;
     else if (item.kind === "audio" && item.storageKey) access = `audio : ${item.storageKey}`;
     else if (item.storageKey) access = item.storageKey;
     const suffix = [detail, access].filter(Boolean).join(" — ");

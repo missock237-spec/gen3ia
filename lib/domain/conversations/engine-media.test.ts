@@ -74,3 +74,21 @@ describe("extrairePhraseÀDire — citation prioritaire", () => {
     );
   });
 });
+
+describe("looksLikeVoixHumaineRequest — « message vocal » (fix production 19:12)", () => {
+  it("détecte LA demande exacte restée sans réponse exécutable en production", () => {
+    expect(looksLikeVoixHumaineRequest("Crée une message vocal d'une femme qui se présente devant un homme")).toBe(true);
+    expect(looksLikeVoixHumaineRequest("Crée un message vocal de bienvenue pour mes clients")).toBe(true);
+    expect(looksLikeVoixHumaineRequest("fais-moi une note vocale d'encouragement")).toBe(true);
+    expect(looksLikeVoixHumaineRequest("je veux un vocal qui dit à bientôt")).toBe(true);
+  });
+
+  it("exclut toujours les agents téléphoniques et les questions méta", () => {
+    expect(looksLikeVoixHumaineRequest("configure l'agent vocal de mon standard")).toBe(false);
+    expect(looksLikeVoixHumaineRequest("c'est quoi un message vocal ?")).toBe(false);
+  });
+
+  it("conserve les détections historiques (« voix » + verbe)", () => {
+    expect(looksLikeVoixHumaineRequest("génère une voix qui dit bonjour")).toBe(true);
+  });
+});

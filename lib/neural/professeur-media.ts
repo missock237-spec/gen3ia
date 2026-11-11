@@ -37,6 +37,112 @@ export const VOIX_PROFESSEUR = [
 
 export type VoixProfesseur = (typeof VOIX_PROFESSEUR)[number];
 
+/* ------------------------------------------------------------------ */
+/* VOIX HUMAINES NÉURONALES — ESPACE PUBLIC (chemin de production)      */
+/* ------------------------------------------------------------------ */
+
+/** Constat production (2026-11-11) : la passerelle interne du professeur
+ *  ({baseUrl}/audio/tts) est INJOIGNABLE depuis un VPS public (adresses
+ *  privées) — la voix humaine réelle exigeait un chemin public. L'espace
+ *  gradio « innoai/Edge-TTS-Text-to-Speech » (voix neuronales Microsoft
+ *  Edge, 323 langues) expose 13 voix FRANÇAISES réalistes via l'API
+ *  gradio standard — contrat sondé puis validé de bout en bout :
+ *    POST {espace}/gradio_api/call/tts_interface  {data:[texte, voix, 0, 0]}
+ *    → {event_id} ; GET …/call/tts_interface/{event_id} (SSE)
+ *    → « event: complete » porte data[0].url (MP3 24 kHz mono).
+ *  Appel ANONYME admis (sonde réelle sans jeton) — le canal est un
+ *  échafaudage : même mention `echafaudage: true` que les autres moteurs.
+ */
+export const ESPACE_VOIX_NEURONALES = "https://innoai-edge-tts-text-to-speech.hf.space";
+
+/** Voix françaises neuronales de l'espace public (labels EXACTS du
+ *  dropdown « Voice » de l'espace — sondés 2026-11-11). Féminines :
+ *  Denise, Éloïse, Vivienne (multilingue) ; masculines : Henri, Rémy
+ *  (multilingue) ; variantes régionales : Charline/Gérard (BE),
+ *  Sylvie/Antoine/Jean (CA), Ariane/Fabrice (CH). */
+export const VOIX_ESPACE = [
+  "fr-FR-DeniseNeural - fr-FR (Female)",
+  "fr-FR-EloiseNeural - fr-FR (Female)",
+  "fr-FR-VivienneMultilingualNeural - fr-FR (Female)",
+  "fr-FR-HenriNeural - fr-FR (Male)",
+  "fr-FR-RemyMultilingualNeural - fr-FR (Male)",
+  "fr-BE-CharlineNeural - fr-BE (Female)",
+  "fr-BE-GerardNeural - fr-BE (Male)",
+  "fr-CA-SylvieNeural - fr-CA (Female)",
+  "fr-CA-AntoineNeural - fr-CA (Male)",
+  "fr-CA-JeanNeural - fr-CA (Male)",
+  "fr-CA-ThierryNeural - fr-CA (Male)",
+  "fr-CH-ArianeNeural - fr-CH (Female)",
+  "fr-CH-FabriceNeural - fr-CH (Male)",
+] as const;
+
+export type VoixEspace = (typeof VOIX_ESPACE)[number];
+
+/** Voix par défaut de l'espace (féminine française — même convention que
+ *  la passerelle : « tongtong » féminine par défaut). */
+export const VOIX_ESPACE_DEFAUT: VoixEspace = "fr-FR-DeniseNeural - fr-FR (Female)";
+
+/** Détection de PERSONNAGE (déterministe, zéro LLM) : le mot de genre
+ *  APPARU EN PREMIER dans la demande désigne le sujet de la voix —
+ *  « une femme qui se présente devant un homme » → VOIX FÉMININE (la femme
+ *  parle, l'homme écoute), « un homme qui mange… » → voix masculine.
+ *  Constat production (capture 19:12) : la demande exacte du propriétaire
+ *  contient les DEUX mots — l'ordre lexical tranche, la féminine reste le
+ *  défaut (convention des deux rosters TTS). */
+export const RE_PERSONNAGE_MASCULIN = /\b(homme|masculin|masculine|mec|gar[çc]on|monsieur|p[èe]re|papa|voix d[''’]?homme|man|male|father)\b/iu;
+export const RE_PERSONNAGE_FÉMININ = /\b(femme|féminin|f[ée]minine|meuf|fille|dame|madame|m[èe]re|maman|voix d[''’]?femme|woman|female|mother)\b/iu;
+
+export function personnageMasculin(texte: string): boolean {
+  return RE_PERSONNAGE_MASCULIN.test(texte);
+}
+
+export function personnageFéminin(texte: string): boolean {
+  return RE_PERSONNAGE_FÉMININ.test(texte);
+}
+
+export interface ChoixVoix {
+  /** Voix de l'espace public (Edge neural) — chemin de production. */
+  voixEspace: VoixEspace;
+  /** Voix de la passerelle interne équivalente (chemin de développement). */
+  voixPasserelle: VoixProfesseur;
+  genre: "féminin" | "masculin";
+}
+
+/** Choisit la voix selon le PERSONNAGE décrit dans la demande (zéro LLM) :
+ *  « voix d'une femme… » → féminine (Denise / tongtong), « d'un homme… »
+ *  → masculine (Henri / jam). Sans personnage explicite → défaut féminin
+ *  français (convention des deux rosters). Variantes régionales lisibles
+ *  dans la demande (« accent québécois », « voix belge »…) respectées. */
+export function choisirVoixSelonPersonnage(demande: string): ChoixVoix {
+  const t = demande.toLowerCase();
+  const régional = /\bqu[ée]b[ée]cois\b|\bcanadien\b/.test(t)
+    ? { f: "fr-CA-SylvieNeural - fr-CA (Female)", m: "fr-CA-AntoineNeural - fr-CA (Male)" }
+    : /\bbelge\b/.test(t)
+      ? { f: "fr-BE-CharlineNeural - fr-BE (Female)", m: "fr-BE-GerardNeural - fr-BE (Male)" }
+      : /\bsuisse\b/.test(t)
+        ? { f: "fr-CH-ArianeNeural - fr-CH (Female)", m: "fr-CH-FabriceNeural - fr-CH (Male)" }
+        : null;
+  const masculin = RE_PERSONNAGE_MASCULIN.exec(t);
+  const féminin = RE_PERSONNAGE_FÉMININ.exec(t);
+  if (masculin && (!féminin || masculin.index < féminin.index)) {
+    return {
+      voixEspace: (régional?.m ?? "fr-FR-HenriNeural - fr-FR (Male)") as VoixEspace,
+      voixPasserelle: "jam",
+      genre: "masculin",
+    };
+  }
+  return {
+    voixEspace: (régional?.f ?? VOIX_ESPACE_DEFAUT) as VoixEspace,
+    voixPasserelle: "tongtong",
+    genre: "féminin",
+  };
+}
+
+/** La voix demandée appartient-elle au roster de l'espace public ? */
+export function estVoixEspace(voix: string): voix is VoixEspace {
+  return (VOIX_ESPACE as readonly string[]).includes(voix);
+}
+
 export interface ConfigurationProfesseur {
   baseUrl: string;
   apiKey: string;
@@ -559,6 +665,13 @@ async function professeurImageEspace(
 /** Génère une VOIX HUMAINE (TTS) via le professeur (échafaudage).
  *  Voix au choix dans le roster documenté (VOIX_PROFESSEUR), vitesse
  *  réglable 0.5–2 ; la durée réelle est mesurée dans l'en-tête WAV renvoyé. */
+/** CASCADE VOIX HUMAINE : passerelle interne (développement, réseau privé)
+ *  → ESPACE PUBLIC Edge-TTS (production — constat : passerelle injoignable
+ *  depuis un VPS public). Une voix de l'espace demandée explicitement
+ *  (roster VOIX_ESPACE) va DIRECTEMENT à l'espace — la passerelle ne
+ *  connaît pas ces voix. Une voix du roster passerelle retombée en échec
+ *  est MAPPEE sur son équivalent de genre côté espace (jamais de voix
+ *  masculine servie pour un personnage féminin). */
 export async function professeurVoix(params: {
   texte: string;
   vitesse?: number;
@@ -568,20 +681,70 @@ export async function professeurVoix(params: {
   if (!config) throw new Error("Professeur média absent (configuration manquante).");
   const texte = params.texte.trim().slice(0, 2000);
   if (texte.length < 2) throw new Error("Professeur voix : texte trop court.");
+  const erreurs: string[] = [];
 
-  // Défense en profondeur : une voix hors roster retombe sur la voix par défaut.
-  const voixDemandée = (VOIX_PROFESSEUR as readonly string[]).includes(params.voix ?? "")
+  // 1) Voix de l'espace demandée explicitement → espace public D'ABORD.
+  if (params.voix && estVoixEspace(params.voix)) {
+    try {
+      return await professeurVoixEspace({ texte, ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}), voix: params.voix });
+    } catch (erreur) {
+      erreurs.push(`espace voix : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
+      // Cette voix n'existe PAS côté passerelle — cascade terminée honnêtement.
+      throw new Error(`Aucun moteur de voix disponible — ${erreurs.join(" · ")}`);
+    }
+  }
+
+  // 2) Voix passerelle (roster officiel, défaut config) — chemin privé.
+  const voixPasserelle = ((VOIX_PROFESSEUR as readonly string[]).includes(params.voix ?? "")
     ? (params.voix as VoixProfesseur)
-    : undefined;
-  const voix = voixDemandée ?? config.voix ?? "tongtong";
+    : undefined) ?? (config.voix as VoixProfesseur | undefined) ?? "tongtong";
+  if (await professeurGatewayAtteignable()) {
+    try {
+      return await professeurVoixPasserelle({ texte, ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}), voix: voixPasserelle }, config);
+    } catch (erreur) {
+      erreurs.push(`passerelle : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
+    }
+  } else {
+    erreurs.push("passerelle : injoignable depuis ce réseau (adresses privées)");
+  }
 
+  // 3) ESPACE PUBLIC (production) — voix mappée sur le même genre.
+  try {
+    return await professeurVoixEspace({
+      texte,
+      ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+      voix: VOIX_PASSERELLE_VERS_ESPACE[voixPasserelle] ?? VOIX_ESPACE_DEFAUT,
+    });
+  } catch (erreur) {
+    erreurs.push(`espace voix : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
+  }
+  throw new Error(`Aucun moteur de voix disponible — ${erreurs.join(" · ")}`);
+}
+
+/** Équivalence de GENRE passerelle → espace (jamais de voix opposée). */
+const VOIX_PASSERELLE_VERS_ESPACE: Record<VoixProfesseur, VoixEspace> = {
+  tongtong: "fr-FR-DeniseNeural - fr-FR (Female)",
+  chuichui: "fr-FR-DeniseNeural - fr-FR (Female)",
+  xiaochen: "fr-FR-EloiseNeural - fr-FR (Female)",
+  jam: "fr-FR-HenriNeural - fr-FR (Male)",
+  kazi: "fr-FR-RemyMultilingualNeural - fr-FR (Male)",
+  douji: "fr-FR-HenriNeural - fr-FR (Male)",
+  luodo: "fr-FR-RemyMultilingualNeural - fr-FR (Male)",
+};
+
+/** Moteur voix 1 — passerelle interne (POST /audio/tts, réseau privé). */
+async function professeurVoixPasserelle(
+  params: { texte: string; vitesse?: number; voix: VoixProfesseur },
+  config: ConfigurationProfesseur,
+): Promise<ŒuvreProfesseur> {
+  const voix = params.voix;
   const réponse = await fetchAvecDélai(
     `${config.baseUrl}/audio/tts`,
     {
       method: "POST",
       headers: enTetes(config),
       body: JSON.stringify({
-        input: texte,
+        input: params.texte,
         voice: voix,
         speed: Math.min(2, Math.max(0.5, params.vitesse ?? 1)),
         response_format: "wav",
@@ -606,9 +769,82 @@ export async function professeurVoix(params: {
       professeurSupprimable: true,
       voix,
       ...(duree !== undefined ? { duree } : {}),
-      caractères: texte.length,
+      caractères: params.texte.length,
       octets: buffer.length,
       note: "Voix du professeur temporaire — le signal d'onde gen3 prendra le relais après distillation.",
+    },
+  };
+}
+
+/** Moteur voix 2 — ESPACE PUBLIC Edge-TTS (production, contrat gradio
+ *  sondé et validé de bout en bout 2026-11-11 : POST tts_interface →
+ *  event_id → SSE complete → MP3 24 kHz). Appel anonyme admis. */
+export async function professeurVoixEspace(params: {
+  texte: string;
+  vitesse?: number;
+  voix?: string;
+}): Promise<ŒuvreProfesseur> {
+  const texte = params.texte.trim().slice(0, 2000);
+  if (texte.length < 2) throw new Error("Espace voix : texte trop court.");
+  const voix = params.voix && estVoixEspace(params.voix) ? params.voix : VOIX_ESPACE_DEFAUT;
+  // Edge-TTS : « rate » en pourcentage entier (vitesse 1 → 0 %, borné ±50 %).
+  const rate = Math.round(Math.min(1.5, Math.max(0.5, params.vitesse ?? 1) - 1) * 100);
+
+  const lancement = await fetchAvecDélai(
+    `${ESPACE_VOIX_NEURONALES}/gradio_api/call/tts_interface`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: [texte, voix, rate, 0] }),
+    },
+    55_000,
+  );
+  if (!lancement.ok) {
+    throw new Error(`espace voix ${lancement.status} : ${(await lancement.text()).slice(0, 200)}`);
+  }
+  const { event_id } = (await lancement.json()) as { event_id?: string };
+  if (!event_id) throw new Error("espace voix : event_id absent.");
+
+  const flux = await fetchAvecDélai(
+    `${ESPACE_VOIX_NEURONALES}/gradio_api/call/tts_interface/${encodeURIComponent(event_id)}`,
+    {},
+    150_000,
+  );
+  if (!flux.ok) throw new Error(`espace voix flux ${flux.status}`);
+  const sse = await flux.text();
+  let issue = "";
+  let donnee = "";
+  for (const bloc of sse.split("\n\n")) {
+    const ev = /^event:\s*(.+)$/m.exec(bloc);
+    const da = /^data:\s*(.*)$/m.exec(bloc);
+    if (ev) issue = ev[1]!.trim();
+    if (da) donnee = da[1]!.trim();
+  }
+  if (issue !== "complete") {
+    const detail = donnee && donnee !== "null" ? ` — ${donnee.slice(0, 120)}` : "";
+    throw new Error(`espace voix : file d'attente « ${issue || "inconnue"} »${detail}`);
+  }
+  const fichiers = JSON.parse(donnee || "[]") as Array<{ url?: string }>;
+  const url = fichiers[0]?.url;
+  if (!url) throw new Error("espace voix : URL audio absente du résultat.");
+  const téléchargement = await fetchAvecDélai(url, {}, 120_000);
+  if (!téléchargement.ok) throw new Error(`espace voix : téléchargement ${téléchargement.status}`);
+  const buffer = Buffer.from(await téléchargement.arrayBuffer());
+  if (buffer.length < 1024) throw new Error("espace voix : audio vide.");
+
+  return {
+    buffer,
+    mime: mimeDepuisOctets(buffer, "audio/mpeg"),
+    meta: {
+      moteur: "professeur-voix-espace-edge-tts",
+      echafaudage: true,
+      loi: "CONTRAINTE-ONDES",
+      professeurSupprimable: true,
+      voix,
+      espace: "innoai/Edge-TTS-Text-to-Speech",
+      caractères: texte.length,
+      octets: buffer.length,
+      note: "Voix neuronale réelle du professeur temporaire (espace public Edge-TTS) — le signal d'onde gen3 prendra le relais après distillation.",
     },
   };
 }

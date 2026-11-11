@@ -84,7 +84,7 @@ describe("extractDeliverables", () => {
 
   it("extrait une vidéo produite (video.create → job + projet studio)", () => {
     const plan = planWith([{ id: "v1", toolName: "video.create", status: "completed", name: "Pub produit", description: "Vidéo publicitaire produit" }]);
-    const deliverables = extractDeliverables(plan, { v1: { success: true, jobId: "job-9", projectId: "proj-7", studioUrl: "/studio/video/proj-7" } });
+    const deliverables = extractDeliverables(plan, { v1: { success: true, jobId: "job-9", projectId: "proj-7", studioUrl: "Projet vidéo : proj-7 (la vidéo finie est livrée dans ce fil)" } });
     expect(deliverables).toHaveLength(1);
     expect(deliverables[0]).toMatchObject({
       kind: "video",
@@ -95,7 +95,7 @@ describe("extractDeliverables", () => {
     });
     const section = deliverablesSection(deliverables);
     expect(section).toContain("[Vidéo - à ouvrir dans le studio]");
-    expect(section).toContain("/studio/video/proj-7");
+    expect(section).toContain("projet vidéo : proj-7");
   });
 
   it("extrait un audio de voix-off persisté (voice.speak storage r2 → clé R2)", () => {

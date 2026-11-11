@@ -260,7 +260,7 @@ export function detectToolIntents(objective: string): ToolIntentHint[] {
 
   // VOICE : synthèse vocale réelle.
   if (VOICE_RE.test(text)) {
-    push("voice", ["voice.speak", "voice.list"], "L'audio réel est synthétisé par voice.speak (voice.list pour explorer les profils de voix disponibles).");
+    push("voice", ["voice.speak"], "L'audio réel est synthétisé par voice.speak (voix humaine réelle : passerelle interne OU espace public Edge-TTS, féminine/masculine selon le personnage).");
   }
 
   // EMAIL : verbe d'envoi + (nom email OU adresse énoncée).

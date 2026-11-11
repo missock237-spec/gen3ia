@@ -60,7 +60,7 @@ export interface MediaNeuralGenere {
   /** "r2" = archivage permanent réussi ; "inline" = repli data URI. */
   storage: "r2" | "inline";
   /** Type MIME du contenu généré. */
-  mime: "image/png" | "image/jpeg" | "image/svg+xml" | "audio/wav" | "video/mp4";
+  mime: "image/png" | "image/jpeg" | "image/svg+xml" | "audio/wav" | "audio/mpeg" | "video/mp4";
   /** Métadonnées réelles de génération (traçabilité honnête). */
   meta: Record<string, unknown>;
   /** Identifiant de génération (idempotence côté journalisation). */
@@ -123,7 +123,7 @@ async function rasteriser(
     return { buffer, mime: "image/png" };
   } catch (erreur) {
     console.warn(
-      "[media-neural] rastérisation sharp indisponible — livraison SVG vectorielle :",
+      "[m[m[m[media-neural] rastérisation sharp indisponible — livraison SVG vectorielle :",
       erreur instanceof Error ? erreur.message : String(erreur),
     );
     return { buffer: Buffer.from(svg, "utf-8"), mime: "image/svg+xml" };
@@ -306,7 +306,7 @@ export async function genererVisuelNeuralEtPersister(params: {
       };
     } catch (erreur) {
       erreurProfesseur = erreur instanceof Error ? erreur.message : String(erreur);
-      console.warn("[media-neural] professeur image indisponible — composition neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
+      console.warn("[m[m[m[media-neural] professeur image indisponible — composition neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
     }
   }
   const { reseau } = getNeuralRuntime();
@@ -383,6 +383,53 @@ export async function genererVisuelNeuralEtPersister(params: {
 }
 
 /**
+ * VOIX HUMAINE RÉELLE SANS REPLI NON-PAROLE (loi CONTRAINTE-ONDES) —
+ * contrairement à genererAudioNeuralEtPersister (qui retombe sur la nappe
+ * neuronale NON parlée), cette fonction NE REND QUE de la vraie parole :
+ * cascade professeurVoix (passerelle interne → espace public Edge-TTS,
+ * voix féminine/masculine selon le personnage). Retourne null quand aucun
+ * moteur de voix n'est disponible — l'appelant choisit alors son propre
+ * chemin honnête (cascade WebGPU navigateur, question de clarification…)
+ * au lieu de servir une nappe muette déguisée en voix.
+ */
+export async function genererVoixHumaineProfesseurEtPersister(params: {
+  userId: string;
+  texte: string;
+  voix?: string;
+  vitesse?: number;
+}): Promise<MediaNeuralGenere | null> {
+  if (!(await professeurDisponibleAsync())) return null;
+  try {
+    const œuvre = await professeurVoix({
+      texte: params.texte,
+      ...(params.voix !== undefined ? { voix: params.voix } : {}),
+      ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+    });
+    const extension = œuvre.mime === "audio/mpeg" ? "mp3" : "wav";
+    const cle = cleCacheMedia(params.userId, "audio", `voix|${œuvre.meta.moteur}|${œuvre.meta.voix ?? "défaut"}|${params.vitesse ?? 1}|${params.texte}`, extension);
+    const persiste = await persistGeneratedBuffer({
+      userId: params.userId,
+      buffer: œuvre.buffer,
+      contentType: œuvre.mime,
+      prefix: "professeur-media",
+      fixedKey: cle,
+      fallbackUrl: `data:${œuvre.mime};base64,${œuvre.buffer.toString("base64")}`,
+    });
+    return {
+      url: persiste.url,
+      storage: persiste.storage === "r2" ? "r2" : "inline",
+      mime: œuvre.mime as MediaNeuralGenere["mime"],
+      meta: { ...œuvre.meta, texte: params.texte.slice(0, 200), cache: "professeur-voix" },
+      generationId: `voix-${randomUUID()}`,
+      ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
+    };
+  } catch (erreur) {
+    console.warn("[m[m[m[media-neural] voix humaine indisponible (cascade complète) :", erreur instanceof Error ? erreur.message : String(erreur));
+    return null;
+  }
+}
+
+/**
  * Génère et archive un SIGNAL AUDIO scénique. MOTEUR V2 : quand la
  * scène est sonore (sons nommés, météo ou cadre reconnus), le design
  * sonore comporte des COUCHES sémantiques (pluie, vagues, vent…)
@@ -430,7 +477,7 @@ export async function genererAudioNeuralEtPersister(params: {
         ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
       };
     } catch (erreur) {
-      console.warn("[media-neural] professeur voix indisponible — nappe neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
+      console.warn("[m[m[m[media-neural] professeur voix indisponible — nappe neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
     }
   }
   const { reseau } = getNeuralRuntime();
@@ -534,7 +581,7 @@ export async function genererVideoNeuralEtPersister(params: {
         ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
       };
     } catch (erreur) {
-      console.warn("[media-neural] professeur vidéo indisponible — storyboard neuronal :", erreur instanceof Error ? erreur.message : String(erreur));
+      console.warn("[m[m[m[media-neural] professeur vidéo indisponible — storyboard neuronal :", erreur instanceof Error ? erreur.message : String(erreur));
     }
   }
   const { reseau } = getNeuralRuntime();

@@ -70,19 +70,37 @@ export async function generateSceneImage(params: {
     if (entity?.referenceAssetId) nbReferencesLiees += 1;
   }
 
-  // GÉNÉRATION NEURONALE LOCALE (les imageurs externes Agnes/HF ont été
-  // supprimés du projet) : la composition visuelle est calculée depuis
-  // l'état réel du cerveau Gen3 (poids synaptiques appris) et rastérisée
-  // en PNG. La continuité visuelle entre scènes repose sur la graine
-  // déterministe dérivée du prompt composé (mêmes entités → même identité
-  // chromatique) — honnête, aucune IA externe.
+  // DEMANDE PROPRIÉTAIRE (2026-11-11 : « gen3 doit pouvoir réaliser des
+  // vidéos réaliste ») — les visuels de scènes partent d'abord vers le
+  // moteur image PHOTORÉALISTE du professeur (cascade passerelle interne →
+  // HF router → espace public FLUX.1-schnell — chemin de production éprouvé
+  // it.144), la continuité visuelle restant assurée par la graine
+  // déterministe du prompt composé. Échec honnête → composition neuronale
+  // locale (comportement historique), jamais de faux succès.
   const referenceContext = nbReferencesLiees > 0
     ? ` ${nbReferencesLiees} référence(s) visuelle(s) liée(s)`
     : "";
-  const rendu = await genererVisuelNeuralBrut({
-    prompt: `${composed.prompt}${referenceContext}`,
-    ratio: agnesRatio(project.aspectRatio),
-  });
+  let rendu: { image: Buffer; mime: "image/png" | "image/svg+xml" | "image/jpeg" | "image/webp"; meta: Record<string, unknown> } | null = null;
+  let sourceMoteur = "gen3-snn-visuel";
+  try {
+    const { professeurImage } = await import("@/lib/neural/professeur-media");
+    const œuvre = await professeurImage({
+      prompt: `${composed.prompt}${referenceContext}`,
+      ratio: agnesRatio(project.aspectRatio),
+    });
+    rendu = { image: œuvre.buffer, mime: œuvre.mime as "image/jpeg", meta: œuvre.meta };
+    sourceMoteur = String(œuvre.meta?.moteur ?? "professeur-image");
+  } catch {
+    // Professeur absent/échec → composition neuronale locale (honnête).
+  }
+  if (!rendu) {
+    const neural = await genererVisuelNeuralBrut({
+      prompt: `${composed.prompt}${referenceContext}`,
+      ratio: agnesRatio(project.aspectRatio),
+    });
+    rendu = { image: neural.image, mime: neural.mime, meta: neural.meta };
+    sourceMoteur = String(neural.meta?.moteur ?? "gen3-snn-visuel");
+  }
   const contentType = rendu.mime;
   const body = rendu.image;
 
@@ -90,7 +108,7 @@ export async function generateSceneImage(params: {
     userId,
     projectId: project.id,
     kind: "image",
-    label: `Image ${scene.id}`,
+    label: `Image ${scene.id} (${sourceMoteur})`,
     role: `scene:${scene.id}`,
     sceneId: scene.id,
     origin: "generated",

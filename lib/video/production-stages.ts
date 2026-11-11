@@ -26,7 +26,7 @@ import { generateSceneImage, findSceneImage } from "@/lib/video/image-bridge";
 import { isSceneVideoServiceEnabled, SceneVideoUnavailableError, startSceneVideoTask, awaitSceneVideoTask, findSceneVideo, type SceneVideoTaskState } from "@/lib/video/scene-video-service";
 import { billImageGeneration, billTts } from "@/lib/video/credits";
 import { resolvePreferredVoice, withPlatformVoiceFallback, attachRecordingAsNarration } from "@/lib/video/voice-service";
-import { listAssets } from "@/lib/video/asset-service";
+import { listAssets, registerAsset } from "@/lib/video/asset-service";
 import { syncVoiceTrack, applyTimelinePatch } from "@/lib/video/timeline-service";
 import { ensureMusicBed } from "@/lib/video/audio-engine";
 import { isOwnedVideoKey } from "@/lib/video/storage";
@@ -211,11 +211,21 @@ async function remainingImageTickets(job: VideoProductionJob): Promise<number> {
 }
 
 /**
- * Tâche de narration d'UNE scène (voie A enregistrement / voie B TTS
- * facturée au caractère réel) — partagée par l'étape voice et le
- * chevauchement assets∥voice (Task 120). Retourne les caractères facturés.
+ * Tâche de narration d'UNE scène (voie A enregistrement / voie B TTS du
+ * PROFESSEUR média) — partagée par l'étape voice et le chevauchement
+ * assets∥voice (Task 120). Retourne les caractères facturés.
+ *
+ * DEMANDE PROPRIÉTAIRE (2026-11-11 : « gen3 doit pouvoir générer de vidéo
+ * et voix ultra réaliste ») : la voie B est RÉTABLIE sur le moteur voix
+ * interne du professeur (cascade passerelle interne → espace public
+ * Edge-TTS, voix féminine/masculine selon le BRIEF du projet — « un homme
+ * qui dit… » → voix masculine, sans LLM). La narration du scénario
+ * (scene.narration) est réellement énoncée et enregistrée comme asset
+ * audio_narration — les sous-titres et le mixage la consomment tel quel.
+ * Échec honnête → 0 caractère, la scène reste muette (comportement
+ * historique assumé, jamais de faux succès).
  */
-async function narrationTaskForScene(
+export async function narrationTaskForScene(
   job: VideoProductionJob,
   scene: ScriptScene,
   voice: VoiceProfile,
@@ -232,10 +242,26 @@ async function narrationTaskForScene(
     });
     return 0;
   }
-  // Voie B (TTS ElevenLabs) SUPPRIMÉE : la synthèse vocale externe a été
-  // retirée du projet — sans enregistrement utilisateur, la scène reste
-  // muette (sous-titres préservés au montage). Aucun caractère facturé.
-  return 0;
+  // Voie B : TTS du professeur média (voix réelle, cascade interne → espace
+  // public). Sans professeur ou en échec → scène muette assumée (0 facturé).
+  const narration = scene.narration?.trim() ?? "";
+  if (narration.length < 2) return 0;
+  const { professeurVoix, choisirVoixSelonPersonnage, professeurDisponibleAsync } = await import("@/lib/neural/professeur-media");
+  if (!(await professeurDisponibleAsync())) return 0;
+  const choix = choisirVoixSelonPersonnage(`${job.prompt} ${narration}`);
+  const œuvre = await professeurVoix({ texte: narration, voix: choix.voixEspace });
+  await registerAsset({
+    userId: job.userId,
+    projectId: job.projectId,
+    kind: "audio_narration",
+    label: `Narration (voix ${choix.genre}) ${scene.id}`,
+    role: `narration:${scene.id}`,
+    sceneId: scene.id,
+    origin: "generated",
+    contentType: œuvre.mime,
+    body: œuvre.buffer,
+  });
+  return narration.length;
 }
 
 /**

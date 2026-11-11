@@ -1398,6 +1398,9 @@ export default function NovaChat() {
                 prompt: event.prompt,
                 ratio: event.ratio,
                 durationSeconds: event.durationSeconds,
+                ...(typeof (event as unknown as { voix?: unknown }).voix === "string"
+                  ? { voix: (event as unknown as { voix: string }).voix }
+                  : {}),
                 engine: event.engine,
               });
               break;

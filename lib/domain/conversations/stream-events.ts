@@ -104,6 +104,8 @@ export type ConversationStreamEvent =
       ratio?: string;
       /** Secondes pour la voix/vidéo. */
       durationSeconds?: number;
+      /** Voix neuronale choisie par le serveur (genre du personnage). */
+      voix?: string;
       /** Répertoire des modèles sur le repo Hugging Face public. */
       engine: { repo: string; manifest: string };
     };

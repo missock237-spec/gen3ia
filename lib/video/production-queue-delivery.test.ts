@@ -404,7 +404,7 @@ describe("advanceProductionJob — livraison chat à la complétion (Task 107-a)
     expect(content).toContain("Votre vidéo est prête");
     // URL du master = MÊME source que la carte client (output.r2Key présigné).
     expect(content).toContain("https://r2.test/presigne/master.mp4");
-    expect(content).toContain("/studio/video/proj-1");
+    expect(content).toContain("Projet vidéo : proj-1");
     expect(content).toContain("Présentation");
     // Marqueur d'idempotence persisté sur le doc job.
     expect(typeof storedJob("job-1").chatDeliveredAt).toBe("string");
@@ -499,7 +499,7 @@ describe("advanceProductionJob — livraison chat à la complétion (Task 107-a)
     jobAtDone();
     vi.mocked(getJob).mockResolvedValue(completedRenderJob as never);
     chatRepo.listMessages.mockResolvedValue([
-      { role: "assistant", content: "Votre vidéo est prête 🎬 ... /studio/video/proj-1 ..." },
+      { role: "assistant", content: "Votre vidéo est prête 🎬 ... Projet vidéo : proj-1 ..." },
     ] as never);
 
     const result = await advanceProductionJob("job-1");
@@ -525,7 +525,7 @@ describe("advanceProductionJob — livraison chat à la complétion (Task 107-a)
     // La production était à l'étape finale (done) quand le rendu a échoué.
     expect(content).toContain("finalisation");
     expect(content).toContain("FFmpeg indisponible");
-    expect(content).toContain("/studio/video/proj-1");
+    expect(content).toContain("Projet vidéo : proj-1");
     expect(content).toContain("video.revise");
   });
 });
@@ -566,7 +566,7 @@ describe("deliverJobToConversation — garde de conditions", () => {
     // Réparation au passage suivant : l'anti-doublon par LECTURE reconnaît
     // le message déjà livré, pose le marqueur (récupéré du rejet) et sort.
     chatRepo.listMessages.mockResolvedValue([
-      { role: "assistant", content: "Votre vidéo est prête 🎬 ... /studio/video/proj-1 ..." },
+      { role: "assistant", content: "Votre vidéo est prête 🎬 ... Projet vidéo : proj-1 ..." },
     ] as never);
     vi.mocked(queueResume.saveJobDoc).mockRejectedValueOnce(new Error("Panne magasin"));
     const job2 = baseJob({ status: "completed", conversationId: "conv-1" }) as unknown as VideoProductionJob;
@@ -592,7 +592,7 @@ describe("buildVideoDeliveryMessage — contenu FR", () => {
     expect(content).toContain("Votre vidéo est prête 🎬");
     expect(content).toContain("« Présentation »");
     expect(content).toContain("https://r2.test/presigne/master.mp4");
-    expect(content).toContain("/studio/video/proj-1");
+    expect(content).toContain("Projet vidéo : proj-1");
     expect(content).toContain("video.revise");
     expect(content).toContain("w1");
     expect(content).toContain("w3");
@@ -616,12 +616,12 @@ describe("buildVideoDeliveryMessage — contenu FR", () => {
     expect(content).toContain("montage et rendu");
     expect(content).toContain("x".repeat(200));
     expect(content).not.toContain("x".repeat(201));
-    expect(content).toContain("/studio/video/proj-1");
+    expect(content).toContain("Projet vidéo : proj-1");
   });
 
   it("cancelled : confirmation + atelier", () => {
     const content = buildVideoDeliveryMessage({ ...base, status: "cancelled" });
     expect(content).toContain("annulée");
-    expect(content).toContain("/studio/video/proj-1");
+    expect(content).toContain("Projet vidéo : proj-1");
   });
 });

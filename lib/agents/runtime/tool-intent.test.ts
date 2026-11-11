@@ -105,7 +105,7 @@ describe("detectToolIntents", () => {
     expect(detectToolIntents("appelle l'API https://api.exemple.com/v1/users")[0]).toMatchObject({ intent: "api_call" });
     expect(detectToolIntents("cherche dans mes documents les notes de réunion")[0]).toMatchObject({ intent: "knowledge", toolNames: ["knowledge.search"] });
     expect(detectToolIntents("compresse ces fichiers en zip")[0]).toMatchObject({ intent: "file_zip", toolNames: ["zip.create"] });
-    expect(detectToolIntents("génère une voix off pour ma présentation")[0]).toMatchObject({ intent: "voice", toolNames: ["voice.speak", "voice.list"] });
+    expect(detectToolIntents("génère une voix off pour ma présentation")[0]).toMatchObject({ intent: "voice", toolNames: ["voice.speak"] });
     // « chaque semaine » déclenche aussi schedule (ordre de détection) :
     // on vérifie la PRÉSENCE de l'intention workflow, pas sa position.
     const workflowHints = detectToolIntents("automatise l'envoi du rapport chaque semaine");

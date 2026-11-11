@@ -26,6 +26,9 @@ export interface JobWebGpu {
   prompt: string;
   ratio?: string;
   durationSeconds?: number;
+  /** Voix neuronale choisie par le serveur (Edge-TTS, genre du personnage)
+   *  — relayée au repli serveur et mappée sur le roster local Kokoro. */
+  voix?: string;
   engine: { repo: string; manifest: string };
 }
 
@@ -80,6 +83,7 @@ export function useWebGpuMedia(options: {
             prompt: job.prompt,
             ratio: job.ratio,
             durationSeconds: job.durationSeconds,
+            ...(job.voix ? { voix: job.voix } : {}),
             raison,
           }),
         });
@@ -201,9 +205,13 @@ export function useWebGpuMedia(options: {
           });
         } else if (job.kind === "voice") {
           const { générerVoixHumaine } = await import("@/lib/neural/webgpu/voice-engine");
+          // Mapping honnête Edge-TTS → roster local Kokoro (même genre) : la
+          // voix neuronale du navigateur respecte le personnage demandé.
+          const masculine = /\b(?:Male|Homme)\b|fr-FR-Henri|Remy|Gerard|Antoine|Jean|Thierry|Fabrice/i.test(job.voix ?? "");
           const res = await générerVoixHumaine({
             texte: job.prompt,
             segmenter: true,
+            ...(job.voix ? { voix: masculine ? ("am_michael" as const) : ("ff_siwis" as const) } : {}),
             onProgress: (i) => {
               onProgress?.({ jobId: job.jobId, étape: i.étape, pourcent: i.pourcent });
               onStatut?.(i.étape);

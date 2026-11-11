@@ -177,6 +177,42 @@ function clampDuration(total: number): number | undefined {
   return Math.min(3600, Math.max(10, Math.round(total)));
 }
 
+/* ────────────────────────────────────────────────────────────────────────
+ * DEMANDE PROPRIÉTAIRE (2026-11-11) : « gen3 doit pouvoir générer de
+ * vidéo … la durée dépend de la demande de l'utilisateur ou du besoin de
+ * l'utilisateur en cas où l'utilisateur ne précise pas la durée. »
+ *
+ * Estimation DÉTERMINISTE du besoin (zéro LLM, zéro variance, testée) :
+ *  - format LONG explicite (documentaire, tutoriel, histoire, film,
+ *    bande-annonce…) → 60 s de base, 90 s si « long/complet/détaillé » ;
+ *  - sinon : clip court 15 s de base, +6 s par marqueur de SÉQUENCE
+ *    (« puis », « ensuite », « après », « enfin », « d'abord »…, plafonné
+ *    à 6) et +4 s par phrase supplémentaire (délimitée [.!?;\n]) — la
+ *    richesse du brief reflète le nombre de moments à montrer ;
+ *  - plafonné à 180 s (le défaut projet) et plancher 10 s.
+ * Ex. « un homme qui mange du poulet frit et dit qu'il a besoin d'une eau
+ * pétillante » → 15 s ; « Crée un documentaire sur Paris » → 60 s.
+ * ──────────────────────────────────────────────────────────────────────── */
+const FORMAT_LONG_RE =
+  /\b(documentaire|reportage|tutoriel|tuto|histoire|r[ée]cit|film|court[- ]m[ée]trage|long[- ]m[ée]trage|bande[- ]annonce|trailer|teaser|podcast|pr[ée]sentation compl[èe]te|explication compl[èe]te|cours|mooc)\b/i;
+const FORMAT_LONG_ÉTENDU_RE =
+  /\b(long(?:ue)?s?|compl(?:e|è)t(?:e|es)?|d[ée]taill[ée]s?|approfondi(?:e|s)?)\b/i;
+const MARQUEUR_SÉQUENCE_RE =
+  /\b(puis|ensuite|apr[èe]s(?:\s+que|s)?|enfin|d[''’]abord|pendant ce temps|lorsque|alors)\b/giu;
+
+export function dureeAutomatiqueSelonBesoin(brief: string): number {
+  const t = brief.toLowerCase();
+  let secondes: number;
+  if (FORMAT_LONG_RE.test(t)) {
+    secondes = FORMAT_LONG_ÉTENDU_RE.test(t) ? 90 : 60;
+  } else {
+    const marqueurs = Math.min(6, (t.match(MARQUEUR_SÉQUENCE_RE) ?? []).length);
+    const phrases = Math.max(1, t.split(/[.!?;\n]+/).filter((s) => s.trim().length > 12).length);
+    secondes = 15 + 6 * marqueurs + 4 * Math.max(0, phrases - 1);
+  }
+  return Math.min(180, Math.max(10, secondes));
+}
+
 /**
  * Cadrage + plateforme + formats dérivés lus dans la demande. La plateforme
  * est normalisée (TikTok, YouTube, Instagram, Reels, Shorts, Facebook) et
