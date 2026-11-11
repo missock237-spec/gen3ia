@@ -19,6 +19,7 @@ import { createApproval } from "@/lib/domain/approvals/repository";
 import { createArtifact } from "@/lib/domain/artifacts/repository";
 import { createRun, finalizeRun, makeStep, updateRunSteps } from "@/lib/domain/runs/repository";
 import { extractJsonObject } from "@/lib/engines/ai-engine";
+import { generateStructuredForUser } from "@/lib/tools/agent-suite/llm-json";
 import { parseConnectorMissing, uniqueToolkits } from "@/lib/integrations/composio/errors";
 import { AUTO_APPROVAL_AUDIT_REASON, isAutoApprovable } from "@/lib/security/authorization-mode";
 import { isExternalAppConnected } from "@/lib/security/connected-apps";
@@ -204,10 +205,59 @@ async function ensureArtifactInput(
         format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
         blocks: generated.blocks,
       };
-    } catch {
-      // Rédaction indisponible (timeout, fournisseur saturé) : l'étape sera
-      // ignorée proprement avec un message clair pour l'utilisateur.
-      return null;
+    } catch (error2) {
+      // TROISIÈME tentative — appel STRUCTURÉ facturé au wallet du
+      // propriétaire (requiresStructuredOutput + validation zod + relance
+      // corrective injectant l'écart) : le fournisseur est CONTRAINT au
+      // JSON au lieu de dépendre de sa docilité. Sondage production : les
+      // deux tentatives conversationnelles répondaient un texte méta hors
+      // JSON (« rédaction impossible ») et l'étape était ignorée — le
+      // livrable documentaire doit être produit, pas esquivé.
+      console.error(JSON.stringify({
+        event: "artifact.redaction_structured_fallback",
+        reason: error2 instanceof Error ? error2.message : String(error2),
+        format: toolInput.format ?? "pdf",
+      }));
+      try {
+        const generated = await generateStructuredForUser({
+          userId: ctx.userId,
+          executionId: ctx.conversationId ? `conv_${ctx.conversationId}` : undefined,
+          task: "chat",
+          system:
+            "Tu rédiges le contenu d'un document professionnel pour l'utilisateur de Gen3ia. " +
+            "Tu produis UNIQUEMENT un objet JSON valide (sans texte autour, sans bloc de code) : " +
+            '{ "title": "<titre court>", "format": "<format>", "blocks": [...] }. ' +
+            "Blocs disponibles : title (une seule fois, en premier), heading (sections), paragraph (texte rédigé), " +
+            "list (puces {items}), table ({columns, rows}) si des données le justifient, quote, pageBreak. " +
+            "Le contenu doit être rédigé intégralement et de façon professionnelle : jamais de placeholder, " +
+            "jamais de « … », jamais de section vide.",
+          user:
+            `Demande de l'utilisateur : ${ctx.message.slice(0, 2000)}\n` +
+            `Objectif du plan : ${ctx.intent.objective ?? "(celui de la demande)"}\n` +
+            `Étape : ${planned.title}${planned.detail ? ` — ${planned.detail}` : ""}\n` +
+            `Format attendu : ${typeof toolInput.format === "string" ? toolInput.format : "pdf"}\n` +
+            `Titre proposé : ${hasTitle ? String(toolInput.title) : "(à déduire de la demande)"}` +
+            `${ctx.priorHistory.length > 0 ? `\n\nContexte récent de la conversation :\n${historyForModel(ctx.priorHistory, 4).map((m) => `${m.role === "user" ? "Utilisateur" : "Assistant"} : ${m.content.slice(0, 400)}`).join("\n")}` : ""}`,
+          schema: DocumentBlocksSchema,
+          maxTokens: 6_000,
+          maxAttempts: 2,
+        });
+        return {
+          ...toolInput,
+          title: hasTitle ? String(toolInput.title) : generated.title,
+          format: typeof toolInput.format === "string" ? toolInput.format : generated.format,
+          blocks: generated.blocks,
+        };
+      } catch (error3) {
+        console.error(JSON.stringify({
+          event: "artifact.redaction_echec_final",
+          reason: error3 instanceof Error ? error3.message : String(error3),
+          format: toolInput.format ?? "pdf",
+        }));
+        // Rédaction réellement indisponible : l'étape sera ignorée
+        // proprement avec un message clair pour l'utilisateur.
+        return null;
+      }
     }
   }
 }
