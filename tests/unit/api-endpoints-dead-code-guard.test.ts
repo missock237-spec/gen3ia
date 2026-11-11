@@ -361,6 +361,25 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
      *    par définition hors dépôt. Aucune UI prévue au contrat. */
     "/compartiments",
     "/monde/passerelle",
+    /* it.146 — MOTEUR DE RECHERCHE WEB TEMPS RÉEL (architecture
+     * propriétaire 2026-11-11 : « créer ce moteur de recherche et
+     * l'implémenter à gen3 pour qu'il réalise des recherches sur le web
+     * en temps réel ») : la CHAÎNE est entièrement serveur et vivante —
+     * lib/recherche-web (multi-moteurs DuckDuckGo/Bing/SearXNG/Wikipédia,
+     * dédoublonnage URL+contenu, vérification dates/crédibilité,
+     * navigation Playwright/Chromium) consommée par :
+     *  - le tool web.search (cascade agrégateur multi-moteurs) et le tool
+     *    web.open (extraction structurée) — enregistrés dans le runtime
+     *    d'outils des agents ;
+     *  - la détection automatique du chat (lib/domain/conversations/
+     *    recherche-temps-reel : signal d'actualité déterministe → contexte
+     *    sourcé numéroté).
+     * La porte /ia/recherche-web est l'accès DIRECT des CLIENTS hors UI :
+     * sous-agents d'essaim, automatisations, sondes de production (GET =
+     * diagnostic moteurs actifs + disponibilité Chromium). Consommateur
+     * naturel : IA utilisatrices et exploitation — aucune UI prévue au
+     * contrat (le chat EST l'UI du moteur). */
+    "/ia/recherche-web",
   ],
   /** Endpoints PRÉ-UI (roadmap LOT 6 du plan plateforme) : la LIB et la
    *  porte HTTP sont DÉJÀ construites et vivantes côté agent (tool

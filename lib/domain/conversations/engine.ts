@@ -25,6 +25,11 @@ import { appendMessage, getConversation, listMessages } from "@/lib/chat/reposit
 import type { ChatConversation } from "@/lib/chat/repository";
 import { hasImageAttachment, shouldRouteImageEdit } from "@/lib/domain/conversations/image-intent";
 import { loadWebPageContext } from "@/lib/domain/conversations/web-context";
+import {
+  besoinRechercheTempsReel,
+  contexteRechercheTempsReel,
+  DIRECTIVE_TEMPS_REEL,
+} from "@/lib/domain/conversations/recherche-temps-reel";
 import { getProject } from "@/lib/domain/projects/repository";
 import { runAIJSON } from "@/lib/engines/ai-engine";
 import { loadImportedFilesContext } from "@/lib/files/import";
@@ -253,6 +258,29 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   }).catch(() => "");
   const webContextShort = webContext.slice(0, 6_000);
 
+  // 1 quinquies B) RECHERCHE WEB TEMPS RÉEL AUTOMATIQUE (architecture
+  // propriétaire 2026-11-11) : quand la demande porte sur l'immédiat
+  // (actualités, prix, météo, résultats, versions récentes…) et ne contient
+  // pas d'URL, le moteur de recherche web temps réel gen3ia est déclenché
+  // DÉTERMINISTEMENT — multi-moteurs réels, dédoublonnage, vérification,
+  // pages lues — et son bloc SOURCÉ numéroté est ajouté au contexte web.
+  // Fail-soft : tout échec laisse le tour continuer sans contexte web.
+  const rechercheAuto = besoinRechercheTempsReel(input.message);
+  const blocTempsReel = rechercheAuto.besoin
+    ? await contexteRechercheTempsReel(input.message)
+        .then((r) => {
+          if (r.bloc) {
+            console.info(
+              `[recherche-temps-reel] contexte sourcé ajouté (${r.reponse?.resultats.length ?? 0} sources, signal : ${rechercheAuto.signal})`,
+            );
+          }
+          return r.bloc;
+        })
+        .catch(() => "")
+    : "";
+  const webContextAvecTempsReel = [webContext, blocTempsReel].filter(Boolean).join("\n\n---\n\n") || webContext;
+  const directiveTempsReel = blocTempsReel ? DIRECTIVE_TEMPS_REEL : undefined;
+
   // 1 sexies) Knowledge du projet (étape 15) : quand la conversation porte
   // sur un projet, les fragments les plus pertinents des documents indexés
   // sont recherchés AUTOMATIQUEMENT sur le message — plus besoin de planifier
@@ -311,7 +339,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   // l'entraînement explicite.
   if (input.research === true || estDemandeRechercheApprofondie(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Recherche approfondie — préparation du plan de recherche…" });
-    const result = await runResearchTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, filesContext, webContext, knowledgeContext, mediaAnalysisContext });
+    const result = await runResearchTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, filesContext, webContext: webContextAvecTempsReel, systemDirectiveAppendix: directiveTempsReel, knowledgeContext, mediaAnalysisContext });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -660,7 +688,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     } catch {
       skillsSection = undefined;
     }
-    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext, knowledgeContext, mediaAnalysisContext, skillsSection });
+    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext: webContextAvecTempsReel, systemDirectiveAppendix: directiveTempsReel, knowledgeContext, mediaAnalysisContext, skillsSection });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,

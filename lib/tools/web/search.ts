@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 import { markupToText } from "@/lib/content/html-text";
+// MOTEUR DE RECHERCHE WEB TEMPS RÉEL gen3ia (architecture propriétaire
+// 2026-11-11) : agrégation multi-moteurs DuckDuckGo + Bing + SearXNG,
+// dédoublonnage URL/contenu, vérification des sources. Le tool historique
+// garde son interface (SearchResponse) mais sa cascade passe par le moteur
+// complet — le diagnostic d'échecs est porté dans la sortie.
+import { agregerMoteurs } from "@/lib/recherche-web/moteurs/agregateur";
 
 import type {
   ToolDefinition,
@@ -30,6 +36,12 @@ interface SearchResult {
 
 interface SearchResponse {
   results: SearchResult[];
+  /** Diagnostic honnête du tour (moteurs opérationnels / en échec). */
+  diagnostic?: {
+    moteursOperatifs: string[];
+    moteursEnEchec: Array<{ moteur: string; raison: string }>;
+    doublonsRetires: number;
+  };
 }
 
 async function executeSearch(
@@ -43,10 +55,12 @@ async function executeSearch(
   const apiKey =
     process.env.SEARCH_API_KEY;
 
-  // Cascade de repli : provider cléé (tavily/serper/serpapi) si configuré,
-  // sinon DuckDuckGo HTML (sans clé), sinon API Wikipedia (sans clé, sourcée).
-  // Un moteur configuré qui échoue retombe aussi sur les sources gratuites :
-  // l'agent ne rend jamais la main avec un échec sec.
+  // Cascade de repli :
+  //   1. provider cléé (tavily/serper/serpapi) si configuré ;
+  //   2. moteur multi-moteurs SANS CLÉ (SearXNG si configuré, DuckDuckGo
+  //      + Bing en parallèle, Wikipédia en repli encyclopédique) ;
+  //   3. Wikipédia direct si l'agrégateur entier échoue (cascade finale).
+  // L'agent ne rend jamais la main avec un échec sec.
   if (provider && apiKey) {
     try {
       return await executeSearchWithProvider(provider, apiKey, input);
@@ -60,10 +74,29 @@ async function executeSearch(
   }
 
   try {
-    return await searchDuckDuckGo(input.query, input.maxResults);
+    const agregation = await agregerMoteurs(input.query, {
+      maxResults: input.maxResults,
+    });
+    if (agregation.resultats.length > 0) {
+      return {
+        results: agregation.resultats.map((resultat) => ({
+          title: resultat.titre,
+          url: resultat.url,
+          snippet: resultat.extrait,
+          publishedAt: resultat.datePublication ?? resultat.publieLe,
+          source: resultat.moteur,
+        })),
+        diagnostic: {
+          moteursOperatifs: agregation.diagnostic.moteursOperatifs,
+          moteursEnEchec: agregation.diagnostic.moteursEnEchec,
+          doublonsRetires: agregation.diagnostic.doublonsRetires,
+        },
+      };
+    }
   } catch {
-    return searchWikipedia(input.query, input.maxResults);
+    /* repli ci-dessous */
   }
+  return searchWikipedia(input.query, input.maxResults);
 }
 
 async function executeSearchWithProvider(
