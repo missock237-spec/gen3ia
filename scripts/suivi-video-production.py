@@ -74,8 +74,8 @@ try:
     while time.time() - debut < 60 and not pid:
         try:
             corps = page.evaluate(
-                "fetch('/api/video/projects',{credentials:'include',cache:'no-store'})"
-                ".then(r => r.status + '|' + r.text())")
+                "async () => { const r = await fetch('/api/video/projects',{credentials:'include',cache:'no-store'});"
+                " return r.status + '|' + (await r.text()); }")
             code, _, corps_json = corps.partition("|")
             projets = json.loads(corps_json).get("projects") or []
             if projets:

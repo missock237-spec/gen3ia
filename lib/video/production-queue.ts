@@ -305,7 +305,40 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
   // visuels/TTS sont facturés au réel au fil de l'eau pendant les ticks et
   // le rendu réserve/libère SON propre budget dans startRenderJob ; une
   // erreur ici ne bloque donc jamais de fonds (rien à rembourser).
-  await createJobDoc(PRODUCTION_JOBS_COLLECTION, jobId, { ...job }, params.userId);
+  //
+  // ROBUSTESSE LANCEMENT (2026-11-13, « chaque requête vidéo échoue ») :
+  // cette création est le SEUL point de non-retour du lancement — un
+  // incident passager du stockage (stall 6 s → disjoncteur ouvert) ne doit
+  // JAMAIS transformer une demande vidéo valide en échec affiché dans le
+  // fil. Jusqu'à 3 tentatives espacées (3 s, 8 s) ; le repli half-open du
+  // disjoncteur laisse passer une sonde — et « already_exists » après un
+  // stall = document créé malgré la réponse perdue → succès confirmé.
+  let jobCree = false;
+  let dernierIncident: unknown = null;
+  for (const tentative of [0, 1, 2]) {
+    if (tentative > 0) await new Promise((resolu) => setTimeout(resolu, tentative === 1 ? 3_000 : 8_000));
+    try {
+      await createJobDoc(PRODUCTION_JOBS_COLLECTION, jobId, { ...job }, params.userId);
+      jobCree = true;
+      break;
+    } catch (error) {
+      dernierIncident = error;
+      const code = (error as { code?: string } | null)?.code;
+      if (code === "already_exists") {
+        // Stall : la création a abouti côté stockage, seule la réponse a
+        // été perdue — le document porte EXACTEMENT ce payload → succès.
+        jobCree = true;
+        break;
+      }
+      // Transitoire/quota : retente (le budget de relance du JOB n'est
+      // pas consommé ici — c'est le lancement, pas un tick).
+    }
+  }
+  if (!jobCree) {
+    throw dernierIncident instanceof Error
+      ? dernierIncident
+      : new Error("Création du job de production impossible (stockage indisponible).");
+  }
   await logSystem(project.id, `Production autopilote ${jobId.slice(0, 8)} enfile (prompt : ${brief.slice(0, 120)}).`).catch(() => undefined);
 
   // ORIGINE CANONIQUE (fix CodeQL request-forgery) : publishProductionTick

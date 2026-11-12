@@ -15,6 +15,14 @@ import React from "react";
  *  - progression réelle (stage + %) tant que la production tourne — canal
  *    SSE GET /api/video/projects/<id>/production/stream, repli sondage 5 s
  *    (mêmes canaux que la carte workspace) ;
+ *  - CONTRAT 0..1 → POURCENTAGE (fix 2026-11-13 « la barre de progression
+ *    n'augmente pas ») : le serveur stocke la progression en 0..1 (contrat
+ *    UI ×100, cf. video-production-card) — la carte du fil applique la
+ *    même conversion tolérante, la barre AUGMENTE au fil des étapes ;
+ *  - progression MONOTONE + ÉTAT CONSERVÉ : un incident passager du canal
+ *    de statut (réseau, disjoncteur de stockage 503) ne ramène JAMAIS la
+ *    barre en arrière ni à zéro — le dernier état connu reste affiché et
+ *    le canal retente ;
  *  - lecteur <video controls> dès que le master existe : GET
  *    .../render renvoie output.playbackUrl PRÉSIGNÉE FRAÎCHE à chaque
  *    appel (jamais d'URL figée expirée dans le fil) ;
@@ -42,8 +50,22 @@ const STAGES_FR: Record<string, string> = {
 
 const TERMINAUX = new Set(["completed", "failed", "cancelled"]);
 
+/**
+ * Contrat de progression tolérant (même sémantique que la carte workspace) :
+ * le serveur porte 0..1 (×100 requis) ; par défense, une valeur > 1 est
+ * déjà un pourcentage — bornée 0..100 dans tous les cas.
+ */
+function pourcentageDepuis(valeur: unknown): number | null {
+  if (typeof valeur !== "number" || !Number.isFinite(valeur)) return null;
+  const pct = valeur <= 1 ? valeur * 100 : valeur;
+  return Math.max(0, Math.min(100, Math.round(pct)));
+}
+
 export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
   const [etat, setEtat] = React.useState<EtatCarte>({ type: "chargement" });
+  // Plafond monotone de la progression affichée (0..100) : un canal qui
+  // trébuche (réseau, 503 disjoncteur) ne fait JAMAIS reculer la barre.
+  const plafond = React.useRef(0);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -68,23 +90,35 @@ export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
         const label = STAGES_FR[st.stage ?? ""] ?? st.stage ?? "production";
         return { type: "echec", detail: `Production interrompue (${label})${st.error ? " — " + st.error.slice(0, 160) : ""}.` };
       }
+      // MONOTONE : la barre ne peut que monter — le plafond connu gagne
+      // toujours contre une lecture plus basse (tick en cours, cache…).
+      const pct = pourcentageDepuis(st.progress);
+      if (pct !== null && pct > plafond.current) plafond.current = pct;
       return {
         type: "progression",
         stage: STAGES_FR[st.stage ?? ""] ?? st.stage ?? "préparation",
-        progress: typeof st.progress === "number" ? st.progress : 0,
+        progress: plafond.current,
       };
     };
 
     const interroger = async () => {
       try {
+        // INCIDENT PASSAGER (réseau, disjoncteur de stockage → 503) : on
+        // garde l'état courant (barre inchangée) — le prochain cycle retente.
         const st = await fetch(`/api/video/projects/${videoProjectId}/production`, { signal: controller.signal })
-          .then((r) => (r.ok ? r.json() : {}))
-          .catch(() => ({}));
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        if (!st || typeof st !== "object") return;
         const etatSuivant = statutDepuisProduction(st as { status?: string; stage?: string; progress?: number; error?: string });
         if (etatSuivant.type === "chargement") {
           const url = await resoudreLecteur();
-          if (url && vivant) setEtat({ type: "prete", url });
-          else if (vivant) setEtat({ type: "progression", stage: "finalisation", progress: 99 });
+          if (url && vivant) {
+            plafond.current = 100;
+            setEtat({ type: "prete", url });
+          } else if (vivant) {
+            plafond.current = Math.max(plafond.current, 99);
+            setEtat({ type: "progression", stage: "finalisation", progress: plafond.current });
+          }
         } else if (vivant) {
           setEtat(etatSuivant);
         }
@@ -143,7 +177,7 @@ export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
       </figure>
     );
   }
-  const progression = etat.type === "progression" ? Math.round(etat.progress) : 0;
+  const progression = etat.type === "progression" ? etat.progress : 0;
   return (
     <figure className="nova-media-carte">
       <figcaption>

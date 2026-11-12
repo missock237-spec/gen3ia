@@ -544,6 +544,7 @@ export async function runVideoTurn(
 
   try {
     const { createVideoProductionJob } = await import("@/lib/video/production-queue");
+    const { classifyTickError } = await import("@/lib/video/queue-resume");
     // Task 106-a — production OPTIMALE : durée, cadrage, plateforme et
     // formats dérivés sont lus DÉTERMINISTEMENT dans la demande (zéro LLM)
     // et relayés à la file de production (options validées côté pipeline).
@@ -556,19 +557,46 @@ export async function runVideoTurn(
     if (params.targetDurationSec === undefined) {
       params.targetDurationSec = dureeAutomatiqueSelonBesoin(promptText);
     }
-    const job = await createVideoProductionJob({
-      userId: ctx.userId,
-      prompt: promptText.trim().slice(0, 4000),
-      title: extractVideoTitle(promptText),
-      // Task 107-a — la conversation d'origine est PORTÉE PAR LE JOB : à la
-      // complétion, le résultat est livré DANS ce fil (message + artefact)
-      // même si l'utilisateur a fermé la page.
-      conversationId: ctx.conversationId,
-      // LIVRAISON DURABLE : l'origine du lanceur est CAPTÉE au tour — le
-      // lien du master livré en arrière-plan suit l'hôte réellement navigué.
-      ...(ctx.origineClient ? { origineClient: ctx.origineClient } : {}),
-      ...(Object.keys(params).length > 0 ? { options: params } : {}),
-    });
+    const lancerJob = () =>
+      createVideoProductionJob({
+        userId: ctx.userId,
+        prompt: promptText.trim().slice(0, 4000),
+        title: extractVideoTitle(promptText),
+        // Task 107-a — la conversation d'origine est PORTÉE PAR LE JOB : à la
+        // complétion, le résultat est livré DANS ce fil (message + artefact)
+        // même si l'utilisateur a fermé la page.
+        conversationId: ctx.conversationId,
+        // LIVRAISON DURABLE : l'origine du lanceur est CAPTÉE au tour — le
+        // lien du master livré en arrière-plan suit l'hôte réellement navigué.
+        ...(ctx.origineClient ? { origineClient: ctx.origineClient } : {}),
+        ...(Object.keys(params).length > 0 ? { options: params } : {}),
+      });
+    // ROBUSTESSE LANCEMENT (2026-11-13, « chaque requête vidéo échoue ») :
+    // un incident PASSAGER du stockage (stall → disjoncteur anti-tempête)
+    // ne doit jamais transformer une demande vidéo valide en échec du fil.
+    // Le lancement complet est relancé (2 relances espacées 5 s / 12 s) :
+    // le repli half-open du disjoncteur laisse passer une sonde réelle par
+    // fenêtre de cooldown — la relance consomme cette sonde au bon moment.
+    // Un échec FATAL (validation, limite atteinte) échoue immédiatement,
+    // sans relance inutile ; après épuisement, échec honnête ci-dessous.
+    let job: Awaited<ReturnType<typeof createVideoProductionJob>> | null = null;
+    let dernierErreur: unknown = null;
+    for (const tentative of [0, 1, 2]) {
+      try {
+        job = await lancerJob();
+        dernierErreur = null;
+        break;
+      } catch (erreurLancement) {
+        dernierErreur = erreurLancement;
+        const passager = classifyTickError(erreurLancement) !== "fatal";
+        if (tentative < 2 && passager) {
+          await new Promise((resolu) => setTimeout(resolu, tentative === 0 ? 5_000 : 12_000));
+        } else {
+          break;
+        }
+      }
+    }
+    if (!job) throw dernierErreur instanceof Error ? dernierErreur : new Error("lancement indisponible");
     const paramsSummary = [
       params.targetDurationSec ? `durée cible ${Math.floor(params.targetDurationSec / 60) > 0 ? `${Math.floor(params.targetDurationSec / 60)} min ${params.targetDurationSec % 60 || ""}`.trim() : `${params.targetDurationSec} s`}${extractTargetDurationSec(promptText) ? "" : " (estimée selon votre besoin — précisez une durée pour l'ajuster)"}` : null,
       params.aspectRatio ? `cadrage ${params.aspectRatio}` : null,
@@ -621,9 +649,17 @@ export async function runVideoTurn(
     };
   } catch (error) {
     const unavailable = error instanceof Error && /n.est pas disponible/.test(error.message);
+    // HONNÊTETÉ (2026-11-13) : un incident passager du stockage (stall →
+    // disjoncteur anti-tempête) est différent d'un moteur non configuré —
+    // l'utilisateur doit savoir QUE faire (réessayer dans quelques minutes)
+    // et pourquoi (protection de la plateforme, pas sa faute).
+    const saturation = error instanceof Error &&
+      /disjoncteur|quota|stall|aucune réponse en|UNAVAILABLE|indisponible \(stockage/i.test(error.message);
     const message = unavailable
       ? "La production vidéo n'est pas disponible sur cette plateforme actuellement (moteur de production non configuré). Votre demande est conservée : réessayez plus tard ou depuis l'atelier vidéo."
-      : "Le lancement de la production vidéo a échoué. Votre demande est conservée — réessayez dans un instant.";
+      : saturation
+        ? "Le lancement de votre vidéo a buté sur une saturation MOMENTANÉE du stockage de la plateforme (protection anti-tempête — reprise automatique dans quelques minutes). Rien n'est perdu : renvoyez simplement votre demande dans un instant, ou dites-moi « relance ma vidéo »."
+        : "Le lancement de la production vidéo a échoué. Votre demande est conservée — réessayez dans un instant.";
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,

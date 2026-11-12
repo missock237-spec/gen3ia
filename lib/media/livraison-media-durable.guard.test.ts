@@ -274,6 +274,62 @@ describe("UI chat — le média apparaît VRAIMENT dans la conversation", () => 
     expect(source).toContain("type: \"echec\"");
     expect(source).toContain("Production interrompue");
   });
+
+  // FIX 2026-11-13 (« la barre de progression n'augmente pas ») : le
+  // serveur stocke la progression en 0..1 (contrat UI ×100) — la carte du
+  // fil appliquait Math.round() NU : la barre restait à 0 % pendant toute
+  // la production. Verrou : conversion tolérante + monotone + état conservé.
+  it("la barre du fil convertit le contrat 0..1 en POURCENTAGE (×100) — barre qui AUGMENTE", () => {
+    const source = lire("components/chat/carte-video-fil.tsx");
+    // Conversion tolérante identique à la carte workspace (0..1 → %).
+    expect(source).toContain("function pourcentageDepuis");
+    expect(source).toContain("valeur <= 1 ? valeur * 100 : valeur");
+    expect(source).toContain("Math.max(0, Math.min(100");
+    // La valeur affichée dans le fil est le pourcentage converti —
+    // plus JAMAIS un Math.round() nu sur la valeur 0..1 brute.
+    expect(source).not.toContain("Math.round(etat.progress)");
+    expect(source).toContain("const progression = etat.type === \"progression\" ? etat.progress : 0");
+  });
+
+  it("la progression du fil est MONOTONE et l'état est CONSERVÉ sous incident (503/réseau)", () => {
+    const source = lire("components/chat/carte-video-fil.tsx");
+    // Plafond monotone : une lecture plus basse ne fait jamais reculer.
+    expect(source).toContain("plafond");
+    expect(source).toContain("pct > plafond.current");
+    // Incident du canal de statut : dernier état connu conservé (pas de
+    // repli vers « préparation 0 % ») — la requête renvoyée non-OK ou
+    // rejetée laisse l'état courant inchangé.
+    expect(source).not.toContain('.catch(() => ({}))');
+    expect(source).toContain("if (!st || typeof st !== \"object\") return;");
+  });
+
+  // FIX 2026-11-13 (« chaque requête vidéo échoue ») : la création du
+  // document job (seul point de non-retour du lancement) est retentée
+  // sous incident passager du stockage — un stall ne transforme plus une
+  // demande vidéo valide en échec affiché dans le fil.
+  it("le lancement du job retente la création sous incident (stall/disjoncteur) — already_exists = succès", () => {
+    const source = lire("lib/video/production-queue.ts");
+    expect(source).toContain("ROBUSTESSE LANCEMENT");
+    expect(source).toContain("code === \"already_exists\"");
+    // Trois tentatives espacées, jamais un échec immédiat au premier stall.
+    expect(source).toContain("tentative === 1 ? 3_000 : 8_000");
+  });
+
+  it("l'échec de lancement distingue la saturation momentanée (message honnête et actionnable)", () => {
+    const source = lire("lib/domain/conversations/engine-media.ts");
+    expect(source).toContain("saturation MOMENTANÉE du stockage");
+    expect(source).toContain("protection anti-tempête");
+  });
+
+  it("le TOUR vidéo relance le lancement complet sous incident passager (classifyTickError ≠ fatal)", () => {
+    const source = lire("lib/domain/conversations/engine-media.ts");
+    expect(source).toContain("ROBUSTESSE LANCEMENT");
+    expect(source).toContain("classifyTickError");
+    // Relances espacées — un stall ne tue plus la demande immédiatement.
+    expect(source).toContain("tentative === 0 ? 5_000 : 12_000");
+    // Les échecs FATAUX (validation, limite) restent immédiats.
+    expect(source).toContain('classifyTickError(erreurLancement) !== "fatal"');
+  });
 });
 
 describe("honnêteté & sécurité de la livraison durable", () => {
