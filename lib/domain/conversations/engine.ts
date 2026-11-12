@@ -21,6 +21,7 @@ import { detectAmbiguitySignals, deterministicClarifyingQuestion, markClarificat
 import { looksLikeExplicitDrawingRequest, looksLikeImageRequest } from "@/lib/ai/image-intent";
 import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
 import { looksLikeVideoRequest } from "@/lib/ai/video-intent";
+import { looksLikeAssessmentRequest } from "@/lib/ai/assessment-intent";
 import { appendMessage, getConversation, listMessages } from "@/lib/chat/repository";
 import type { ChatConversation } from "@/lib/chat/repository";
 import { hasImageAttachment, shouldRouteImageEdit } from "@/lib/domain/conversations/image-intent";
@@ -46,6 +47,7 @@ import type { TurnBase } from "./engine-chat";
 import { IntentSchema, buildIntentSystemPrompt, detectExplicitToolIntent, extractApiUrlFromMessage, extractSearchQuery } from "./engine-intent";
 import type { ExplicitToolIntent, TurnIntent } from "./engine-intent";
 import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, looksLikeVoixHumaineRequest, intentionMédiaÉtiquetée } from "./engine-media";
+import { runEvaluationTurn } from "./engine-evaluation";
 // ENTRAÎNEMENT DEPUIS LE CHAT — entrée UNIQUE (demande utilisateur) : les
 // messages « apprends que / retiens que / entraîne-toi » entraînent
 // réellement le cortex via l'outil brain.train.
@@ -412,6 +414,25 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   }
 
   // (voix-off supprimée : TTS externe retiré du projet)
+
+  // 2 septies) ASSESSMENT ENGINE (système n°15 — feuille de route
+  // propriétaire : « Générer des tests, évaluations et questionnaires ») :
+  // cascade honnête (moteur structuré contraint → repli déterministe sur
+  // corpus fourni) → livrable documentaire RÉEL (PDF questions + corrigé).
+  // AVANT la détection d'application web : un « quiz » documentaire est une
+  // ÉVALUATION, pas une page web (les demandes de quiz EN LIGNE restent
+  // exclues du routage évaluation par WEB_APP_CONTEXT_RE).
+  if (looksLikeAssessmentRequest(input.message)) {
+    await onEvent({ type: "status", phase: "execution", label: "Génération de l'évaluation…" });
+    const result = await runEvaluationTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
 
   // 2 bis) ARTEFACTS — création d'une page web / petite application :
   // le moteur produit un artefact HTML complet + un LIEN WEB (/preview/<id>)
