@@ -21,7 +21,16 @@ STAMP = str(int(time.time()))
 EMAIL = f"ass{STAMP}@e2e-gen3ia.test"
 PASSWORD = "E2e!Assessment" + STAMP[-4:]
 
-MSG = "Crée un quiz de 5 questions sur la Révolution française"
+MSG = (
+    "Crée un quiz de 5 questions sur ce texte : La photosynthèse est le "
+    "processus biologique par lequel les plantes fabriquent leur matière "
+    "organique. Ce mécanisme convertit l'énergie lumineuse en énergie "
+    "chimique stockée sous forme de glucose. Les chloroplastes contiennent "
+    "la chlorophylle qui absorbe la lumière solaire. L'eau absorbe les "
+    "photons lors de la phase claire du processus. Le dioxyde de carbone "
+    "est ensuite fixé durant la phase sombre. Cette réaction produit du "
+    "glucose et libère de l'oxygène dans l'atmosphère."
+)
 
 resultats = []
 

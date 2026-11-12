@@ -223,7 +223,9 @@ export function genererQuizDeterministe(corpus: string, nombre: number): Quiz | 
   };
 }
 
-/** Cascade complète : moteur structuré puis repli déterministe (corpus). */
+/** Cascade complète : CORPUS → déterministe d'abord (garanti, zéro LLM,
+ *  zéro fait inventé — voie éprouvée en production) ; SANS corpus → moteur
+ *  structuré (le cerveau entraîné peut réussir) → null honnête. */
 export interface QuizGenere {
   quiz: Quiz;
   /** Moteur réellement utilisé — tracé honnêtement dans la livraison. */
@@ -231,13 +233,18 @@ export interface QuizGenere {
 }
 
 export async function genererQuiz(params: GenererQuizParams): Promise<QuizGenere | null> {
-  const parMoteur = await genererQuizMoteur(params);
-  if (parMoteur && parMoteur.questions.length > 0) {
-    return { quiz: parMoteur, moteur: "structured" };
-  }
+  // Matière fournie : le repli déterministe est LA voie primaire — rapide,
+  // déterministe et vérifiable (chaque réponse figure littéralement dans le
+  // texte). Constat production 2026-11-12 : la génération JSON du moteur
+  // est défaillante plateforme entière (sonde documentaire aussi) — le
+  // déterminisme d'abord est la seule voie fiable.
   if (params.corpus && params.corpus.trim().length >= 120) {
     const deterministe = genererQuizDeterministe(params.corpus, params.nombre);
     if (deterministe) return { quiz: deterministe, moteur: "deterministe-corpus" };
+  }
+  const parMoteur = await genererQuizMoteur(params);
+  if (parMoteur && parMoteur.questions.length > 0) {
+    return { quiz: parMoteur, moteur: "structured" };
   }
   return null;
 }

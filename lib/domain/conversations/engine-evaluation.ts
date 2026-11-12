@@ -114,9 +114,11 @@ export async function runEvaluationTurn(ctx: TurnBase): Promise<ConversationTurn
       userId: ctx.userId,
       role: "assistant",
       content:
-        "Je peux générer un test, un questionnaire ou une évaluation — il me faut une base réelle : " +
-        "collez le cours/les notes à évaluer dans votre message (même long), ou indiquez précisément le sujet " +
-        "et le niveau. Je ne fabrique jamais des questions au hasard sans matière : elles seraient fausses.",
+        "Je peux générer un test, un questionnaire ou une évaluation — il me faut la MATIÈRE à évaluer : " +
+        "collez le cours/les notes dans votre message (même long), et je produis immédiatement l'évaluation " +
+        "complète (questions « compléter » construites sur votre texte — chaque réponse figure littéralement " +
+        "dans la matière fournie, plus aucune question inventée) avec le corrigé en PDF téléchargeable. " +
+        "Je ne fabrique jamais des questions au hasard sans matière : elles seraient fausses.",
       generationStatus: "complete",
     });
     await onEvent({ type: "message_complete", message: messageClarification });
