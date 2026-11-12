@@ -29,10 +29,24 @@ import { genererQuiz, type Question, type Quiz } from "@/lib/evaluation/generate
  * (aucun quiz au hasard déguisé en succès).
  */
 
-/** Extrait le sujet évalué (texte après le sujet demandé) du message. */
-function sujetDepuisMessage(message: string): { sujet: string; corpus?: string } {
+/** Extrait le sujet évalué (texte après le sujet demandé) du message.
+ *  Exporté pour les gardes (sonde production : la commande « Crée un quiz…
+ *  sur ce texte : » ne doit JAMAIS faire partie du corpus évalué). */
+export function sujetDepuisMessage(message: string): { sujet: string; corpus?: string } {
   const brut = message.trim();
-  // Corpus fourni : le message entier sert de sujet ET de corpus.
+  // CORPUS (voie primaire déterministe) : texte APRÈS l'amorce de commande
+  // (« sur ce texte : », « d'après ce cours : », « à partir des notes
+  // suivantes : »…) — la commande elle-même ne fait JAMAIS partie du
+  // corpus (constat sonde production : « Crée un quiz… » était masqué
+  // dans la première question).
+  const mCorpus = brut.match(
+    /(?:sur|à partir de|d'après|depuis)\s+(?:ce|le|la|du|des)\s+(?:texte|cours|document|passage|notes?|chapitre|paragraphe|contenu)\s*[:：]\s*([\s\S]+)$/i,
+  );
+  if (mCorpus && mCorpus[1].trim().length >= 120) {
+    const corps = mCorpus[1].trim();
+    return { sujet: corps.slice(0, 200), corpus: corps };
+  }
+  // Corpus fourni sans amorce reconnue : le message entier sert de matière.
   if (brut.length >= 400) return { sujet: brut.slice(0, 200), corpus: brut };
   // « sur <sujet> » / « à propos de <sujet> » / « : <sujet> ».
   const m = brut.match(/\b(?:sur|à propos de|about)\s*[:：]?\s*(.+)$/i)

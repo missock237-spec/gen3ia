@@ -179,7 +179,7 @@ try:
           "prête »)", prete,
           "clarification reçue (moteur indisponible)" if clarification
           else f"{len(reponse)} car.")
-    n_questions = len(re.findall(r"(?m)^\s*[1-9]\d?\.\s", reponse))
+    n_questions = len(re.findall(r"(?:^|[\s»])[1-9]\d?\.\s", reponse))
     verif("5. aperçu des questions dans le fil (≥1 question numérotée)",
           n_questions >= 1, f"{n_questions} question(s) vues")
 
@@ -187,8 +187,9 @@ try:
     # conversation (GET /api/workspace/conversations/{sid} → artifacts[]),
     # même contrat que le panneau artefacts de l'UI.
     id_doc = ""
+    cle_stockage = ""
     debut_a = time.time()
-    while time.time() - debut_a < 75 and not id_doc:
+    while time.time() - debut_a < 75 and not cle_stockage:
         try:
             sid = page.evaluate("""async () => {
               const r = await fetch('/api/workspace/conversations?limit=10',
@@ -201,35 +202,41 @@ try:
                       const r = await fetch(`/api/workspace/conversations/${sid}`,
                         {credentials:'include',cache:'no-store'});
                       return await r.text(); }""", sid)
-                m = re.search(r'"artifacts"\s*:\s*(\[[\s\S]{0,4000}?\])', corps)
-                zone = m.group(1) if m else corps
-                m_id = re.search(r'"id"\s*:\s*"([-A-Za-z0-9_]+)"', zone)
-                if m_id and '"type"' in zone:
+                m_cle = re.search(r'"storagePath"\s*:\s*"([^"]+)"', corps)
+                if m_cle:
+                    cle_stockage = m_cle.group(1)
+                m_id = re.search(r'"id"\s*:\s*"([-A-Za-z0-9_]+)"', corps)
+                if m_id:
                     id_doc = m_id.group(1)
         except Exception:
             pass
-        if not id_doc:
+        if not cle_stockage:
             time.sleep(8)
-    verif("6. artefact document créé côté serveur", id_doc != "",
-          f"id={id_doc[:40]}" if id_doc else "aucun artefact listé")
+    verif("6. artefact document créé côté serveur (storagePath résolvable)",
+          cle_stockage != "",
+          f"clé={cle_stockage[:60]}" if cle_stockage else "aucun artefact listé")
 
-    # 6) Téléchargement RÉEL + octets magiques %PDF
-    if id_doc:
+    # 6) Téléchargement RÉEL + octets magiques %PDF — via l'URL signée du
+    # stockage permanent (même résolution que la carte artefact de l'UI).
+    if cle_stockage:
         ok_pdf = False
         taille = 0
         tete = ""
         try:
-            rep = page.evaluate(
-                """async (u) => {
-                    const r = await fetch(u, {credentials:'include',
-                      cache:'no-store'});
-                    const b = await r.arrayBuffer();
+            donnees = page.evaluate(
+                """async (cle) => {
+                    const r1 = await fetch(`/api/storage/permanent?path=${encodeURIComponent(cle)}`,
+                      {credentials:'include',cache:'no-store'});
+                    const j1 = await r1.json();
+                    if (!j1.url) return { erreur: "pas d'URL signée" };
+                    const r2 = await fetch(j1.url, {cache:'no-store'});
+                    const b = await r2.arrayBuffer();
                     const t = new Uint8Array(b.slice(0, 8));
-                    return { statut: r.status, taille: b.byteLength,
+                    return { statut: r2.status, taille: b.byteLength,
                              tete: Array.from(t).map(x => String.fromCharCode(x)).join('') };
-                }""", f"{BASE}/api/files/artifacts/{id_doc}?redirect=1")
-            taille = rep.get("taille", 0)
-            tete = rep.get("tete", "")
+                }""", cle_stockage)
+            taille = donnees.get("taille", 0)
+            tete = donnees.get("tete", "")
             ok_pdf = tete[:5] == "%PDF-" and taille >= 2000
         except Exception:
             pass

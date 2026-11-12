@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-
+// eslint-disable-next-line import/first
+import { sujetDepuisMessage } from "@/lib/domain/conversations/engine-evaluation";
 /**
  * GARDES — ASSESSMENT ENGINE (système n°15 : « Générer des tests,
  * évaluations et questionnaires »).
@@ -49,6 +50,34 @@ describe("câblage du tour évaluation (engine.ts)", () => {
 
   it("le tour évaluation est appelé avec la même base que les autres tours média", () => {
     expect(moteur).toContain("runEvaluationTurn({ ...input, conversation, project, projectId, userMessage, priorHistory })");
+  });
+});
+
+describe("extraction du corpus (sujetDepuisMessage — fix sonde production)", () => {
+  it("l'amorce de commande est SÉPARÉE du corpus (jamais masquée dans une question)", () => {
+    const message = "Crée un quiz de 5 questions sur ce texte : La photosynthèse est le processus biologique par lequel les plantes fabriquent leur matière organique. Ce mécanisme convertit l'énergie lumineuse en énergie chimique stockée sous forme de glucose. Les chloroplastes contiennent la chlorophylle qui absorbe la lumière solaire. L'eau absorbe les photons lors de la phase claire.";
+    const r = sujetDepuisMessage(message);
+    expect(r.corpus).toBeDefined();
+    expect(r.corpus!.startsWith("La photosynthèse")).toBe(true);
+    expect(r.corpus).not.toContain("Crée un quiz");
+  });
+
+  it("les autres amorces (« d'après ce cours : ») sont reconnues", () => {
+    const message = "Génère un questionnaire d'après ce cours : " + "x".repeat(140);
+    const r = sujetDepuisMessage(message);
+    expect(r.corpus).toBeDefined();
+    expect(r.corpus!.startsWith("x")).toBe(true);
+  });
+
+  it("message long sans amorce reconnue → message entier comme matière", () => {
+    const r = sujetDepuisMessage("a".repeat(450));
+    expect(r.corpus).toBe("a".repeat(450));
+  });
+
+  it("sujet court sans corpus → pas de corpus (voie moteur, clarification honnête si échec)", () => {
+    const r = sujetDepuisMessage("Crée un quiz sur les Vikings");
+    expect(r.corpus).toBeUndefined();
+    expect(r.sujet.toLowerCase()).toContain("vikings");
   });
 });
 
