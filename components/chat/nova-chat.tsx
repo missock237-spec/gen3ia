@@ -64,6 +64,7 @@ import { authFetch } from "@/lib/firebase/auth-client";
 import {
   fusionnerHistoriqueServeur,
   messagesDepuisServeur,
+  resoudreUidSession,
   type DetailConversationServeur,
   type ConversationServeurMeta,
 } from "@/components/chat/sync-historique";
@@ -898,8 +899,11 @@ export default function NovaChat() {
       try {
         const reponse = await fetch("/api/auth/session", { credentials: "include", cache: "no-store" });
         if (reponse.ok) {
-          const corps = (await reponse.json()) as { authenticated?: boolean; uid?: string };
-          if (corps.authenticated && typeof corps.uid === "string" && corps.uid.length > 0) uid = corps.uid;
+          // FIX sonde vidéo 2026-11-12 : le payload r2 réel porte l'UID
+          // SOUS user.uid — la lecture racine corps.uid résolvait JAMAIS
+          // l'identité (chat en mode invité en session valide : cache
+          // utilisateur, fusion d'historique et rattrapage inopérants).
+          uid = resoudreUidSession(await reponse.json());
         }
       } catch {
         uid = null;

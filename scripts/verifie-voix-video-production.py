@@ -351,15 +351,15 @@ def phase_video(page, saisie) -> None:
 
     livree = False
     master_url = ""
-    # Le message de livraison arrive PENDANT que la page est ouverte ou
-    # APRÈS fermeture : le rattrapage au chargement (nova-chat) doit le
-    # rendre visible après un simple RECHARGEMENT — c'est exactement le
-    # chemin testé ici (promesse « livrée dans ce fil même si vous fermez
-    # la page »).
-    page.reload(wait_until="domcontentloaded")
-    time.sleep(8)
+    # Le rattrapage (nova-chat) s'exécute À CHAQUE CHARGEMENT : la livraison
+    # peut être écrite quelques secondes après le status=completed — chaque
+    # itération RECHARGE la page (nouvelle exécution du rattrapage) puis
+    # relit le fil. Promesse testée : « livrée dans ce fil même si vous
+    # fermez la page » → au retour, le message est là.
     debut_fil = time.time()
-    while time.time() - debut_fil < 75:
+    while time.time() - debut_fil < 120:
+        page.reload(wait_until="domcontentloaded")
+        time.sleep(6)
         fil = page.locator(".nova-fil .nova-bulle")
         texte_fil = "\n".join(
             fil.nth(i).inner_text() for i in range(fil.count())
@@ -371,7 +371,7 @@ def phase_video(page, saisie) -> None:
             if m_master:
                 master_url = m_master.group(1)
             break
-        time.sleep(8)
+        time.sleep(10)
     verif("B6. vidéo LIVRÉE DANS LE FIL (« Votre vidéo est prête »)",
           livree, master_url[:120] if master_url else "")
     if master_url:

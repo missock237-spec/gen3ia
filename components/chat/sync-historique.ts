@@ -155,3 +155,26 @@ export function messagesDepuisServeur(
     modele: m.model,
   }));
 }
+
+/**
+ * Résout l'UID depuis le corps de GET /api/auth/session — DEUX formes
+ * observées en production (sonde vidéo 2026-11-12) :
+ *   - `{ authenticated: true, uid: "r2_…" }` (forme historique attendue) ;
+ *   - `{ authenticated: true, user: { uid: "r2_…" } }` (forme RÉELLE de
+ *     l'API r2 — le code lisait `corps.uid` au niveau racine et resolvait
+ *     donc JAMAIS l'identité : le chat se croyait invité en session valide
+ *     — cache par utilisateur jamais écrit, fusion d'historique jamais
+ *     déclenchée, rattrapage des livraisons jamais exécuté, bouton
+ *     « Se connecter » affiché malgré l'authentification).
+ * Retourne null si non authentifié ou UID absent — jamais d'invention.
+ */
+export function resoudreUidSession(
+  corps: unknown,
+): string | null {
+  if (typeof corps !== "object" || corps === null) return null;
+  const c = corps as { authenticated?: unknown; uid?: unknown; user?: { uid?: unknown } };
+  if (c.authenticated !== true) return null;
+  if (typeof c.uid === "string" && c.uid.length > 0) return c.uid;
+  if (typeof c.user?.uid === "string" && c.user.uid.length > 0) return c.user.uid;
+  return null;
+}

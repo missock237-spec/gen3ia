@@ -21,6 +21,7 @@ import { describe, expect, it } from "vitest";
 import {
   fusionnerHistoriqueServeur,
   messagesDepuisServeur,
+  resoudreUidSession,
   type ConversationLocaleMinimale,
 } from "@/components/chat/sync-historique";
 
@@ -197,5 +198,36 @@ describe("verrous structurels du câblage UI (nova-chat.tsx)", () => {
   it("l'import par recherche partage le même mapping (une seule source de vérité)", () => {
     expect(chat).toContain("messagesDepuisServeur(data, Date.now(), idSuivant)");
     expect((chat.match(/messagesDepuisServeur\(/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("resoudreUidSession — les DEUX formes du payload /api/auth/session (fix sonde vidéo)", () => {
+  const chat = read(CHAT);
+
+  it("forme r2 RÉELLE : { authenticated, user: { uid } } → uid résolu (l'ancienne lecture racine échouait)", () => {
+    const uid = resoudreUidSession({
+      authenticated: true,
+      user: { uid: "r2_941b511e76dfe8b3b8897c6c", email: "x@y.test" },
+      wallet: { currency: "XAF" },
+    });
+    expect(uid).toBe("r2_941b511e76dfe8b3b8897c6c");
+  });
+
+  it("forme historique : { authenticated, uid } → uid résolu", () => {
+    expect(resoudreUidSession({ authenticated: true, uid: "u_1" })).toBe("u_1");
+  });
+
+  it("non authentifié / UID absent / corps invalide → null (jamais d'invention)", () => {
+    expect(resoudreUidSession({ authenticated: false, user: { uid: "r2_x" } })).toBeNull();
+    expect(resoudreUidSession({ authenticated: true })).toBeNull();
+    expect(resoudreUidSession({ authenticated: true, user: { uid: "" } })).toBeNull();
+    expect(resoudreUidSession(null)).toBeNull();
+    expect(resoudreUidSession("chaîne")).toBeNull();
+    expect(resoudreUidSession(undefined)).toBeNull();
+  });
+
+  it("nova-chat utilise le helper (plus de lecture racine fautive)", () => {
+    expect(chat).toContain("resoudreUidSession(await reponse.json())");
+    expect(chat).not.toContain('typeof corps.uid === "string"');
   });
 });
