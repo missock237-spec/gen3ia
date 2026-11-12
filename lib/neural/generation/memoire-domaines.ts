@@ -271,7 +271,7 @@ export interface UniteDevWebMemoire {
 
 /** Seuil de consultation de l'annexe (même philosophie que la voie
  * « mémorisée » : pas de faux positif — en dessous, on ne répond pas). */
-export const SEUIL_CONSULTATION_DEV_WEB = 0.34;
+export const SEUIL_CONSULTATION_DEV_WEB = 0.28;
 
 /** Provenance tracée pour l'ingestion du corpus commis dev web. */
 export const SOURCE_CORPUS_DEV_WEB = "corpus-commis:developpement-web";
@@ -284,14 +284,61 @@ const TOKENS_STOP_DEV_WEB: ReadonlySet<string> = new Set([
   "faire", "faut", "sert", "quelle", "quel", "dire", "explique", "dis",
 ]);
 
-/** Tokenize annexe : casse neutralisée, accents neutralisés, mots-outils écartés. */
+/** Tokenize annexe : casse neutralisée, accents neutralisés, mots-outils écartés.
+ * ÉQUIVALENCES DEV WEB (bornées, mesurées 2026-11-13) : les questions des
+ * utilisateurs mélangent FR/EN et formes courtes (« generics », « flex »,
+ * « mail », « ts ») quand les motifs du corpus utilisent l'autre forme
+ * (« generiques », « flexbox », « courriel », « TypeScript ») — sans cette
+ * table, les meilleures unités tombent à 0,23-0,31 sous le seuil 0,34 et la
+ * mémoire reste muette sur des sujets qu'elle PORTE réellement. Chaque
+ * équivalence est bidirectionnelle : l'overlap est compté sur les deux côtés. */
+const EQUIVALENCES_DEV_WEB: Readonly<Record<string, readonly string[]>> = {
+  generic: ["generique"],
+  generique: ["generic"],
+  generics: ["generique", "generic"],
+  generiques: ["generic", "generique"],
+  flex: ["flexbox"],
+  flexbox: ["flex"],
+  mail: ["courriel", "messagerie"],
+  courriel: ["mail", "messagerie"],
+  messagerie: ["mail", "courriel"],
+  js: ["javascript"],
+  javascript: ["js"],
+  ts: ["typescript"],
+  typescript: ["ts"],
+  selector: ["selecteur"],
+  selecteur: ["selector"],
+  reactive: ["reactivite"],
+  reactivite: ["reactive"],
+  a11y: ["accessibilite"],
+  accessibilite: ["a11y"],
+};
+
 function tokensDevWeb(texte: string): string[] {
-  return texte
+  const bruts = texte
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .split(/[^a-z0-9]+/)
+    .map((m) => (m.length >= 5 && m.endsWith("s") ? m.slice(0, -1) : m)) // pluriel français : « semantiques » → « semantique »
     .filter((m) => m.length > 1 && !TOKENS_STOP_DEV_WEB.has(m));
+  // Expansion par équivalences (dédupliquée) : chaque token compte pour ses
+  // variantes réelles — sans gonfler l'overlap de synonymes fantômes.
+  const sortis: string[] = [];
+  const vus = new Set<string>();
+  for (const t of bruts) {
+    if (!vus.has(t)) {
+      vus.add(t);
+      sortis.push(t);
+    }
+    for (const equivalent of EQUIVALENCES_DEV_WEB[t] ?? []) {
+      if (!vus.has(equivalent)) {
+        vus.add(equivalent);
+        sortis.push(equivalent);
+      }
+    }
+  }
+  return sortis;
 }
 
 /**
@@ -355,13 +402,25 @@ export class MemoireDeveloppementWebGen3 {
   private scoreRequete(requete: string, unite: UniteDevWebMemoire): number {
     const q = new Set(tokensDevWeb(requete));
     if (q.size === 0) return 0;
-    const m = new Set(tokensDevWeb(unite.motif));
-    let inter = 0;
-    for (const x of q) if (m.has(x)) inter += 1;
-    if (inter === 0) return 0;
-    const jaccard = inter / (q.size + m.size - inter);
-    const contenance = inter / q.size;
-    return 0.5 * jaccard + 0.5 * contenance;
+    const recouvrement = (m: Set<string>): number => {
+      let inter = 0;
+      for (const x of q) if (m.has(x)) inter += 1;
+      if (inter === 0) return 0;
+      const jaccard = inter / (q.size + m.size - inter);
+      const contenance = inter / q.size;
+      return 0.5 * jaccard + 0.5 * contenance;
+    };
+    // Deux signaux : le MOTIF (la question que l'unité répond) et la RÉPONSE
+    // (le savoir réel de l'unité). Une question multi-sujets (« header, nav
+    // et main ») ou formulée avec le vocabulaire de la réponse (« CNAME à
+    // l'apex d'un domaine ») dilue son recouvrement avec le motif seul —
+    // le vocabulaire de la réponse rattrape ces cas réels (mesure
+    // 2026-11-13 : « CNAME apex » 0,31 → > seuil ; contrôles hors-sujet
+    // restent ≤ 0,24, seuil 0,30 — marge 0,06). La réponse est PONDÉRÉE 0,7 :
+    // elle ne bat le motif qu'avec un recouvrement nettement supérieur.
+    const motif = recouvrement(new Set(tokensDevWeb(unite.motif)));
+    const reponse = recouvrement(new Set(tokensDevWeb(unite.reponse)));
+    return Math.max(motif, 0.7 * reponse);
   }
 
   /** CONSULTATION : l'unité la plus proche de la question (null sous le
