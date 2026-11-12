@@ -46,7 +46,7 @@ import { findLastConversationImage, runChatTurn } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import { IntentSchema, buildIntentSystemPrompt, detectExplicitToolIntent, extractApiUrlFromMessage, extractSearchQuery } from "./engine-intent";
 import type { ExplicitToolIntent, TurnIntent } from "./engine-intent";
-import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, looksLikeVoixHumaineRequest, intentionMédiaÉtiquetée } from "./engine-media";
+import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, runMusiqueTurn, looksLikeDemandeMusique, looksLikeVoixHumaineRequest, intentionMédiaÉtiquetée } from "./engine-media";
 import { runEvaluationTurn } from "./engine-evaluation";
 // ENTRAÎNEMENT DEPUIS LE CHAT — entrée UNIQUE (demande utilisateur) : les
 // messages « apprends que / retiens que / entraîne-toi » entraînent
@@ -404,6 +404,23 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   if (intentionMédiaÉtiquetée(input.message) === "video" || looksLikeVideoRequest(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Lancement de la production vidéo…" });
     const result = await runVideoTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+
+  // 2 huitiès) DEMANDE DE MUSIQUE : composition algorithmique RÉELLE du
+  // moteur gen3 (musique.creer) — WAV/MP3 rendu via FFmpeg, archivage
+  // permanent, lecteur audio durable dans le fil. APRÈS vidéo/voix (leurs
+  // détecteurs priment : « une vidéo avec une musique énergique » reste
+  // une vidéo ; « un message vocal » reste de la voix).
+  if (looksLikeDemandeMusique(input.message)) {
+    await onEvent({ type: "status", phase: "execution", label: "Composition de la musique en cours…" });
+    const result = await runMusiqueTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,

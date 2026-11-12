@@ -6,7 +6,7 @@ import "server-only";
 
 import { safeEmitter } from "./stream-events";
 import { detectImageRatio } from "@/lib/ai/image-intent";
-import { extractVideoParams, extractVideoTitle, extractTargetDurationSec, dureeAutomatiqueSelonBesoin } from "@/lib/ai/video-intent";
+import { extractVideoParams, extractVideoTitle, extractTargetDurationSec, dureeAutomatiqueSelonBesoin, looksLikeVideoRequest } from "@/lib/ai/video-intent";
 import { appendMessage } from "@/lib/chat/repository";
 import { createArtifact } from "@/lib/domain/artifacts/repository";
 import { attachmentImageCandidates, resolveEditableImageSources } from "@/lib/files/image-source";
@@ -224,6 +224,102 @@ export async function texteÀFaireDire(demande: string): Promise<string> {
     // IA indisponible → dernier recours ci-dessous.
   }
   return demande.trim().slice(0, 2000);
+}
+
+/* ------------------------------------------------------------------ */
+/* MUSIQUE RÉELLE — « crée une musique de 2 minutes » : composition    */
+/* algorithmique déterministe du moteur gen3 (styles, accords,         */
+/* mélodie, percussions) rendue WAV/MP3 via FFmpeg, archivée en        */
+/* stockage permanent et livrée DANS LE FIL (lecteur audio durable).   */
+/* ------------------------------------------------------------------ */
+
+/** DEMANDE DE MUSIQUE : verbe de création (ou durée explicite) + objet
+ * musical. Exclusions strictes : VIDÉO (son pipeline possède son propre
+ * lit musical — « une vidéo avec une musique énergique » reste une vidéo),
+ * VOIX parlée (sans instrumentation), questions méta (aucun produit
+ * demandé). Détection déterministe : aucune variance LLM. */
+export function looksLikeDemandeMusique(message: string): boolean {
+  const objet =
+    /\b(musique|chanson|m[eé]lodie|instrumentale?|piste (?:audio|musicale)|boucle musicale|nappe sonore|beat|soundtrack|bande[- ]son)\b/iu.test(message);
+  if (!objet) return false;
+  const verbe =
+    /\b(cr[ée]{1,3}\b|cr[ée]e|cr[ée]er|compose[szr]?|g[ée]n[èe]re[szr]?|g[ée]n[ée]rer|fais|fait|fabrique[szr]?|produis|improvise)\b/iu.test(message);
+  const duree = /\b\d+\s*(min|minutes?|secondes?|secs?|s)\b/iu.test(message);
+  if (!verbe && !duree) return false;
+  if (looksLikeVideoRequest(message)) return false;
+  if (looksLikeVoixHumaineRequest(message)) return false;
+  if (/^\s*(c[''’]est quoi|qu['''’]est[- ]ce que|comment (?:ça|c[a])?\s*marche)\b/i.test(message.trim())) return false;
+  return true;
+}
+
+export async function runMusiqueTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  await onEvent({ type: "status", phase: "execution", label: "Composition de la musique en cours…" });
+  try {
+    const { musiqueCreerTool } = await import("@/lib/tools/media/musique");
+    const sortie = await musiqueCreerTool.execute({ demande: ctx.message }, { userId: ctx.userId });
+    const { urlDurableAbsolue, urlDurableRelative } = await import("@/lib/media/url-durable");
+    const cle = sortie.url && sortie.url.startsWith("users/") ? sortie.url : undefined;
+    const urlJouable = (cle ? urlDurableAbsolue(cle, ctx.origineClient) : null) ?? sortie.ecouterUrl;
+    const audioUrlDurable = cle ? urlDurableRelative(cle) : undefined;
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content:
+        `Votre musique est prête (${sortie.dureeReelle ?? "?"} s, style ${sortie.styleLabel ?? sortie.style ?? "génératif"}). ` +
+        `VRAIE composition algorithmique du moteur gen3 — ${sortie.note ?? ""} Écoutez ici : ${urlJouable}`,
+      // Champ STRUCTURÉ lu par le fil : lecteur <audio> embarqué durable.
+      ...(audioUrlDurable ? { audioUrl: audioUrlDurable } : {}),
+      provider: "musique-gen3",
+      model: "composition-algorithmique",
+      generationStatus: "complete",
+    });
+    const artifact = await createArtifact({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      projectId: ctx.projectId,
+      type: "audio",
+      title: ctx.message.slice(0, 80),
+      url: sortie.ecouterUrl,
+      storagePath: cle,
+      note: `Musique réelle — ${sortie.styleLabel ?? sortie.style ?? "génératif"}, ${sortie.dureeReelle ?? "?"} s`,
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    await onEvent({ type: "artifact_created", artifact });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [artifact],
+      approvals: [],
+      intent: { mode: "chat", understanding: `Musique réellement composée (${sortie.dureeReelle ?? "?"} s, ${sortie.styleLabel ?? "génératif"}) et archivée en permanent.` },
+    };
+  } catch (error) {
+    // ÉCHEC HONNÊTE : la cause réelle est nommée à l'utilisateur — jamais
+    // de message d'audio fictif ni de lien mort.
+    const cause = error instanceof Error ? error.message : "erreur inconnue";
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content:
+        "Je n'ai pas réussi à composer cette musique — cause réelle : " + cause.slice(0, 300) +
+        ". Réessayez (par ex. « crée une musique de 2 minutes, calme au piano ») ou demandez-moi un message vocal.",
+      provider: "musique-gen3",
+      model: "composition-algorithmique",
+      generationStatus: "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Composition musicale en échec honnête (cause nommée)." },
+    };
+  }
 }
 
 export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
