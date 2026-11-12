@@ -328,6 +328,13 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
   let sortieRechercheWeb: unknown = undefined;
   /** Image générée pendant ce tour (affichée sur le message final). */
   let turnImageUrl: string | undefined;
+  /** LIVRAISON MÉDIA DURABLE (2026-11-12) — sortie voice.speak réussie :
+   *  l'URL canonique de l'audio (re-signée à chaque résolution) est portée
+   *  par le message final → lecteur <audio> du fil jouable à vie. */
+  let sortieAudioDurable: string | undefined;
+  /** Projet vidéo lancé par ce tour (video.create) → carte de progression
+   *  et lecteur dans le fil (URL fraîche via /render, jamais présignée). */
+  let sortieVideoProjectId: string | undefined;
   /** Task 143 — connecteurs Composio requis mais NON connectés par
    * l'utilisateur : collectés pendant l'exécution (erreur typée
    * CONNECTOR_MISSING) pour attacher la carte « Connecter <App> » au
@@ -737,6 +744,19 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
           sortieRechercheWeb = result.output;
         }
         if (TOOL_OUTPUT_ARTIFACTS.has(toolName)) {
+          // Capture RÉELLE de la sortie média (avant l'artefact) : l'URL
+          // durable / l'id projet alimentent le message final — le lecteur
+          // et la carte vidéo du fil ne dépendent JAMAIS d'un lien
+          // présigné expirable ni d'un artifact_created non rendu.
+          const sortieMedia = (result.output ?? {}) as Record<string, unknown>;
+          if (toolName === "voice.speak") {
+            const { urlDurableRelative } = await import("@/lib/media/url-durable");
+            sortieAudioDurable =
+              (typeof sortieMedia.url === "string" ? urlDurableRelative(sortieMedia.url) : null) ?? sortieAudioDurable;
+          }
+          if (toolName === "video.create" && typeof sortieMedia.projectId === "string") {
+            sortieVideoProjectId = sortieMedia.projectId;
+          }
           const artifact = await artifactFromToolOutput({
             userId: ctx.userId,
             conversationId: ctx.conversationId,
@@ -825,6 +845,9 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
     runId: run.id,
     generationStatus: "complete",
     ...(turnImageUrl ? { imageUrl: turnImageUrl } : {}),
+    // LIVRAISON MÉDIA DURABLE : lecteur audio + carte vidéo du fil.
+    ...(sortieAudioDurable ? { audioUrl: sortieAudioDurable } : {}),
+    ...(sortieVideoProjectId ? { videoProjectId: sortieVideoProjectId } : {}),
     // Task 143 — connecteurs manquants détectés pendant l'exécution : la
     // carte « Connecter <App> » (bouton OAuth) est rendue sous la réponse.
     ...(missingConnectors.length > 0 ? { missingConnectors: uniqueToolkits(missingConnectors) } : {}),

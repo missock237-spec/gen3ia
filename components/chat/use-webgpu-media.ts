@@ -40,7 +40,7 @@ export interface ProgressionWebGpu {
 
 interface RéponseComplète {
   ok?: boolean;
-  message?: { id: string; content: string; imageUrl?: string | null };
+  message?: { id: string; content: string; imageUrl?: string | null; audioUrl?: string | null };
   artifact?: { id: string; url?: string; type?: string };
   error?: string;
 }

@@ -246,6 +246,13 @@ export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult
     });
     if (rendu) {
       const moteur = String(rendu.meta?.moteur ?? "");
+      // LIVRAISON DURABLE (2026-11-12) : l'URL présignée expire (TTL 1 h) —
+      // le message persisté porte l'URL canonique re-signée à chaque
+      // résolution (texte cliquable à vie + lecteur du fil via audioUrl).
+      // Repli : présignée d'origine (jamais de perte de livraison).
+      const { urlDurableAbsolue, urlDurableRelative } = await import("@/lib/media/url-durable");
+      const urlJouable = (rendu.cleStockage ? urlDurableAbsolue(rendu.cleStockage) : null) ?? rendu.url;
+      const audioUrlDurable = rendu.cleStockage ? urlDurableRelative(rendu.cleStockage) : undefined;
       const assistantMessage = await appendMessage({
         conversationId: ctx.conversationId,
         userId: ctx.userId,
@@ -253,7 +260,9 @@ export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult
         content:
           `Voici votre message vocal — voix ${choix.genreLabel} réelle (${String(rendu.meta?.voix ?? "neuronale")}, ` +
           `${moteur === "professeur-voix-espace-edge-tts" ? "espace public Edge-TTS" : "professeur média temporaire"}, ` +
-          "échafaudage — loi CONTRAINTE-ONDES). Écoutez ici : " + rendu.url,
+          "échafaudage — loi CONTRAINTE-ONDES). Écoutez ici : " + urlJouable,
+        // Champ STRUCTURÉ lu par le fil : lecteur <audio> embarqué durable.
+        ...(audioUrlDurable ? { audioUrl: audioUrlDurable } : {}),
         provider: "professeur-temporaire",
         model: moteur || "professeur-voix",
         generationStatus: "complete",
@@ -581,6 +590,10 @@ export async function runVideoTurn(
         "",
         "Demandez-moi « où en est ma vidéo ? » à tout moment. La vidéo terminée sera livrée DIRECTEMENT dans ce fil (message + lien de lecture + artefact), même si vous fermez la page.",
       ].filter(Boolean).join("\n"),
+      // CARTE VIDÉO DANS LE FIL (2026-11-12) : l'id projet structuré permet
+      // au chat de rendre la carte de progression/lecteur immédiatement —
+      // sans dépendre d'un artifact_created jamais rendu par l'UI épurée.
+      videoProjectId: job.projectId,
       generationStatus: "complete",
     });
     const artifact = await createArtifact({

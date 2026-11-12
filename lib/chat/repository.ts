@@ -284,6 +284,11 @@ function messageFrom(id: string, conversationId: string, userId: string, x: Mess
     provider: x.provider,
     model: x.model,
     imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : undefined,
+    // LIVRAISON MÉDIA DURABLE (2026-11-12) — audio jouable à vie (URL
+    // canonique re-signée) + id projet vidéo pour la carte du fil.
+    audioUrl: typeof x.audioUrl === "string" && x.audioUrl.length > 0 ? x.audioUrl : undefined,
+    videoProjectId:
+      typeof x.videoProjectId === "string" && x.videoProjectId.length > 0 ? x.videoProjectId : undefined,
     runId: typeof x.runId === "string" ? x.runId : undefined,
     connectors: Array.isArray(x.connectors)
       ? x.connectors.filter((c: unknown): c is string => typeof c === "string" && c.length > 0 && c.length <= 60)

@@ -109,13 +109,21 @@ export const voiceSpeakTool: ToolDefinition<
     const estPermanent = rendu.storage === "r2" && typeof rendu.cleStockage === "string";
     const estProfesseur = rendu.meta?.echafaudage === true;
     const voixUtilisée = typeof rendu.meta?.voix === "string" ? rendu.meta.voix : null;
+    // LIVRAISON DURABLE (2026-11-12) : le texte final du planner cite
+    // ecouterUrl — s'il était présigné (TTL 1 h), le lien du message
+    // persisté mourrait (« l'audio n'est pas réellement envoyé »). Quand la
+    // clé permanente existe, ecouterUrl = URL canonique re-signée à chaque
+    // résolution ; repli : présignée d'origine (jamais de perte).
+    const { urlDurableAbsolue } = await import("@/lib/media/url-durable");
+    const ecouter =
+      estPermanent && rendu.cleStockage ? (urlDurableAbsolue(rendu.cleStockage) ?? rendu.url) : rendu.url;
     return {
       // Contrat artefact : `url` = clé permanente résolvable (Task 113).
       ...(estPermanent ? { url: rendu.cleStockage } : {}),
       storage: rendu.storage,
       // Repli inline : data URI lisible par le lecteur embarqué (bornée).
       ...(rendu.storage === "inline" ? { audioDataUri: rendu.url } : {}),
-      ecouterUrl: rendu.url,
+      ecouterUrl: ecouter,
       mimeType: rendu.mime === "audio/mpeg" ? "audio/mpeg" : "audio/wav",
       dureeSecondes: typeof rendu.meta.duree === "number" ? rendu.meta.duree : 0,
       moteur: String(rendu.meta.moteur ?? "gen3-snn-audio-v1"),

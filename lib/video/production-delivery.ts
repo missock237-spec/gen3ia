@@ -148,12 +148,25 @@ export async function deliverJobToConversation(job: VideoProductionJob): Promise
     // ici en direct : job de rendu rattaché (job.renderJobId) → clé R2 du
     // master → URL présignée 900 s. L'URL est un PLUS : un incident de
     // signature n'empêche jamais la livraison du message.
+    //
+    // LIVRAISON DURABLE (2026-11-12) : une présignée 900 s dans un message
+    // PERSISTÉ meurt en 15 minutes (« la vidéo n'a pas été envoyée »). Si le
+    // master est une clé média propriétaire (permanent/ OU video/), le texte
+    // porte l'URL canonique /api/media/durable?path=… re-signée à chaque
+    // résolution — jouable à vie. Repli : présignée 900 s (historique).
     let masterUrl: string | undefined;
     if (job.status === "completed" && job.renderJobId) {
       try {
         const renderJob = await getJob(job.renderJobId);
         const r2Key = renderJob?.output?.r2Key;
-        if (r2Key) masterUrl = await createVideoPlaybackUrl(job.userId, r2Key, 900).catch(() => undefined);
+        if (r2Key) {
+          const { urlDurableAbsolue } = await import("@/lib/media/url-durable");
+          // Clés résolvables durables : permanent/ (voix…) ET video/ (masters).
+          masterUrl = (r2Key.startsWith(`users/${job.userId}/permanent/`) ||
+            r2Key.startsWith(`users/${job.userId}/video/`)
+            ? urlDurableAbsolue(r2Key)
+            : undefined) ?? await createVideoPlaybackUrl(job.userId, r2Key, 900).catch(() => undefined);
+        }
       } catch {
         // Rendu introuvable / R2 indisponible : message livré sans URL.
       }
@@ -171,11 +184,15 @@ export async function deliverJobToConversation(job: VideoProductionJob): Promise
 
     // 2) LE LIVRABLE : le message part AVANT tout marquage. Un échec ici ne
     // laisse AUCUN marqueur → reprise garantie au prochain passage.
+    // CARTE VIDÉO (2026-11-12) : le message porte l'id projet structuré —
+    // le fil rend la carte (progression/lecteur) sans dépendre d'un
+    // artifact_created jamais affiché par l'UI épurée du chat.
     await appendMessage({
       conversationId: job.conversationId,
       userId: job.userId,
       role: "assistant",
       content,
+      videoProjectId: job.projectId,
       generationStatus: "complete",
     });
 

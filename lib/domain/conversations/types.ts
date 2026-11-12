@@ -83,6 +83,20 @@ export interface ConversationMessage {
   model?: string;
   /** URL d'une image générée (Agnes AI) jointe à la réponse. */
   imageUrl?: string;
+  /**
+   * LIVRAISON AUDIO DURABLE (2026-11-12) : URL canonique
+   * /api/media/durable?path=… d'un audio généré par ce tour — jouable à
+   * vie par le lecteur du fil (l'URL présignée du texte expire, celle-ci
+   * jamais : elle re-signe à chaque résolution).
+   */
+  audioUrl?: string;
+  /**
+   * LIVRAISON VIDÉO DURABLE (2026-11-12) : id du projet vidéo produit par
+   * ce tour — la carte du fil résout une URL de lecture FRAÎCHE via
+   * GET /api/video/projects/<id>/render (jamais d'URL présignée figée
+   * expirée dans le message).
+   */
+  videoProjectId?: string;
   /** Run lié à ce message (timeline d'exécution affichée inline). */
   runId?: string;
   /** Connecteurs activés par l'utilisateur pour ce tour (slugs Composio). */

@@ -48,6 +48,12 @@ export interface MessageLocalMinimal {
   content: string;
   date: number;
   modele?: string;
+  /** LIVRAISON MÉDIA DURABLE (2026-11-12) : audio jouable à vie dans le
+   *  fil (URL canonique re-signée) — jamais une présignée expirable. */
+  audioUrl?: string;
+  /** Projet vidéo du tour : carte progression/lecteur du fil (URL fraîche
+   *  résolue par la carte via GET /render). */
+  videoProjectId?: string;
 }
 
 /** Détail serveur renvoyé par GET /api/workspace/conversations/[id]. */
@@ -59,6 +65,8 @@ export interface DetailConversationServeur {
     content?: string;
     createdAt?: string;
     model?: string;
+    audioUrl?: string;
+    videoProjectId?: string;
   }>;
 }
 
@@ -153,6 +161,10 @@ export function messagesDepuisServeur(
     content: String(m.content ?? ""),
     date: Date.parse(m.createdAt ?? "") || maintenant,
     modele: m.model,
+    // LIVRAISON MÉDIA DURABLE : lecteur audio + carte vidéo restent jouables
+    // après rechargement/rattrapage (les champs sont persistés serveur).
+    ...(typeof m.audioUrl === "string" && m.audioUrl.length > 0 ? { audioUrl: m.audioUrl } : {}),
+    ...(typeof m.videoProjectId === "string" && m.videoProjectId.length > 0 ? { videoProjectId: m.videoProjectId } : {}),
   }));
 }
 

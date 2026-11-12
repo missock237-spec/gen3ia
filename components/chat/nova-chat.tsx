@@ -60,6 +60,7 @@ import Link from "next/link";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import CarteAutoApprentissage from "@/components/chat/auto-apprentissage-carte";
 import IndicateurMoteur from "@/components/chat/indicateur-moteur";
+import { CarteVideoFil } from "@/components/chat/carte-video-fil";
 import { authFetch } from "@/lib/firebase/auth-client";
 import {
   fusionnerHistoriqueServeur,
@@ -268,6 +269,12 @@ interface NovaMessage {
   erreur?: boolean;
   enCours?: boolean;
   imageUrl?: string;
+  /** LIVRAISON AUDIO DURABLE (2026-11-12) : URL canonique re-signée —
+   *  lecteur <audio> embarqué dans la bulle, jouable à vie. */
+  audioUrl?: string;
+  /** Projet vidéo du tour : carte progression/lecteur rendue dans le fil
+   *  (URL de lecture fraîche à chaque affichage — jamais présignée figée). */
+  videoProjectId?: string;
   fichiers?: NovaFichierMsg[];
   /** Télémétrie brute du tour (événement turn_telemetry — mode debug). */
   telemetrie?: TelemetrieTour;
@@ -583,6 +590,17 @@ const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={m.imageUrl} alt="Image générée par Gen3ia" className="nova-image-generee" />
                 ) : null}
+                {m.audioUrl ? (
+                  // LIVRAISON AUDIO DURABLE : lecteur embarqué jouable à
+                  // vie (l'URL re-signée à chaque résolution — plus de
+                  // « l'audio n'a pas été envoyé » après expiration).
+                  <audio src={m.audioUrl} controls preload="metadata" className="nova-media-audio" />
+                ) : null}
+                {m.videoProjectId ? (
+                  // LIVRAISON VIDÉO DURABLE : carte progression + lecteur
+                  // dans le fil (la carte résout une URL de lecture fraîche).
+                  <CarteVideoFil videoProjectId={m.videoProjectId} />
+                ) : null}
                 {m.enCours ? <span className="nova-curseur" aria-hidden="true" /> : null}
               </>
             )
@@ -744,6 +762,7 @@ export default function NovaChat() {
                     modele: "gen3-media-engine-v1",
                     enCours: false,
                     ...(message.imageUrl ? { imageUrl: message.imageUrl } : {}),
+                    ...(message.audioUrl ? { audioUrl: message.audioUrl } : {}),
                   },
                 ],
               },
@@ -1423,6 +1442,8 @@ export default function NovaChat() {
                 content: contenu,
                 modele: event.message.model || m.modele,
                 ...(event.message.imageUrl ? { imageUrl: event.message.imageUrl } : {}),
+                ...(event.message.audioUrl ? { audioUrl: event.message.audioUrl } : {}),
+                ...(event.message.videoProjectId ? { videoProjectId: event.message.videoProjectId } : {}),
               }));
               break;
             case "turn_telemetry":
@@ -1448,6 +1469,27 @@ export default function NovaChat() {
               });
               break;
             }
+            case "artifact_created": {
+              // LIVRAISON MÉDIA DANS LE FIL (2026-11-12) : l'artefact audio
+              // (storagePath permanent → URL canonique) devient un lecteur ;
+              // l'artefact vidéo (videoProjectId) devient la carte de
+              // progression/lecteur. Historiquement ignoré — le média
+              // généré n'apparaissait JAMAIS dans la conversation.
+              const ar = event.artifact;
+              if (ar.type === "audio" && typeof ar.storagePath === "string" && ar.storagePath.startsWith("users/") && ar.storagePath.includes("/permanent/")) {
+                majMessage(conv.id, streamId, (m) => ({
+                  ...m,
+                  audioUrl: m.audioUrl ?? `/api/media/durable?path=${encodeURIComponent(ar.storagePath as string)}`,
+                }));
+              }
+              if (ar.type === "video" && typeof ar.videoProjectId === "string") {
+                majMessage(conv.id, streamId, (m) => ({
+                  ...m,
+                  videoProjectId: m.videoProjectId ?? ar.videoProjectId,
+                }));
+              }
+              break;
+            }
             case "done": {
               const final = event.assistantMessage;
               const suggestions = final.suggestions ?? [];
@@ -1459,6 +1501,8 @@ export default function NovaChat() {
                 modele: final.model || def.nom,
                 enCours: false,
                 ...(final.imageUrl ? { imageUrl: final.imageUrl } : {}),
+                ...(final.audioUrl ? { audioUrl: final.audioUrl } : {}),
+                ...(final.videoProjectId ? { videoProjectId: final.videoProjectId } : {}),
               }));
               if (suggestions.length > 0) {
                 majConvs(

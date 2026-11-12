@@ -87,12 +87,24 @@ export async function POST(request: NextRequest) {
       .map(([k, v]) => `${k}: ${String(v)}`)
       .join(" · ");
 
+    // LIVRAISON DURABLE (2026-11-12) : pour la voix et la vidéo WebGPU le
+    // message historique ne portait AUCUN lien — le média persisté était
+    // invisible (« pas réellement créé et envoyé »). Le contenu porte
+    // désormais l'URL canonique re-signée (jouable à vie) ; la voix expose
+    // aussi le champ structuré audioUrl (lecteur du fil).
+    const { urlDurableAbsolue, urlDurableRelative } = await import("@/lib/media/url-durable");
+    const lienJouable =
+      persisté.storagePath && kind !== "image" ? (urlDurableAbsolue(persisté.storagePath) ?? persisté.url) : undefined;
+    const audioUrlDurable =
+      kind === "voice" && persisté.storagePath ? urlDurableRelative(persisté.storagePath) ?? undefined : undefined;
+
     const message = await appendMessage({
       conversationId,
       userId: guard.context.userId,
       role: "assistant",
-      content: `${libellé}${métaTexte ? `\n\n${métaTexte}` : ""}`,
+      content: `${libellé}${métaTexte ? `\n\n${métaTexte}` : ""}${lienJouable ? `\n\nÉcoutez / regardez ici : ${lienJouable}` : ""}`,
       imageUrl: kind === "image" ? persisté.url : undefined,
+      ...(audioUrlDurable ? { audioUrl: audioUrlDurable } : {}),
       provider: "gen3-webgpu",
       model: "gen3-media-engine-v1",
       generationStatus: "complete",
