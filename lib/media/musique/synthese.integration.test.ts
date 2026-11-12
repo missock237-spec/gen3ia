@@ -69,7 +69,11 @@ describe("intégration FFmpeg réelle — musique → MP3 jouable", () => {
           stderr += c.toString();
         });
         proc.on("close", () => {
-          const m = /time=(\d+):(\d+):(\d+\.\d+)/u.exec(stderr);
+          // ffmpeg journalise un time= pour l'ENTRÉE puis pour la SORTIE :
+          // le DERNIER est le temps traité total (le premier peut valoir
+          // 00:00:00 sur le runner CI — divergence observée).
+          const toutes = [...stderr.matchAll(/time=(\d+):(\d+):(\d+\.\d+)/gu)];
+          const m = toutes[toutes.length - 1];
           if (!m) reject(new Error(`durée illisible : ${stderr.slice(-300)}`));
           else accept(Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]));
         });
