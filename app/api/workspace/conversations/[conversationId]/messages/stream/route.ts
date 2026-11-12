@@ -9,6 +9,7 @@ import { definirContexteRequeteTenant } from "@/lib/observability/contexte-reque
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
+import { resolveOrigineClient } from "@/lib/media/origine-client";
 // Task 153 — paiement par exécution : réservation AVANT le flux (402
 // immédiat si solde insuffisant), règlement au réel à la fin du tour.
 import { openExecutionBilling } from "@/lib/billing/execution-gate";
@@ -170,8 +171,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
               research: body.research,
               // LIVRAISON MÉDIA DURABLE : origine https RÉSOLUE PAR LA
               // ROUTE (jamais fournie par le client) — les liens de médias
-              // suivent l'hôte réellement navigué (cookie host-only).
-              origineClient: request.nextUrl.origin,
+              // suivent l'hôte RÉELLEMENT navigué (cookie host-only) :
+              // X-Forwarded-Host → Referer → origine vue serveur → canonique.
+              // (Constat production 2026-11-12 : nextUrl.origin vaut
+              // « https://localhost:3000 » derrière nginx — jamais livré.)
+              origineClient: resolveOrigineClient(request),
               onEvent: send,
             });
             void result;

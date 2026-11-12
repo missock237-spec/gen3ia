@@ -97,6 +97,34 @@ export const voiceSpeakTool: ToolDefinition<
     // Défaut INTELLIGENT : la voix suit le personnage décrit dans le texte
     // (féminine/masculine, déterministe) quand aucune voix n'est imposée.
     const voixRésolue = input.voix ?? choisirVoixSelonPersonnage(input.text).voixEspace;
+    // MODE 1 SANS CONFIGURATION (2026-11-12) : la cascade de PAROLE seule
+    // (passerelle configurée → espace public Edge-TTS ANONYME) — la vraie
+    // voix humaine ne dépend plus d'aucun fichier de configuration.
+    const { genererVoixHumaineProfesseurEtPersister } = await import("@/lib/neural/media-service");
+    const renduVoix = await genererVoixHumaineProfesseurEtPersister({
+      userId: context.userId,
+      texte: input.text.trim(),
+      voix: voixRésolue,
+      ...(input.vitesse !== undefined ? { vitesse: input.vitesse } : {}),
+    }).catch(() => null);
+    if (renduVoix) {
+      const { urlDurableAbsolue } = await import("@/lib/media/url-durable");
+      const estPermanent = renduVoix.storage === "r2" && typeof renduVoix.cleStockage === "string";
+      const ecouter =
+        estPermanent && renduVoix.cleStockage ? (urlDurableAbsolue(renduVoix.cleStockage) ?? renduVoix.url) : renduVoix.url;
+      return {
+        ...(estPermanent ? { url: renduVoix.cleStockage } : {}),
+        storage: renduVoix.storage,
+        ...(renduVoix.storage === "inline" ? { audioDataUri: renduVoix.url } : {}),
+        ecouterUrl: ecouter,
+        mimeType: renduVoix.mime === "audio/mpeg" ? "audio/mpeg" : "audio/wav",
+        dureeSecondes: typeof renduVoix.meta.duree === "number" ? renduVoix.meta.duree : 0,
+        moteur: String(renduVoix.meta.moteur ?? "professeur-voix-espace-edge-tts"),
+        note:
+          "Voix humaine RÉELLE (loi CONTRAINTE-ONDES — échafaudage supprimable ; le signal d'onde gen3 prendra le relais après distillation)." +
+          (typeof renduVoix.meta.voix === "string" ? ` Voix utilisée : ${renduVoix.meta.voix}.` : ""),
+      };
+    }
     const rendu = await genererAudioNeuralEtPersister({
       userId: context.userId,
       prompt: input.text.trim(),

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { protectRoute } from "@/lib/security/route-guard";
 import { persistGeneratedBuffer } from "@/lib/media/persist";
+import { resolveOrigineClient } from "@/lib/media/origine-client";
 import { appendMessage } from "@/lib/chat/repository";
 import { createArtifact } from "@/lib/domain/artifacts/repository";
 
@@ -93,11 +94,12 @@ export async function POST(request: NextRequest) {
     // désormais l'URL canonique re-signée (jouable à vie) ; la voix expose
     // aussi le champ structuré audioUrl (lecteur du fil).
     const { urlDurableAbsolue, urlDurableRelative } = await import("@/lib/media/url-durable");
-    // Origine de la REQUÊTE (résolue par la route) : le cookie de session
-    // est host-only — le lien doit suivre l'hôte réellement navigué.
+    // Origine RÉELLEMENT naviguée (résolue par la route : X-Forwarded-Host →
+    // Referer → origine vue serveur → canonique) : le cookie de session est
+    // host-only — jamais un lien localhost derrière proxy (constat prod).
     const lienJouable =
       persisté.storagePath && kind !== "image"
-        ? (urlDurableAbsolue(persisté.storagePath, request.nextUrl.origin) ?? persisté.url)
+        ? (urlDurableAbsolue(persisté.storagePath, resolveOrigineClient(request)) ?? persisté.url)
         : undefined;
     const audioUrlDurable =
       kind === "voice" && persisté.storagePath ? urlDurableRelative(persisté.storagePath) ?? undefined : undefined;

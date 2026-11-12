@@ -168,13 +168,28 @@ describe("chemin VOIX — URL durable dans le texte + champ structuré", () => {
     expect(source).toContain("origineClient: ctx.origineClient");
   });
 
-  it("les routes résolvent l'origine serveur (jamais une entrée client)", () => {
+  it("les routes résolvent l'origine RÉELLEMENT naviguée (jamais une entrée client, jamais un lien localhost)", () => {
     const stream = lire("app/api/workspace/conversations/[conversationId]/messages/stream/route.ts");
-    expect(stream).toContain("origineClient: request.nextUrl.origin");
+    expect(stream).toContain("origineClient: resolveOrigineClient(request)");
     const api = lire("app/api/workspace/conversations/[conversationId]/messages/route.ts");
-    expect(api).toContain("origineClient: request.nextUrl.origin");
+    expect(api).toContain("origineClient: resolveOrigineClient(request)");
     const webgpu = lire("app/api/media/webgpu-complete/route.ts");
-    expect(webgpu).toContain("urlDurableAbsolue(persisté.storagePath, request.nextUrl.origin)");
+    expect(webgpu).toContain("urlDurableAbsolue(persisté.storagePath, resolveOrigineClient(request))");
+    // CONSTAT PRODUCTION (sonde 2026-11-12 : liens « https://localhost:3000 »
+    // derrière nginx) : les quatre routes médias passent par le résolveur
+    // allowlisté — plus AUCUN `request.nextUrl.origin` brut sur les liens.
+    expect(stream).not.toContain("origineClient: request.nextUrl.origin");
+    expect(api).not.toContain("origineClient: request.nextUrl.origin");
+    const repli = lire("app/api/media/webgpu-fallback/route.ts");
+    expect(repli).toContain("resolveOrigineClient(request)");
+  });
+
+  it("le résolveur d'origine est allowlisté et rejette localhost en production", () => {
+    const source = lire("lib/media/origine-client.ts");
+    expect(source).toContain("isAllowedJobHost");
+    expect(source).toContain("x-forwarded-host");
+    expect(source).toContain("referer");
+    expect(source).toContain('process.env.NODE_ENV === "production"');
   });
 
   it("le job vidéo porte l'origine du lanceur (livraison en arrière-plan)", () => {

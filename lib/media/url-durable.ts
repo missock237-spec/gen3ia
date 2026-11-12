@@ -81,8 +81,21 @@ export function urlDurableAbsolue(cle: unknown, origineClient?: string): string 
   if (candidat) {
     try {
       const url = new URL(candidat);
-      const httpsOuLocal = url.protocol === "https:" || url.hostname === "localhost";
-      if (httpsOuLocal && !url.pathname.startsWith("//")) return url.origin + relative;
+      const hoteLocal = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(
+        url.hostname.toLowerCase(),
+      );
+      const httpsOuLocal = url.protocol === "https:" || hoteLocal;
+      // GARDE PRODUCTION (sonde 2026-11-12 : liens « https://localhost:3000 »
+      // dans les messages persistés derrière nginx) : une origine LOCALE n'est
+      // JAMAIS l'origine naviguée par l'utilisateur quand une origine
+      // canonique https existe — elle est écartée au profit du repli
+      // canonique (en dev sans GEN3IA_APP_ORIGIN, localhost reste valable).
+      const canoniqueDisponible = resolveJobOrigin().ok;
+      const candidatAdmis =
+        httpsOuLocal &&
+        !url.pathname.startsWith("//") &&
+        !(hoteLocal && canoniqueDisponible);
+      if (candidatAdmis) return url.origin + relative;
     } catch {
       // origine client invalide → repli canonique ci-dessous.
     }

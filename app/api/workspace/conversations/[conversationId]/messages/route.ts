@@ -13,6 +13,7 @@ import {
   RETRY_AFTER_SECONDES,
 } from "@/lib/security/concurrency";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
+import { resolveOrigineClient } from "@/lib/media/origine-client";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 // Task 153 — paiement par exécution : réservation avant le tour complet
 // (intention + plan + synthèse), règlement au coût réel après.
@@ -131,8 +132,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
             agentId: body.agentId,
             webSearch: body.webSearch,
             timezone: body.timezone,
-            // LIVRAISON MÉDIA DURABLE : origine résolue par la route.
-            origineClient: request.nextUrl.origin,
+            // LIVRAISON MÉDIA DURABLE : origine résolue par la route —
+            // l'hôte RÉELLEMENT navigué (cookie host-only), jamais un lien
+            // localhost derrière proxy (constat production 2026-11-12).
+            origineClient: resolveOrigineClient(request),
           }),
       });
       return NextResponse.json({ ...result, billing });

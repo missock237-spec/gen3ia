@@ -20,8 +20,9 @@ import { lexiqueMultimodal } from "./generation/lexique-serveur";
 import {
   professeurDisponibleAsync,
   professeurImage,
-  professeurVoix,
   professeurVideo,
+  professeurVoix,
+  professeurVoixEspace,
 } from "./professeur-media";
 import type { NeuralSnapshot } from "./generation/snapshot";
 import { persistGeneratedBuffer } from "@/lib/media/persist";
@@ -391,6 +392,13 @@ export async function genererVisuelNeuralEtPersister(params: {
  * moteur de voix n'est disponible — l'appelant choisit alors son propre
  * chemin honnête (cascade WebGPU navigateur, question de clarification…)
  * au lieu de servir une nappe muette déguisée en voix.
+ *
+ * CHEMIN SANS CONFIGURATION (2026-11-12, « voix humaine ultra réaliste sans
+ * que l'utilisateur ait à se soucier de la configuration ») : l'espace
+ * public Edge-TTS est ANONYME — quand aucune configuration professeur
+ * n'existe (env/R2/fichiers), l'appel DIRECT à l'espace reste tenté AVANT
+ * de déclarer la voix indisponible. La parole humaine réelle ne doit JAMAIS
+ * dépendre d'un fichier de configuration.
  */
 export async function genererVoixHumaineProfesseurEtPersister(params: {
   userId: string;
@@ -398,15 +406,11 @@ export async function genererVoixHumaineProfesseurEtPersister(params: {
   voix?: string;
   vitesse?: number;
 }): Promise<MediaNeuralGenere | null> {
-  if (!(await professeurDisponibleAsync())) return null;
-  try {
-    const œuvre = await professeurVoix({
-      texte: params.texte,
-      ...(params.voix !== undefined ? { voix: params.voix } : {}),
-      ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
-    });
+  const persister = async (
+    œuvre: { buffer: Buffer; mime: string; meta: Record<string, unknown> },
+  ): Promise<MediaNeuralGenere> => {
     const extension = œuvre.mime === "audio/mpeg" ? "mp3" : "wav";
-    const cle = cleCacheMedia(params.userId, "audio", `voix|${œuvre.meta.moteur}|${œuvre.meta.voix ?? "défaut"}|${params.vitesse ?? 1}|${params.texte}`, extension);
+    const cle = cleCacheMedia(params.userId, "audio", `voix|${œuvre.meta.moteur ?? "professeur"}|${œuvre.meta.voix ?? "défaut"}|${params.vitesse ?? 1}|${params.texte}`, extension);
     const persiste = await persistGeneratedBuffer({
       userId: params.userId,
       buffer: œuvre.buffer,
@@ -423,10 +427,35 @@ export async function genererVoixHumaineProfesseurEtPersister(params: {
       generationId: `voix-${randomUUID()}`,
       ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
     };
-  } catch (erreur) {
-    console.warn("[m[m[m[media-neural] voix humaine indisponible (cascade complète) :", erreur instanceof Error ? erreur.message : String(erreur));
-    return null;
+  };
+
+  // 1) Chemin CONFIGURÉ : passerelle interne → espace public (roster complet).
+  if (await professeurDisponibleAsync()) {
+    try {
+      const œuvre = await professeurVoix({
+        texte: params.texte,
+        ...(params.voix !== undefined ? { voix: params.voix } : {}),
+        ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+      });
+      return await persister(œuvre);
+    } catch (erreur) {
+      console.warn("[media-neural] voix humaine (chemin configuré) :", erreur instanceof Error ? erreur.message : String(erreur));
+    }
   }
+
+  // 2) ESPACE PUBLIC ANONYME (production, aucune configuration requise) :
+  // voix neuronale Edge réelle — féminine/masculine selon le personnage.
+  try {
+    const œuvre = await professeurVoixEspace({
+      texte: params.texte,
+      ...(params.voix !== undefined ? { voix: params.voix } : {}),
+      ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+    });
+    return await persister(œuvre);
+  } catch (erreur) {
+    console.warn("[media-neural] voix humaine indisponible (cascade complète) :", erreur instanceof Error ? erreur.message : String(erreur));
+  }
+  return null;
 }
 
 /**
