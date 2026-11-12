@@ -682,6 +682,8 @@ export async function professeurVoix(params: {
   texte: string;
   vitesse?: number;
   voix?: string;
+  /** Prosodie Edge-TTS : ajustement de hauteur en Hz (−50..+50, défaut 0). */
+  pitch?: number;
 }): Promise<ŒuvreProfesseur> {
   const config = await configurationProfesseurAsync();
   if (!config) throw new Error("Professeur média absent (configuration manquante).");
@@ -692,7 +694,12 @@ export async function professeurVoix(params: {
   // 1) Voix de l'espace demandée explicitement → espace public D'ABORD.
   if (params.voix && estVoixEspace(params.voix)) {
     try {
-      return await professeurVoixEspace({ texte, ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}), voix: params.voix });
+      return await professeurVoixEspace({
+        texte,
+        ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+        ...(params.pitch !== undefined ? { pitch: params.pitch } : {}),
+        voix: params.voix,
+      });
     } catch (erreur) {
       erreurs.push(`espace voix : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
       // Cette voix n'existe PAS côté passerelle — cascade terminée honnêtement.
@@ -719,6 +726,7 @@ export async function professeurVoix(params: {
     return await professeurVoixEspace({
       texte,
       ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+      ...(params.pitch !== undefined ? { pitch: params.pitch } : {}),
       voix: VOIX_PASSERELLE_VERS_ESPACE[voixPasserelle] ?? VOIX_ESPACE_DEFAUT,
     });
   } catch (erreur) {
@@ -789,19 +797,25 @@ export async function professeurVoixEspace(params: {
   texte: string;
   vitesse?: number;
   voix?: string;
+  /** Prosodie Edge-TTS : ajustement de hauteur en Hz (−50..+50, défaut 0). */
+  pitch?: number;
 }): Promise<ŒuvreProfesseur> {
   const texte = params.texte.trim().slice(0, 2000);
   if (texte.length < 2) throw new Error("Espace voix : texte trop court.");
   const voix = params.voix && estVoixEspace(params.voix) ? params.voix : VOIX_ESPACE_DEFAUT;
   // Edge-TTS : « rate » en pourcentage entier (vitesse 1 → 0 %, borné ±50 %).
   const rate = Math.round(Math.min(1.5, Math.max(0.5, params.vitesse ?? 1) - 1) * 100);
+  // Edge-TTS : « pitch » en Hz entiers (contrat gradio sondé 2026-11-14 :
+  // 4ᵉ paramètre « Pitch Adjustment (Hz) », défaut 0). Prosodie contextuelle
+  // (registre voix) sans jamais dépasser la fenêtre du slider (±50 Hz).
+  const pitch = Math.round(Math.min(50, Math.max(-50, params.pitch ?? 0)));
 
   const lancement = await fetchAvecDélai(
     `${ESPACE_VOIX_NEURONALES}/gradio_api/call/tts_interface`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: [texte, voix, rate, 0] }),
+      body: JSON.stringify({ data: [texte, voix, rate, pitch] }),
     },
     55_000,
   );

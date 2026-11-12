@@ -6,6 +6,7 @@ import { assertPublicHttpUrl } from "@/lib/security/url-safety";
 import { adminDb } from "@/lib/firebase/admin";
 import { assertResourceWrite } from "@/lib/tenants/resource-access";
 import { CHUNKED_COMMIT_SIZE, commitOpsInChunks, type ChunkedWriteOp } from "@/lib/firestore/chunked-commit";
+import { ATTACHMENT_MAX_FILE_BYTES } from "@/lib/files/attachment-policy";
 import { indexKnowledgeDocument } from "./indexer";
 import { markupToText } from "@/lib/content/html-text";
 import { evaluateKnowledgeTriggers } from "./triggers";
@@ -21,9 +22,9 @@ import { pdfToText } from "@/lib/files/pdf-text";
  */
 
 export const KNOWLEDGE_MAX_TEXT_BYTES = 2_000_000;
-// Politique unifiée des pièces jointes : 50 Mo par fichier (canal R2 — le
+// Politique unifiée des pièces jointes : 100 Mo par fichier (canal R2 — le
 // corps serverless ne limite plus l'ingestion depuis le stockage permanent).
-export const KNOWLEDGE_MAX_FILE_BYTES = 50 * 1024 * 1024;
+export const KNOWLEDGE_MAX_FILE_BYTES = ATTACHMENT_MAX_FILE_BYTES;
 export const KNOWLEDGE_MAX_URL_BYTES = 2_000_000;
 
 const TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "csv", "tsv", "json", "log", "xml", "yml", "yaml", "html", "htm"]);
@@ -167,7 +168,7 @@ export async function extractTextFromUpload(file: File): Promise<{ text: string;
 
 /**
  * Ingestion Knowledge depuis le stockage PERMANENT (canal R2 — exigence
- * production : fichiers jusqu'à 50 Mo sans limite de corps serverless).
+ * production : fichiers jusqu'à 100 Mo sans limite de corps serverless).
  * Le cloisonnement (préfixe permanent du propriétaire) est vérifié avant
  * tout téléchargement, puis la même extraction que le canal direct.
  */

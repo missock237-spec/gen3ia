@@ -24,12 +24,12 @@ export const dynamic = "force-dynamic";
  * renvoyée au client ne contient jamais le texte intégral — il reste servi
  * côté serveur au modèle.
  *
- * DEUX canaux (politique unifiée 10 fichiers × 50 Mo) :
+ * DEUX canaux (politique unifiée 15 fichiers × 100 Mo) :
  *  - FormData { file } : canal direct (fichiers ≤ limite de corps serverless) ;
  *  - JSON { path, filename, contentType?, sizeBytes? } : canal R2 — le
  *    fichier a DÉJÀ été téléversé dans le stockage permanent (multipart
  *    présigné, aucune limite de corps) ; le serveur le télécharge depuis R2
- *    puis le convertit. Les 50 Mo par fichier passent réellement.
+ *    puis le convertit. Les 100 Mo par fichier passent réellement.
  */
 export async function POST(request: NextRequest) {
   try {

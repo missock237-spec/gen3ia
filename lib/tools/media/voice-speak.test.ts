@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { dureeDuTexte, voiceSpeakTool } from "./voice-speak";
+import {
+  dureeDuTexte,
+  deduireRegistreVoix,
+  PROSODIE_PAR_REGISTRE,
+  REGISTRES_VOIX,
+  voiceSpeakTool,
+} from "./voice-speak";
 import { VOIX_PROFESSEUR } from "@/lib/neural/professeur-media";
 
 /**
@@ -72,5 +78,78 @@ describe("voice.speak — outil de synthèse vocale parlée", () => {
     expect(valide.text).toBe("Salut la plateforme");
     expect(valide.voix).toBe("chuichui");
     expect(valide.vitesse).toBe(1.2);
+  });
+});
+
+describe("voice.speak — registre vocal contextuel (Task 2-a AUDIO)", () => {
+  it("annonce la prosodie CONTEXTUELLE (registres) dans la description du tool", () => {
+    const description = voiceSpeakTool.description.toLowerCase();
+    expect(description).toContain("prosodie contextuelle");
+    expect(description).toContain("registre");
+    expect(description).toContain("rate/pitch");
+  });
+
+  it("détecte les cinq registres documentés depuis le contenu du texte", () => {
+    // annonceur (registre du SUPPORT — priorité 1)
+    expect(deduireRegistreVoix("Écoutez cette annonce : le lancement commence.").registre).toBe("annonceur");
+    expect(deduireRegistreVoix("Une publicité pour notre promotion d'été.").registre).toBe("annonceur");
+    // calme (humeur)
+    expect(deduireRegistreVoix("Installez-vous… séance de méditation guidée.").registre).toBe("calme");
+    expect(deduireRegistreVoix("Respirez profondément, laissez-vous aller vers le sommeil.").registre).toBe("calme");
+    // enthousiaste
+    expect(deduireRegistreVoix("Félicitations ! Super travail de toute l'équipe.").registre).toBe("enthousiaste");
+    // narration (forme)
+    expect(deduireRegistreVoix("Il était une fois… voici le premier chapitre de cette histoire.").registre).toBe("narration");
+    expect(deduireRegistreVoix("Documentaire sur les légendes bretonnes.").registre).toBe("narration");
+    // professionnel (défaut)
+    expect(deduireRegistreVoix("Voici le rapport technique du trimestre, avec le résumé des points clés.").registre).toBe("professionnel");
+    expect(deduireRegistreVoix("").registre).toBe("professionnel");
+  });
+
+  it("la correspondance registre → prosodie Edge-TTS est bornée par les sliders", () => {
+    expect([...REGISTRES_VOIX]).toEqual([
+      "annonceur",
+      "calme",
+      "enthousiaste",
+      "narration",
+      "professionnel",
+    ]);
+    for (const registre of REGISTRES_VOIX) {
+      const p = PROSODIE_PAR_REGISTRE[registre];
+      expect(p.ratePourcent).toBeGreaterThanOrEqual(-50);
+      expect(p.ratePourcent).toBeLessThanOrEqual(50);
+      expect(p.pitchHz).toBeGreaterThanOrEqual(-50);
+      expect(p.pitchHz).toBeLessThanOrEqual(50);
+      expect(p.vitesse).toBeGreaterThanOrEqual(0.5);
+      expect(p.vitesse).toBeLessThanOrEqual(1.5);
+      expect(p.quand.length).toBeGreaterThan(10); // documentation lisible
+    }
+  });
+
+  it("valeurs documentées : calme −22 %/−3 Hz, enthousiaste +15 %/+5 Hz, neutre 0/0", () => {
+    expect(PROSODIE_PAR_REGISTRE.calme.ratePourcent).toBe(-22);
+    expect(PROSODIE_PAR_REGISTRE.calme.pitchHz).toBe(-3);
+    expect(PROSODIE_PAR_REGISTRE.enthousiaste.ratePourcent).toBe(15);
+    expect(PROSODIE_PAR_REGISTRE.enthousiaste.pitchHz).toBe(5);
+    expect(PROSODIE_PAR_REGISTRE.professionnel.ratePourcent).toBe(0);
+    expect(PROSODIE_PAR_REGISTRE.professionnel.pitchHz).toBe(0);
+    expect(PROSODIE_PAR_REGISTRE.narration.vitesse).toBeCloseTo(0.92, 5);
+    expect(PROSODIE_PAR_REGISTRE.annonceur.vitesse).toBeCloseTo(1.08, 5);
+  });
+
+  it("priorité déterministe : l'annonceur gagne sur l'humeur du texte", () => {
+    // « annonce » (support) précède « calme » (humeur) dans l'ordre de détection.
+    expect(deduireRegistreVoix("Annonce calmement récitée pour le nouveau produit.").registre).toBe("annonceur");
+    // Même appel, même résultat — déduction déterministe (zéro LLM).
+    const texte = "Séance de relaxation guidée.";
+    expect(deduireRegistreVoix(texte)).toEqual(deduireRegistreVoix(texte));
+  });
+
+  it("le schéma accepte un registre imposé du roster et refuse les autres", () => {
+    const impose = voiceSpeakTool.inputSchema.parse({ text: "Bonjour", registre: "calme" });
+    expect(impose.registre).toBe("calme");
+    expect(() =>
+      voiceSpeakTool.inputSchema.parse({ text: "Bonjour", registre: "chuchotement" }),
+    ).toThrow();
   });
 });

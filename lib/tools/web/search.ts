@@ -4,9 +4,14 @@ import { markupToText } from "@/lib/content/html-text";
 // MOTEUR DE RECHERCHE WEB TEMPS RÉEL gen3ia (architecture propriétaire
 // 2026-11-11) : agrégation multi-moteurs DuckDuckGo + Bing + SearXNG,
 // dédoublonnage URL/contenu, vérification des sources. Le tool historique
-// garde son interface (SearchResponse) mais sa cascade passe par le moteur
-// complet — le diagnostic d'échecs est porté dans la sortie.
+// garde sa cascade, mais sa SORTIE UTILISATEUR est devenue un RAPPORT
+// détaillé et autonome (demande propriétaire : l'utilisateur ne voit plus
+// les sources) — les résultats bruts restent dans le champ interne
+// `__interne.resultats`, retiré de toute sérialisation (voir toJSON).
 import { agregerMoteurs } from "@/lib/recherche-web/moteurs/agregateur";
+import {
+  construirRapportRecherche,
+} from "@/lib/recherche-web/rapport";
 
 import type {
   ToolDefinition,
@@ -34,13 +39,75 @@ interface SearchResult {
   source?: string;
 }
 
-interface SearchResponse {
-  results: SearchResult[];
+/** Sortie UTILISATEUR du tool web.search : un rapport autonome.
+ *  AUCUNE liste de résultats, AUCUNE URL, AUCUNE mention de sources —
+ *  le rapport se suffit à lui-même (titres thématiques, points clés,
+ *  nuances, synthèse). Les résultats bruts ne sortent QUE dans le champ
+ *  interne `__interne.resultats`, et uniquement pour le moteur gen3 :
+ *  ils peuvent être cités À L'ORAL si l'utilisateur les demande
+ *  explicitement, jamais en liste automatique. */
+export interface SortieRechercheWebTool {
+  /** Rapport détaillé en français (sections thématiques, points clés,
+   *  nuances, synthèse) — sans URL ni nom de domaine. */
+  rapport: string;
+  /** Nombre de sections thématiques détectées dans le rapport. */
+  sections: number;
+  /** Fiabilité d'ensemble selon le volume recueilli. */
+  fiabilite: "haute" | "moyenne" | "basse";
   /** Diagnostic honnête du tour (moteurs opérationnels / en échec). */
   diagnostic?: {
     moteursOperatifs: string[];
     moteursEnEchec: Array<{ moteur: string; raison: string }>;
     doublonsRetires: number;
+  };
+}
+
+interface SearchResponse extends SortieRechercheWebTool {
+  /** Résultats bruts (titre/URL/extrait) réservés AU MOTEUR gen3 : ils
+   *  alimentent le canal interne (pont connaissances, synthèses de plan)
+   *  et ne sont JAMAIS sérialisés vers l'utilisateur — voir toJSON. */
+  __interne: { resultats: SearchResult[] };
+  /** Sérialisation publique : timeline, streaming, persistance et prompts
+   *  ne reçoivent QUE le rapport — les URL brutes ne fuient nulle part. */
+  toJSON(): SortieRechercheWebTool;
+}
+
+/** Sortie BRUTE intermédiaire des fournisseurs (provider cléé, Wikipédia,
+ *  DuckDuckGo direct) : uniquement consommée par reponseDepuisResultats,
+ *  jamais exposée telle quelle au moteur conversationnel. */
+interface ResultatsBrutsFournisseur {
+  results: SearchResult[];
+}
+
+/** Assemble la réponse finale : rapport utilisateur + résultats bruts
+ *  internes (jamais sérialisés) + diagnostic honnête. */
+function reponseDepuisResultats(
+  query: string,
+  resultats: SearchResult[],
+  diagnostic?: SortieRechercheWebTool["diagnostic"],
+): SearchResponse {
+  const rapport = construirRapportRecherche(
+    query,
+    resultats.map((resultat) => ({
+      titre: resultat.title,
+      extrait: resultat.snippet,
+      publieLe: resultat.publishedAt,
+    })),
+  );
+  return {
+    rapport: rapport.texte,
+    sections: rapport.sections,
+    fiabilite: rapport.fiabilite,
+    ...(diagnostic ? { diagnostic } : {}),
+    __interne: { resultats },
+    toJSON() {
+      return {
+        rapport: rapport.texte,
+        sections: rapport.sections,
+        fiabilite: rapport.fiabilite,
+        ...(diagnostic ? { diagnostic } : {}),
+      };
+    },
   };
 }
 
@@ -51,7 +118,6 @@ async function executeSearch(
 ): Promise<SearchResponse> {
   const provider =
     process.env.SEARCH_PROVIDER;
-
   const apiKey =
     process.env.SEARCH_API_KEY;
 
@@ -63,7 +129,10 @@ async function executeSearch(
   // L'agent ne rend jamais la main avec un échec sec.
   if (provider && apiKey) {
     try {
-      return await executeSearchWithProvider(provider, apiKey, input);
+      const brutProvider = await executeSearchWithProvider(provider, apiKey, input);
+      if (brutProvider.results.length > 0) {
+        return reponseDepuisResultats(input.query, brutProvider.results);
+      }
     } catch {
       /* repli ci-dessous */
     }
@@ -78,32 +147,38 @@ async function executeSearch(
       maxResults: input.maxResults,
     });
     if (agregation.resultats.length > 0) {
-      return {
-        results: agregation.resultats.map((resultat) => ({
+      return reponseDepuisResultats(
+        input.query,
+        agregation.resultats.map((resultat) => ({
           title: resultat.titre,
           url: resultat.url,
           snippet: resultat.extrait,
           publishedAt: resultat.datePublication ?? resultat.publieLe,
           source: resultat.moteur,
         })),
-        diagnostic: {
+        {
           moteursOperatifs: agregation.diagnostic.moteursOperatifs,
           moteursEnEchec: agregation.diagnostic.moteursEnEchec,
           doublonsRetires: agregation.diagnostic.doublonsRetires,
         },
-      };
+      );
     }
   } catch {
     /* repli ci-dessous */
   }
-  return searchWikipedia(input.query, input.maxResults);
+  // Cascade finale : Wikipédia direct (source toujours disponible, sans clé).
+  const repliWikipedia = await searchWikipedia(input.query, input.maxResults);
+  if (repliWikipedia.results.length === 0) {
+    throw new Error("Aucune source de recherche disponible.");
+  }
+  return reponseDepuisResultats(input.query, repliWikipedia.results);
 }
 
 async function executeSearchWithProvider(
   provider: string,
   apiKey: string,
   input: z.infer<typeof SearchInput>,
-): Promise<SearchResponse> {
+): Promise<ResultatsBrutsFournisseur> {
   switch (provider) {
     case "tavily":
       return searchTavily(
@@ -137,7 +212,7 @@ async function searchSerpApi(
   query: string,
   maxResults: number,
   apiKey: string,
-): Promise<SearchResponse> {
+): Promise<ResultatsBrutsFournisseur> {
   const params = new URLSearchParams({
     engine: "google",
     q: query,
@@ -198,7 +273,7 @@ async function searchTavily(
   query: string,
   maxResults: number,
   apiKey: string,
-): Promise<SearchResponse> {
+): Promise<ResultatsBrutsFournisseur> {
   const response =
     await fetch(
       "https://api.tavily.com/search",
@@ -270,7 +345,7 @@ async function searchSerper(
   query: string,
   maxResults: number,
   apiKey: string,
-): Promise<SearchResponse> {
+): Promise<ResultatsBrutsFournisseur> {
   const response =
     await fetch(
       "https://google.serper.dev/search",
@@ -346,7 +421,7 @@ export const webSearchTool:
       "Web Search",
 
     description:
-      "Search the public Internet in real time (moteur cléé si configuré, sinon DuckDuckGo puis Wikipédia).",
+      "Recherche web temps réel. Livre un RAPPORT détaillé et autonome (rapport, sections, fiabilité) : ne produis JAMAIS une liste de sources ni d'URLs à partir de cette sortie ; si l'utilisateur demande explicitement les liens, cite-les oralement depuis __interne.resultats.",
 
     category:
       "web",
@@ -362,8 +437,10 @@ export const webSearchTool:
   };
 
 /**
- * Standalone search helper for server modules (research engine, planners)
- * that need raw results without going through the tool registry.
+ * Recherche BRUTE pour les modules serveur (moteurs de recherche internes,
+ * planificateurs) qui ont besoin des résultats crus sans passer par le
+ * registre d'outils. Usage MOTEUR : ne jamais afficher ces résultats en
+ * liste automatique — passer par webSearchTool (rapport) pour l'utilisateur.
  */
 export async function searchWeb(
   query: string,
@@ -375,7 +452,7 @@ export async function searchWeb(
   const response =
     await executeSearch(parsed);
 
-  return response.results;
+  return response.__interne.resultats;
 }
 
 /* ------------------------------------------------------------------ */
@@ -394,7 +471,7 @@ const BROWSER_UA =
 export async function searchDuckDuckGo(
   query: string,
   maxResults = 8,
-): Promise<SearchResponse> {
+): Promise<ResultatsBrutsFournisseur> {
   const params = new URLSearchParams({ q: query });
   const response = await fetch(`https://html.duckduckgo.com/html/?${params.toString()}`, {
     headers: {
@@ -459,7 +536,7 @@ function stripHtml(html: string): string {
 export async function searchWikipedia(
   query: string,
   maxResults = 8,
-): Promise<SearchResponse> {
+): Promise<ResultatsBrutsFournisseur> {
   for (const lang of ["fr", "en"]) {
     try {
       const params = new URLSearchParams({

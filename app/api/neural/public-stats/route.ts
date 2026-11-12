@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getNeuralRuntime } from "@/lib/neural/runtime";
+import { cacheReponses, cleCache } from "@/lib/perf/cache-reponses";
 
 /**
  * STATISTIQUES PUBLIQUES du moteur neuronal — métriques ANONYMES du cerveau
@@ -11,48 +12,73 @@ import { getNeuralRuntime } from "@/lib/neural/runtime";
  */
 export const dynamic = "force-dynamic";
 
+/**
+ * CACHE HOT PATH (Task 9-a) — vitrine PUBLIQUE et 100 % ANONYME : uniquement
+ * des compteurs structurels du moteur (neurones, synapses, cycles, santé)
+ * et l'état d'auto-apprentissage PLATEFORME (lireEtatAuto = lecture fichier,
+ * hors utilisateur). Aucune donnée personnelle, aucune variante par compte
+ * : le payload est identique pour tous les visiteurs → cache global LRU +
+ * TTL + single-flight (les rafales de visiteurs concurrents partagent UNE
+ * construction). TTL 10 s : volontairement court pour rester proche du
+ * temps réel, tout en absorbant les pics de sondage ; l'en-tête navigateur
+ * (max-age=30) reste inchangé — ce cache serveur est un ÉTAGE INTERNE
+ * invisible du client. Version `v1` : bump = invalidation instantanée.
+ */
+const CLE_STATS_PUBLIQUES = cleCache("stats-publiques-neural", "v1");
+const TTL_STATS_PUBLIQUES_MS = 10_000;
+
+/** Construit le payload complet (hors route — appelé via le cache). */
+async function construirePayloadPublic() {
+  const runtime = getNeuralRuntime();
+  const stats = runtime.reseau.getStats();
+
+  return {
+    moteur: "gen3-snn-v1",
+    cerveau: {
+      nbNeurones: stats.nbNeurones,
+      nbSynapses: stats.nbSynapses,
+      poidsMoyen: Number(stats.poidsMoyen.toFixed(3)),
+      histogramme: stats.histogramme,
+    },
+    sante: {
+      cyclesTotaux: runtime.noyau.metriquesSante.cyclesTotaux,
+      energieMoyenne: Number(runtime.noyau.metriquesSante.energieMoyenne.toFixed(3)),
+      indiceHomeostasie: runtime.noyau.metriquesSante.indiceHomeostasie,
+      mode: runtime.noyau.metriquesSante.modeActuel,
+    },
+    langage: {
+      paires: runtime.cortex.nbPaires,
+      vocabulaire: runtime.cortex.tailleVocabulaire,
+      themes: runtime.cortex.themes().length,
+      pairesPersonnalisees: runtime.cortex.compterPersonnalisees(),
+    },
+    evolution: {
+      echangesObserves: runtime.evolution.metriques().echangesObserves,
+      echangesConsolides: runtime.evolution.metriques().echangesConsolides,
+      cyclesConsolidation: runtime.evolution.metriques().cyclesConsolidation,
+      apprentissageContinu: true,
+    },
+    entraînementUtilisateurs: {
+      studio: "Gen entraîne les modèles fournis par les utilisateurs",
+      moteurNatif: "gen3-native (CPU local, apprentissage réel)",
+    },
+    cortexV2: blocCortexV2(runtime),
+    autoApprentissage: await blocAutoApprentissagePublic(),
+    iaExterne: "aucune — moteur 100 % local",
+  };
+}
+
 export async function GET() {
   try {
-    const runtime = getNeuralRuntime();
-    const stats = runtime.reseau.getStats();
-
-    return NextResponse.json(
-      {
-        moteur: "gen3-snn-v1",
-        cerveau: {
-          nbNeurones: stats.nbNeurones,
-          nbSynapses: stats.nbSynapses,
-          poidsMoyen: Number(stats.poidsMoyen.toFixed(3)),
-          histogramme: stats.histogramme,
-        },
-        sante: {
-          cyclesTotaux: runtime.noyau.metriquesSante.cyclesTotaux,
-          energieMoyenne: Number(runtime.noyau.metriquesSante.energieMoyenne.toFixed(3)),
-          indiceHomeostasie: runtime.noyau.metriquesSante.indiceHomeostasie,
-          mode: runtime.noyau.metriquesSante.modeActuel,
-        },
-        langage: {
-          paires: runtime.cortex.nbPaires,
-          vocabulaire: runtime.cortex.tailleVocabulaire,
-          themes: runtime.cortex.themes().length,
-          pairesPersonnalisees: runtime.cortex.compterPersonnalisees(),
-        },
-        evolution: {
-          echangesObserves: runtime.evolution.metriques().echangesObserves,
-          echangesConsolides: runtime.evolution.metriques().echangesConsolides,
-          cyclesConsolidation: runtime.evolution.metriques().cyclesConsolidation,
-          apprentissageContinu: true,
-        },
-        entraînementUtilisateurs: {
-          studio: "Gen entraîne les modèles fournis par les utilisateurs",
-          moteurNatif: "gen3-native (CPU local, apprentissage réel)",
-        },
-        cortexV2: blocCortexV2(runtime),
-        autoApprentissage: await blocAutoApprentissagePublic(),
-        iaExterne: "aucune — moteur 100 % local",
-      },
-      { headers: { "cache-control": "public, max-age=30, stale-while-revalidate=60" } },
+    const stats = await cacheReponses.obtenirOuCalculer(
+      CLE_STATS_PUBLIQUES,
+      TTL_STATS_PUBLIQUES_MS,
+      construirePayloadPublic,
     );
+
+    return NextResponse.json(stats, {
+      headers: { "cache-control": "public, max-age=30, stale-while-revalidate=60" },
+    });
   } catch {
     // Vitrine publique : jamais d'erreur visible — le fallback honnête
     // déclare simplement le moteur sans chiffres.

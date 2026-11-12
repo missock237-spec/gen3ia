@@ -64,7 +64,31 @@ export type SourceLangage =
   | "vocation"
   | "compartiment_math"
   | "compartiment_monde"
-  | "compartiment_terminal";
+  | "compartiment_terminal"
+  | "memoire_utilisateur"
+  | "memoire_dev_web";
+
+/** Résultat de consultation de la mémoire utilisateur (Studio) — le texte
+ * servi et son score d'appariement réels. */
+export interface ReponseMemoireUtilisateurMoteur {
+  readonly texte: string;
+  /** Thème de traçabilité (ex. "studio:botanique"). */
+  readonly theme?: string;
+  /** Score d'appariement réel de la consultation (0..1). */
+  readonly score?: number;
+}
+
+/**
+ * STUDIO D'ENTRAÎNEMENT — CONSULTATION DE LA MÉMOIRE UTILISATEUR (point
+ * d'injection du savoir entraîné dans les réponses du cerveau) : implémenté
+ * par lib/studio/memoire-utilisateur.ts (consulterMemoireUtilisateur) et
+ * câblé par lib/neural/runtime.ts. Signature découplée (pas d'import
+ * direct) : absent (tests, intégrations minimales) → comportement inchangé.
+ */
+export type ConsultationMemoireUtilisateur = (
+  message: string,
+  userId: string,
+) => Promise<ReponseMemoireUtilisateurMoteur | null>;
 
 /** Composition finale : texte émis + provenance (traçabilité). */
 export interface CompositionReponse {
@@ -290,6 +314,13 @@ export class NeuralEngine {
      * (tests existants) → la chaîne historique tourne à l'identique.
      */
     private readonly compartiments?: CompartimentsGen3,
+    /**
+     * STUDIO D'ENTRAÎNEMENT — mémoire de domaine PAR UTILISATEUR (câblée par
+     * le runtime) : consultée à CHAQUE réponse avec l'userId du compte —
+     * l'IA entraînée par l'utilisateur répond depuis SA connaissance ingérée
+     * (textes, datasets, URLs du Studio). Absent → chaîne historique.
+     */
+    private readonly memoireUtilisateur?: ConsultationMemoireUtilisateur,
   ) {}
 
   /**
@@ -491,6 +522,11 @@ export class NeuralEngine {
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
+      // STUDIO D'ENTRAÎNEMENT — MÉMOIRE UTILISATEUR : l'IA entraînée répond
+      // depuis la connaissance ingérée du compte (domaines du Studio), AVANT
+      // les organes génériques — c'est le point d'injection du savoir
+      // fourni par l'utilisateur (évalué avant/après par le pipeline).
+      (await this.compositionMemoireUtilisateur(messageUtilisateur, options)) ??
       // it.114 — COMPARTIMENTS CALCULABLES : la demande de calcul, de
       // simulation ou d'exécution reçoit une réponse CALCULÉE par l'organe
       // du cerveau concerné (preuve, pas récitation) — avant le corpus.
@@ -501,6 +537,10 @@ export class NeuralEngine {
       // un appariement fort répond AVANT le pont vocation (le raisonnement
       // appris bat l'ancrage générique — mesure : appariement exact 5,67).
       this.compositionCorpusPrioritaire(messageUtilisateur) ??
+      // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel des unités ingérées au boot
+      // (seuil de pertinence interne) — APRÈS corpus prioritaire, AVANT le
+      // pont vocation (voir compositionMemoireDevWeb).
+      this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
     this.memoriser(messageUtilisateur, composition.texte, memoire);
@@ -616,12 +656,14 @@ export class NeuralEngine {
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
+      // STUDIO D'ENTRAÎNEMENT — MÉMOIRE UTILISATEUR (même règle que generate).
+      (await this.compositionMemoireUtilisateur(messageUtilisateur, options)) ??
       // it.114 — COMPARTIMENTS CALCULABLES (même règle que generate).
       this.compositionCompartiments(messageUtilisateur) ??
-      // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT : une paire apprise avec
-      // un appariement fort répond AVANT le pont vocation (le raisonnement
-      // appris bat l'ancrage générique — mesure : appariement exact 5,67).
+      // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT (même règle que generate).
       this.compositionCorpusPrioritaire(messageUtilisateur) ??
+      // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel borné (voir compositionMemoireDevWeb).
+      this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
 
@@ -707,10 +749,14 @@ export class NeuralEngine {
     // que les deux chemins principaux (génération et flux).
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
+      // STUDIO D'ENTRAÎNEMENT — MÉMOIRE UTILISATEUR (même règle que generate).
+      (await this.compositionMemoireUtilisateur(messageUtilisateur, options)) ??
       // it.114 — COMPARTIMENTS CALCULABLES (même règle que generate).
       this.compositionCompartiments(messageUtilisateur) ??
       // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT (même règle que generate).
       this.compositionCorpusPrioritaire(messageUtilisateur) ??
+      // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel borné (voir compositionMemoireDevWeb).
+      this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
 
@@ -762,6 +808,36 @@ export class NeuralEngine {
   }
 
   /**
+   * STUDIO D'ENTRAÎNEMENT — COMPOSITION DEPUIS LA MÉMOIRE UTILISATEUR :
+   * consulte la mémoire de domaine du COMPTE (metadata.userId) sur le
+   * message brut. Sous le seuil ou sans compte : null — la chaîne normale
+   * reprend la main, inchangée. Toute panne de la consultation dégrade en
+   * null (jamais de conversation cassée par une mémoire).
+   */
+  private async compositionMemoireUtilisateur(
+    messageUtilisateur: string,
+    options: AIRequest,
+  ): Promise<CompositionReponse | null> {
+    if (!this.memoireUtilisateur || messageUtilisateur.trim().length === 0) return null;
+    const userId =
+      typeof options.metadata?.userId === "string" ? options.metadata.userId : "";
+    if (userId.length === 0) return null;
+    try {
+      const reponse = await this.memoireUtilisateur(messageUtilisateur, userId);
+      if (!reponse || reponse.texte.trim().length === 0) return null;
+      return {
+        texte: reponse.texte,
+        source: "memoire_utilisateur",
+        theme: reponse.theme,
+        scoreAppariement: reponse.score,
+      };
+    } catch {
+      // Une mémoire indisponible ne doit jamais casser la conversation.
+      return null;
+    }
+  }
+
+  /**
    * it.114 — COMPOSITION PAR COMPARTIMENTS CALCULABLES : l'orchestrateur de
    * raisonnement analyse la requête (calcul / simulation / exécution /
    * connaissance), sollicite l'organe du cerveau concerné (math, monde
@@ -779,6 +855,27 @@ export class NeuralEngine {
       return { texte: resultat.texte, source: resultat.source };
     } catch {
       // Un compartiment en échec ne doit jamais casser la conversation.
+      return null;
+    }
+  }
+
+  /**
+   * DÉVELOPPEMENT WEB/DNS — MÉMOIRE COMMISE (demande propriétaire 2026-11-13 :
+   * « entraîne gen3 sur le développement web et le DNS ») : consulte l'annexe
+   * dev web ingérée au démarrage du runtime (2 441 unités). Le rappel est
+   * DÉJÀ borné par un seuil de pertinence (jaccard + contenance, hors sujet →
+   * null) : la chaîne historique répond EXACTEMENT comme avant — cette étape
+   * ne peut qu'augmenter le service, jamais court-circuiter une réponse
+   * plus forte (elle est placée APRÈS corpus prioritaire).
+   */
+  private compositionMemoireDevWeb(messageUtilisateur: string): CompositionReponse | null {
+    if (!this.compartiments) return null;
+    try {
+      const texte = this.compartiments.memoireDomaines?.repondreIngestion(messageUtilisateur) ?? null;
+      if (texte === null || texte.length < 40) return null;
+      return { texte, source: "memoire_dev_web", theme: "developpement-web" };
+    } catch {
+      // Une annexe mémoire en échec ne doit jamais casser la conversation.
       return null;
     }
   }
@@ -1121,6 +1218,8 @@ export class NeuralEngine {
       this.compositionCompartiments(messageUtilisateur) ??
       // it.85 — CORPUS PRIORITAIRE SUR MATCH FORT (même règle que generate).
       this.compositionCorpusPrioritaire(messageUtilisateur) ??
+      // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel borné (voir compositionMemoireDevWeb).
+      this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur);
     if (!composition) return null;
 

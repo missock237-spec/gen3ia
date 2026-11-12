@@ -1,0 +1,103 @@
+/* ============================================================
+   INDICATEUR DE RÉFLEXION — CSS MODULE (import local au
+   composant indicateur-reflexion.tsx : aucune collision avec
+   nova-chat.css).
+   Identité Aurora OS : tokens --g3-* uniquement (thèmes
+   clair/sombre, cf. app/globals.css § tokens). Cycles d'animation
+   1,4 s / 1,8 s (< 2 s) ; mouvement réduit respecté.
+   ============================================================ */
+
+.conteneur {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+/* Pastille de points : fond souple + halo respirant (radial doux,
+   cycle 1,8 s — jamais envahissant, jamais bloquant). */
+.halo {
+  position: relative;
+  display: inline-flex;
+  gap: 5px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: var(--g3-primary-soft);
+  box-shadow: 0 0 0 1px var(--g3-primary-border);
+}
+
+.halo::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  background: radial-gradient(closest-side, var(--g3-primary-soft), transparent);
+  animation: halo-respire 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Points qui pulsent en cascade (cycle 1,4 s + décalages 0,18 s). */
+.point {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--g3-primary-strong);
+}
+
+.point:nth-child(1) {
+  animation: point-pulse 1.4s ease-in-out infinite;
+}
+
+.point:nth-child(2) {
+  animation: point-pulse 1.4s ease-in-out 0.18s infinite;
+}
+
+.point:nth-child(3) {
+  animation: point-pulse 1.4s ease-in-out 0.36s infinite;
+}
+
+@keyframes point-pulse {
+  0%,
+  70%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes halo-respire {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+/* Libellé vivant : la phase RÉELLE du flux (annonce polie). */
+.libelle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--g3-text-secondary);
+  letter-spacing: 0.01em;
+}
+
+/* ACCESSIBILITÉ — mouvement réduit : aucun cycle animé, les points
+   restent visibles (opacity figée), le libellé ne bouge plus. */
+@media (prefers-reduced-motion: reduce) {
+  .point,
+  .halo::before {
+    animation: none;
+  }
+
+  .point {
+    opacity: 0.85;
+  }
+}

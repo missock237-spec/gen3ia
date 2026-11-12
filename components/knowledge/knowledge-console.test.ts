@@ -37,7 +37,7 @@ describe("Knowledge Spaces — espace documents (câblage /api/knowledge, it.49)
   it("la porte knowledge est consommée dans ses trois modes (liste, ingestion, suppression)", () => {
     // GET — liste scopée par projet.
     expect(consoleData).toContain("`/api/knowledge?projectId=${projectId}`");
-    // POST multipart — ingestion fichiers (≤ 10 par lot, côté porte).
+    // POST multipart — ingestion fichiers (≤ 15 par lot, côté porte).
     expect(consoleData).toContain('authFetch("/api/knowledge", { method: "POST", body: form }');
     // POST JSON — ingestion par URL (garde SSRF côté serveur).
     expect(consoleData).toContain('body: JSON.stringify({ url: url.trim(), projectId: selectedProject })');

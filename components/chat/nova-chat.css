@@ -616,18 +616,85 @@
   background: #000;
 }
 
-.nova-media-barre {
-  height: 6px;
-  border-radius: 999px;
+/* CARRÉ DE PROGRESSION VIDÉO (2026-11-13, demande propriétaire : plus de
+ * barre horizontale — un carré affichant le POURCENTAGE en grand, qui se
+ * remplit du bas comme un niveau). Mêmes variables de thème que l'ancienne
+ * barre : --g3-border (fond/cadre du carré) et --g3-accent (niveau).
+ *
+ * Contraste du pourcentage calculé côté composant via [data-contraste] :
+ *   - < 55 % de remplissage → texte blanc sur pastille sombre translucide ;
+ *   - ≥ 55 % → texte sombre sur pastille claire translucide.
+ * Pastilles à teintes FIXES volontaires (hors tokens) : elles recouvrent
+ * le niveau d'accent, identique dans les deux thèmes.
+ * Aucune pulsation : seul le niveau monte (transition height), désactivée
+ * sous prefers-reduced-motion. */
+.nova-media-carte.nova-media-carte-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nova-media-carre {
+  position: relative;
+  flex: 0 0 auto;
+  width: 88px;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  border: 1px solid var(--g3-border-strong);
   background: var(--g3-border);
   overflow: hidden;
 }
 
-.nova-media-barre-remplie {
-  height: 100%;
-  border-radius: 999px;
+/* Niveau : remplit le carré DU BAS vers le haut, proportionnel au %. */
+.nova-media-carre-niveau {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 0%;
   background: var(--g3-accent, #6c5ce7);
-  transition: width 1.2s ease;
+  transition: height 1.2s ease;
+}
+
+/* Pourcentage affiché EN GRAND dans le carré, par-dessus le niveau. */
+.nova-media-carre-pourcentage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.nova-media-carre[data-contraste="sombre"] .nova-media-carre-pourcentage {
+  color: #ffffff;
+  background: rgba(5, 6, 12, 0.46);
+}
+
+.nova-media-carre[data-contraste="clair"] .nova-media-carre-pourcentage {
+  color: #101b26;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+/* Texte sondes « Production vidéo — … (NN %) » à côté du carré : le
+ * figcaption (dernier enfant de <figure>) devient fluide dans la ligne
+ * flex — marge basse de .nova-media-carte figcaption neutralisée. */
+.nova-media-carte.nova-media-carte-progress figcaption {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+  /* Mobile : carré compact ~72 px, pourcentage légèrement réduit. */
+  .nova-media-carre { width: 72px; }
+  .nova-media-carre-pourcentage { font-size: 0.95rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-media-carre-niveau { transition: none; }
 }
 
 

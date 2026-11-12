@@ -14,7 +14,7 @@ export type StorageUsageView = { usedBytes: number; quotaBytes: number; fileCoun
 
 /**
  * Page dédiée « Mémoire permanente » : les souvenirs texte (clé/valeur)
- * et les documents réellement stockés (100 Mo max/fichier, 10 fichiers
+ * et les documents réellement stockés (100 Mo max/fichier, 15 fichiers
  * par lot) que les agents retrouveront lors de leurs missions.
  */
 export function MemoryWorkspace() {
@@ -79,7 +79,7 @@ export function MemoryWorkspace() {
             <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight md:text-4xl">Mémoire permanente</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--g3-muted)] md:text-base">
               Tout ce que vos agents doivent retenir : informations clés et documents réellement stockés
-              jusqu&apos;à <strong>100 Mo par fichier</strong>, par lots de <strong>10 fichiers</strong>. Secrets et
+              jusqu&apos;à <strong>100 Mo par fichier</strong>, par lots de <strong>15 fichiers</strong>. Secrets et
               mots de passe y restent interdits.
             </p>
           </div>

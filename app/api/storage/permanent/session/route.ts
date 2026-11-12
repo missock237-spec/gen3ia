@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { protectRoute } from "@/lib/security/route-guard";
-import { validateUploadBatch } from "@/lib/storage/upload-policy";
+import { MAX_FILES_PER_BATCH, validateUploadBatch } from "@/lib/storage/upload-policy";
 import { abortUpload, cleanupExpiredSessions, createUploadSessions, getUserStorageUsage } from "@/lib/storage/permanent-user-storage";
 import { errorStatus } from "@/lib/security/http-errors";
 
@@ -14,7 +14,9 @@ const IntentSchema = z.object({
   sizeBytes: z.number().int().positive(),
 });
 
-const CreateSchema = z.object({ files: z.array(IntentSchema).min(1).max(10) });
+// Borne de lot DERIVÉE de la politique (MAX_FILES_PER_BATCH = 15) : la route
+// ne peut plus diverger de la validation métier validateUploadBatch.
+const CreateSchema = z.object({ files: z.array(IntentSchema).min(1).max(MAX_FILES_PER_BATCH) });
 
 /** Ouvre une session de televersement chunked (validation + quota inclus). */
 export async function POST(request: NextRequest) {

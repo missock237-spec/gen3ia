@@ -19,19 +19,22 @@ function envLimit(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-/** 50 Mo max par fichier (politique unifiée des pièces jointes Gen3ia). */
-export const MAX_FILE_BYTES = envLimit("GEN3IA_MAX_PERMANENT_FILE_BYTES", 50 * 1024 * 1024);
+/** 100 Mo max par fichier (politique unifiée des pièces jointes Gen3ia). */
+export const MAX_FILE_BYTES = envLimit("GEN3IA_MAX_PERMANENT_FILE_BYTES", 100 * 1024 * 1024);
 
-/** 10 fichiers max par lot de televersement. */
-export const MAX_FILES_PER_BATCH = envLimit("GEN3IA_MAX_PERMANENT_BATCH_FILES", 10);
+/** 15 fichiers max par lot de televersement (demande propriétaire : 15 × 100 Mo simultanés). */
+export const MAX_FILES_PER_BATCH = envLimit("GEN3IA_MAX_PERMANENT_BATCH_FILES", 15);
 
 /**
- * Quota du plan gratuit — 1 Go offert à chaque compte (Task 150).
- * Remplacé à l'exécution par le quota du plan souscrit (5 Go / 10 Go) via
- * lib/storage/plans.ts ; cette constante reste le socle du plan free et la
- * limite utilisée quand aucun plan n'est encore enregistré.
+ * Quota du plan gratuit — 4 Go offerts à chaque compte (Task 150 + demande
+ * « 15 fichiers × 100 Mo en un lot » : 1,5 Go devait tenir dans le socle).
+ * SOCLE UNIQUE : lib/storage/plans.ts (plan « free » du catalogue) dérive de
+ * CETTE constante, donc la variable d'environnement
+ * GEN3IA_MAX_PERMANENT_QUOTA_BYTES pilote aussi le quota facturé/affiché.
+ * Remplacé à l'exécution par le quota du plan souscrit (5 Go / 10 Go) + les
+ * licences d'espace via lib/storage/plans.ts.
  */
-export const MAX_USER_QUOTA_BYTES = envLimit("GEN3IA_MAX_PERMANENT_QUOTA_BYTES", 1024 ** 3);
+export const MAX_USER_QUOTA_BYTES = envLimit("GEN3IA_MAX_PERMANENT_QUOTA_BYTES", 4 * 1024 ** 3);
 
 /**
  * Taille d'une partie multipart : 8 Mo. Contrainte double :

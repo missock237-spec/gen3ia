@@ -73,7 +73,7 @@ function redirigerApresSession(redirectTo?: string | null): void {
 /**
  * Inscription par compte natif R2 : le serveur crée le compte (identifiants
  * hashés scrypt dans R2), provisionne l'identité + le wallet, ouvre l'espace
- * de stockage (1 Go offert) et pose la session — puis redirection.
+ * de stockage (4 Go offerts) et pose la session — puis redirection.
  */
 export async function signUpWithR2(
   input: R2SignupInput,

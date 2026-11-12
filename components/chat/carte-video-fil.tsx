@@ -2,6 +2,8 @@
 
 import React from "react";
 
+import { pourcentageDepuis } from "./carte-video-fil-logique";
+
 /**
  * CARTE VIDÉO DU FIL DE CONVERSATION (2026-11-12) — le chaînon manquant de
  * « la vidéo n'est pas réellement créée et envoyée dans la conversation ».
@@ -18,10 +20,16 @@ import React from "react";
  *  - CONTRAT 0..1 → POURCENTAGE (fix 2026-11-13 « la barre de progression
  *    n'augmente pas ») : le serveur stocke la progression en 0..1 (contrat
  *    UI ×100, cf. video-production-card) — la carte du fil applique la
- *    même conversion tolérante, la barre AUGMENTE au fil des étapes ;
+ *    même conversion tolérante, le carré SE REMPLIT au fil des étapes ;
+ *  - CARRÉ DE PROGRESSION (demande propriétaire 2026-11-13 : plus de
+ *    barre horizontale — un CARRÉ affichant le pourcentage en grand, qui
+ *    se remplit du bas comme un niveau) : styles .nova-media-carre-* ;
+ *    le texte « Production vidéo — {stage} ({NN} %) » est CONSERVÉ tel
+ *    quel à côté du carré (les sondes production Python le lisent via
+ *    .nova-fil, cf. scripts/verifie-voix-video-production.py) ;
  *  - progression MONOTONE + ÉTAT CONSERVÉ : un incident passager du canal
- *    de statut (réseau, disjoncteur de stockage 503) ne ramène JAMAIS la
- *    barre en arrière ni à zéro — le dernier état connu reste affiché et
+ *    de statut (réseau, disjoncteur de stockage 503) ne ramène JAMAIS le
+ *    carré en arrière ni à zéro — le dernier état connu reste affiché et
  *    le canal retente ;
  *  - lecteur <video controls> dès que le master existe : GET
  *    .../render renvoie output.playbackUrl PRÉSIGNÉE FRAÎCHE à chaque
@@ -50,21 +58,10 @@ const STAGES_FR: Record<string, string> = {
 
 const TERMINAUX = new Set(["completed", "failed", "cancelled"]);
 
-/**
- * Contrat de progression tolérant (même sémantique que la carte workspace) :
- * le serveur porte 0..1 (×100 requis) ; par défense, une valeur > 1 est
- * déjà un pourcentage — bornée 0..100 dans tous les cas.
- */
-function pourcentageDepuis(valeur: unknown): number | null {
-  if (typeof valeur !== "number" || !Number.isFinite(valeur)) return null;
-  const pct = valeur <= 1 ? valeur * 100 : valeur;
-  return Math.max(0, Math.min(100, Math.round(pct)));
-}
-
 export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
   const [etat, setEtat] = React.useState<EtatCarte>({ type: "chargement" });
   // Plafond monotone de la progression affichée (0..100) : un canal qui
-  // trébuche (réseau, 503 disjoncteur) ne fait JAMAIS reculer la barre.
+  // trébuche (réseau, 503 disjoncteur) ne fait JAMAIS reculer le carré.
   const plafond = React.useRef(0);
 
   React.useEffect(() => {
@@ -90,7 +87,7 @@ export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
         const label = STAGES_FR[st.stage ?? ""] ?? st.stage ?? "production";
         return { type: "echec", detail: `Production interrompue (${label})${st.error ? " — " + st.error.slice(0, 160) : ""}.` };
       }
-      // MONOTONE : la barre ne peut que monter — le plafond connu gagne
+      // MONOTONE : le carré ne peut que se remplir — le plafond connu gagne
       // toujours contre une lecture plus basse (tick en cours, cache…).
       const pct = pourcentageDepuis(st.progress);
       if (pct !== null && pct > plafond.current) plafond.current = pct;
@@ -104,7 +101,7 @@ export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
     const interroger = async () => {
       try {
         // INCIDENT PASSAGER (réseau, disjoncteur de stockage → 503) : on
-        // garde l'état courant (barre inchangée) — le prochain cycle retente.
+        // garde l'état courant (carré inchangé) — le prochain cycle retente.
         const st = await fetch(`/api/video/projects/${videoProjectId}/production`, { signal: controller.signal })
           .then((r) => (r.ok ? r.json() : null))
           .catch(() => null);
@@ -179,13 +176,30 @@ export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
   }
   const progression = etat.type === "progression" ? etat.progress : 0;
   return (
-    <figure className="nova-media-carte">
+    /* CARRÉ DE PROGRESSION (2026-11-13) : le pourcentage est affiché EN
+     * GRAND dans le carré, qui se remplit du bas comme un niveau. Contraste
+     * calculé via data-contraste (< 55 % → texte blanc sur pastille sombre
+     * translucide ; ≥ 55 % → texte sombre sur pastille claire). Le rôle
+     * progressbar + aria-valuenow/min/max sont conservés, avec un libellé
+     * explicite. figcaption reste un enfant direct de <figure> (dernier
+     * enfant : HTML valide) — son texte, lu par les sondes via .nova-fil,
+     * est strictement inchangé. */
+    <figure className="nova-media-carte nova-media-carte-progress">
+      <div
+        className="nova-media-carre"
+        role="progressbar"
+        aria-valuenow={progression}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Progression de création de la vidéo : ${progression} %`}
+        data-contraste={progression < 55 ? "sombre" : "clair"}
+      >
+        <div className="nova-media-carre-niveau" style={{ height: `${progression}%` }} />
+        <span className="nova-media-carre-pourcentage">{progression} %</span>
+      </div>
       <figcaption>
         Production vidéo {etat.type === "progression" ? `— ${etat.stage} (${progression} %)` : "— chargement du lecteur…"}
       </figcaption>
-      <div className="nova-media-barre" role="progressbar" aria-valuenow={progression} aria-valuemin={0} aria-valuemax={100}>
-        <div className="nova-media-barre-remplie" style={{ width: `${progression}%` }} />
-      </div>
     </figure>
   );
 }

@@ -31,8 +31,12 @@ describe("abbreviations — chargement du dataset réel", () => {
   it("double les sigles connus de leur forme longue (expansion à l'entrée)", async () => {
     await chargerAbréviations();
     const sortie = promptAvecAbréviations("Notre SaaS utilise un GPU pour le ML");
-    expect(sortie).toContain("SaaS (");
-    expect(sortie).toContain("GPU (");
+    // PASSAGE 1 (dictionnaire large lib/langue) : forme longue AVANT le
+    // sigle, originale conservée (« software as a service (SaaS) »).
+    expect(sortie).toContain("(SaaS)");
+    expect(sortie).toContain("(GPU)");
+    // PASSAGE 2 (dataset) : le sigle ambigu non tranché par le dictionnaire
+    // large reste pris en charge par le dataset — jamais perdu.
     expect(sortie).toContain("ML (");
     // le sigle original reste présent (forme doublée, pas remplacée)
     expect(sortie).toContain("SaaS");

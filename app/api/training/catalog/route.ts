@@ -6,6 +6,22 @@ import { errorBody, errorStatus } from "@/lib/security/http-errors";
 
 import { buildCatalog } from "@/lib/training/catalog";
 import { trainingQuotas } from "@/lib/training/quotas";
+import { cacheReponses, cleCache } from "@/lib/perf/cache-reponses";
+
+/**
+ * CACHE HOT PATH (Task 9-a) — le corps métier de cette route est GLOBAL :
+ * moteurs, modèles de base, sondes fournisseurs agrégées et quotas ne dépendent
+ * AUCUNEMENT de l'utilisateur appelant (aucune donnée personnelle, aucune
+ * variante par compte). Seul `requestId` est propre à chaque requête — il
+ * reste généré hors cache. Le calcul (`buildCatalog` = sondes fournisseurs,
+ * potentiellement I/O) est donc mis en cache par un seul appel par fenêtre
+ * TTL via LRU + TTL + single-flight : N rafales simultanées → 1 sondage.
+ * TTL 60 s : fraîcheur conservée pour une config produit, coût sondes
+ * divisé par le taux de requêtes. Version `v1` : bump = invalidation
+ * instantanée de toutes les clés.
+ */
+const CLE_CATALOGUE = cleCache("catalogue-formation", "v1");
+const TTL_CATALOGUE_MS = 60_000;
 
 /**
  * GET /api/training/catalog — catalogue « CONFIG ONLY » (demande n° 6).
@@ -25,8 +41,15 @@ export async function GET(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.trim() || randomUUID();
   try {
     await requireUser(request);
-    const catalog = await buildCatalog();
-    const quotas = trainingQuotas();
+    const { catalog, quotas } = await cacheReponses.obtenirOuCalculer(
+      CLE_CATALOGUE,
+      TTL_CATALOGUE_MS,
+      async () => {
+        const catalogueConstruit = await buildCatalog();
+        const quotasCalcules = trainingQuotas();
+        return { catalog: catalogueConstruit, quotas: quotasCalcules };
+      },
+    );
 
     /* Agrégation config-only de l'état d'exécution (aucun détail d'infra). */
     const nativeAvailable = catalog.providers.some(

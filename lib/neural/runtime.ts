@@ -58,6 +58,11 @@ import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine"
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import { piloterPlateforme } from "./pilotage/gen3ia";
+// STUDIO D'ENTRAÎNEMENT — MÉMOIRE DE DOMAINE PAR UTILISATEUR : câblée au
+// moteur pour que l'IA entraînée par un utilisateur réponde depuis SA
+// connaissance ingérée (consultation à chaque tour, cache process 60 s,
+// dégradation honnête en « pas de mémoire » si le stockage est indisponible).
+import { consulterMemoireUtilisateur } from "@/lib/studio/memoire-utilisateur";
 import {
   enregistrerPoolsDomaines,
 } from "./training/trainer";
@@ -446,7 +451,7 @@ export function getNeuralRuntime(): NeuralRuntime {
   const compartiments = creerCompartimentsGen3();
   const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
     void sauvegarderCerveauRuntime().catch(() => undefined);
-  }, piloterPlateforme, coucheRPIA, compartiments);
+  }, piloterPlateforme, coucheRPIA, compartiments, consulterMemoireUtilisateur);
 
   const runtime: NeuralRuntime = {
     reseau,

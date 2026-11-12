@@ -100,7 +100,7 @@ export default function StoragePage() {
         const detail = (await readJsonSafely<{ error?: string }>(response))?.error;
         throw new Error(detail ?? `Le changement de plan a échoué (erreur ${response.status}).`);
       }
-      setPlanDone(planId === "free" ? "Plan de base activé — quota ramené à 1 Go." : "Plan activé — votre quota est étendu immédiatement.");
+      setPlanDone(planId === "free" ? "Plan de base activé — quota ramené à 4 Go." : "Plan activé — votre quota est étendu immédiatement.");
       await refresh();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Le changement de plan a échoué.");
@@ -159,10 +159,10 @@ export default function StoragePage() {
       <div className="mt-5 space-y-2">{artifacts.map(artifact => <div key={artifact.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--g3-border)] bg-[var(--g3-elevated)] p-4"><span className="min-w-0"><span className="block truncate" title={artifact.filename}>{artifact.filename}</span><span className="text-xs text-[var(--g3-faint)]">{artifact.kind} · {artifact.conversion === "full" ? `analyse complète · ${artifact.charCount.toLocaleString("fr-FR")} caractères` : "métadonnées"}</span></span><span className="flex shrink-0 items-center gap-3"><span className="text-xs text-[var(--g3-muted)]">{formatBytesFr(artifact.sizeBytes)}</span><a href={`/api/files/artifacts/${artifact.id}`} target="_blank" rel="noopener noreferrer" className="rounded-full bg-[var(--g3-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--g3-primary-strong)]">Ouvrir</a></span></div>)}{loaded && !artifacts.length && <p className="text-sm text-[var(--g3-faint)]">Aucun artefact : importez un document dans le Chat IA, il apparaîtra ici.</p>}</div>
     </div>
 
-    {/* Plans de stockage — 1 Go inclus, 5 Go à 2,5 €/mois, 10 Go à 5 €/mois */}
+    {/* Plans de stockage — 4 Go inclus, 5 Go à 2,5 €/mois, 10 Go à 5 €/mois */}
     <div className="mt-6 rounded-3xl border border-[var(--g3-border)] bg-[var(--g3-surface)] p-6 shadow-[var(--gen3ia-shadow-md)]">
       <h2 className="font-serif text-xl font-semibold">Étendre mon stockage</h2>
-      <p className="mt-2 text-sm text-[var(--g3-muted)]">Chaque compte dispose de 1 Go offert. Les plans payants sont débités chaque mois sur votre portefeuille Gen3ia et peuvent être annulés à tout moment — vos fichiers sont toujours conservés.</p>
+      <p className="mt-2 text-sm text-[var(--g3-muted)]">Chaque compte dispose de 4 Go offerts. Les plans payants sont débités chaque mois sur votre portefeuille Gen3ia et peuvent être annulés à tout moment — vos fichiers sont toujours conservés.</p>
       <div className="mt-5 grid gap-4 md:grid-cols-3">{plans.map(plan => {
         const active = profile?.plan.id === plan.id;
         return <div key={plan.id} className={`rounded-2xl border p-5 ${active ? "border-[var(--g3-primary)] bg-[var(--g3-primary-soft)]" : "border-[var(--g3-border)] bg-[var(--g3-elevated)]"}`}>

@@ -26,7 +26,7 @@ import {
  *   · l'ESPACE DE STOCKAGE R2 de l'utilisateur s'ouvre : un fichier de
  *     bienvenue est déposé dans users/<uid>/permanent/ (visible sur la
  *     page Stockage, supprimable) ;
- *   · le quota offert est de 1 Go (plan free de lib/storage/plans.ts,
+ *   · le quota offert est de 4 Go (plan free de lib/storage/plans.ts,
  *     appliqué dynamiquement — getQuotaBytesForUser).
  *
  * La session est établie par le cookie signé `gen3ia_session`
@@ -63,7 +63,7 @@ const WELCOME_FILE_CONTENT = [
   "Bienvenue sur Gen3ia !",
   "",
   "Cet espace de stockage personnel vient de s'ouvrir pour votre compte.",
-  "Quota offert : 1 Go (extensible à 5 Go pour 2,50 EUR/mois ou 10 Go pour",
+  "Quota offert : 4 Go (extensible à 5 Go pour 2,50 EUR/mois ou 10 Go pour",
   "5 EUR/mois depuis la page Stockage).",
   "",
   "Tout ce que vous déposez ici est conservé dans VOTRE espace privé :",

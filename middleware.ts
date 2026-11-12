@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { classerChemin, enregistrerRequete } from "@/lib/observability/metrics-registry";
+import { noterRequetePerf } from "@/lib/perf/compteur";
 import {
   formaterTraceparent,
   GEN3IA_TRACE_HEADER,
@@ -176,7 +177,13 @@ function genererTraceId(): string {
 /** la télémétrie ne doit JAMAIS perturber le trafic (ni latence, ni erreur). */
 function noterRequeteSLI(chemin: string, statut: number, debutMs: number): void {
   try {
-    enregistrerRequete(classerChemin(chemin), statut, performance.now() - debutMs);
+    const duree = performance.now() - debutMs;
+    enregistrerRequete(classerChemin(chemin), statut, duree);
+    // Compteurs PER-ROUTE (Task 9-a) : granularité ROUTE NORMALISÉE pour
+    // /api/perf/metrics (segments identifiants repliés en « :id »,
+    // cardinalité plafonnée à 256 routes, ring buffer 500 par route —
+    // lib/perf/compteur.ts). Même contrat d'échec silencieux.
+    noterRequetePerf(chemin, statut, duree);
   } catch {
     // Volontairement muet : la perte d'une mesure est acceptable, une
     // perturbation du trafic ne l'est pas.
@@ -194,6 +201,55 @@ function getClientEntry(request: NextRequest) {
 
 function isPublicClientApi(pathname: string) {
   return pathname === "/api/public" || pathname.startsWith("/api/public/");
+}
+
+/* ------------------------------------------------------------------ */
+/* CACHE PARTAGÉ DES ASSETS PUBLICS (Task 9-a — performance/échelle)     */
+/*                                                                       */
+/* Principe de PRUDENCE : le middleware n'ajoute des en-têtes de cache   */
+/* QUE sur les assets publics DÉJÀ jugés cacheables par next.config.ts   */
+/* (headers()) — icônes, image OG, SDK, llms.txt, manifeste. Les valeurs */
+/* max-age / stale-while-revalidate navigateur restent IDENTIQUES : seul */
+/* s-maxage est ajouté, qui s'adresse à la couche cache partagée (CDN /  */
+/* proxy) — un CDN devant l'app peut alors servir ces fichiers sans      */
+/* remonter jusqu'à Node. AUCUN changement sur : /api (jamais), les      */
+/* pages HTML (règle « revalidé à chaque visite » ci-dessous), sw.js /   */
+/* version.json / offline.html (revalidation obligatoire), et tout       */
+/* chemin hors liste (robots.txt, sitemap.xml, contenus multimodaux…).   */
+/*                                                                       */
+/* /_next/static est EXCLU du matcher du middleware (décision perf       */
+/* antérieure : ne pas faire transiter chaque asset par le middleware    */
+/* Node) — il est déjà servi `public, max-age=31536000, immutable` par   */
+/* Next.js lui-même (assets de build hachés), cf. docs/perf-capacite.md. */
+/* ------------------------------------------------------------------ */
+
+interface PolitiqueCachePublic {
+  prefixe: string;
+  /** max-age navigateur — IDENTIQUE à next.config.ts (aucun changement). */
+  maxAgeNavigateur: number;
+  /** s-maxage couche partagée (CDN/proxy) — l'AJOUT de cette tâche. */
+  smaxage: number;
+  /** stale-while-revalidate — IDENTIQUE à next.config.ts. */
+  swr: number;
+}
+
+/** Liste bornée et verrouillée (jamais de correspondance libre sur le path). */
+const ASSETS_PUBLICS: ReadonlyArray<PolitiqueCachePublic> = [
+  // Icônes PWA + image Open Graph : versionnées / remplacées au déploiement.
+  { prefixe: "/icons/", maxAgeNavigateur: 86_400, smaxage: 86_400, swr: 604_800 },
+  { prefixe: "/images/", maxAgeNavigateur: 86_400, smaxage: 86_400, swr: 604_800 },
+  { prefixe: "/og-image.png", maxAgeNavigateur: 86_400, smaxage: 86_400, swr: 604_800 },
+  // SDK public (.tgz) et corpus llms : quasi immuables → CDN long.
+  { prefixe: "/sdk/", maxAgeNavigateur: 86_400, smaxage: 604_800, swr: 604_800 },
+  { prefixe: "/llms.txt", maxAgeNavigateur: 86_400, smaxage: 604_800, swr: 604_800 },
+  { prefixe: "/llms-full.txt", maxAgeNavigateur: 86_400, smaxage: 604_800, swr: 604_800 },
+  // Manifeste d'installabilité : frais 1 h (valeur inchangée).
+  { prefixe: "/manifest.webmanifest", maxAgeNavigateur: 3_600, smaxage: 3_600, swr: 86_400 },
+];
+
+/** Politique applicable à ce chemin (première correspondance gagne) ou null. */
+function politiqueCachePublic(pathname: string): PolitiqueCachePublic | null {
+  return ASSETS_PUBLICS.find((politique) => pathname.startsWith(politique.prefixe)) ?? null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -455,6 +511,26 @@ export async function middleware(request: NextRequest) {
   // (version.json, sw.js — déjà max-age=0) gardent leur politique propre.
   if (!isApiRoute && request.headers.get("accept")?.includes("text/html")) {
     response.headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+  }
+
+  // Assets publics allowlistés (Task 9-a) : GET/HEAD en 200 UNIQUEMENT, et
+  // JAMAIS un document HTML (l'accept text/html est déjà couvert par la
+  // règle ci-dessus qui reste prioritaire en réécriture si besoin). La valeur
+  // posée conserve max-age/swr identiques à next.config.ts et ajoute s-maxage
+  // pour la couche cache partagée. Erreurs/redirects : jamais touchées.
+  if (
+    !isApiRoute &&
+    !request.headers.get("accept")?.includes("text/html") &&
+    (request.method === "GET" || request.method === "HEAD") &&
+    response.status === 200
+  ) {
+    const politique = politiqueCachePublic(pathname);
+    if (politique) {
+      response.headers.set(
+        "Cache-Control",
+        `public, max-age=${politique.maxAgeNavigateur}, s-maxage=${politique.smaxage}, stale-while-revalidate=${politique.swr}`,
+      );
+    }
   }
 
   if (isClientEntry) {

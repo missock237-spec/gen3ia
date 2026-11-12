@@ -1,8 +1,9 @@
 /**
  * Plans de stockage permanent — Task 150.
  *
- * Chaque utilisateur dispose d'un quota de base de 1 Go à l'ouverture du
- * compte (plan « free »). Deux plans payants étendent le quota :
+ * Chaque utilisateur dispose d'un quota de base de 4 Go à l'ouverture du
+ * compte (plan « free », socle MAX_USER_QUOTA_BYTES de la politique de
+ * téléversement). Deux plans payants étendent le quota :
  *
  *   · storage-pro5  : 5 Go pour 2,5 €/mois  (250 unités mineures)
  *   · storage-pro10 : 10 Go pour 5 €/mois   (500 unités mineures)
@@ -20,7 +21,7 @@
  * Renouvellement « lazy » : la échéance est vérifiée au moment où le profil
  * est lu (GET /api/storage/plan, chaque upload, chaque consultation) — aucun
  * cron externe n'est requis. Si le solde est insuffisant à l'échéance, le
- * compte retombe sur le plan free (1 Go) : les fichiers existants sont
+ * compte retombe sur le plan free (4 Go) : les fichiers existants sont
  * CONSERVÉS (aucune destruction), seuls les nouveaux téléversements au-delà
  * du quota sont bloqués.
  */
@@ -29,9 +30,17 @@ import { FieldValue, Timestamp, type DocumentSnapshot } from "@/lib/r2fs";
 import { adminDb } from "@/lib/firebase/admin";
 import { getWallet, reserveFunds, settleReservation } from "@/lib/billing/wallet";
 import { listStorageLicences, type StorageLicenceView } from "@/lib/storage/licences";
+import { MAX_USER_QUOTA_BYTES } from "@/lib/storage/upload-policy";
 
-/** Quota du plan gratuit (unités SI — 1 Go = 1024³ octets). */
-export const FREE_QUOTA_BYTES = 1024 ** 3;
+/**
+ * Quota du plan gratuit (socle partagé avec la politique de téléversement).
+ * Dérivé de MAX_USER_QUOTA_BYTES (lib/storage/upload-policy.ts) : UNE seule
+ * source de vérité — la variable GEN3IA_MAX_PERMANENT_QUOTA_BYTES pilote à la
+ * fois la validation des lots et ce catalogue facturé/affiché. Valeur
+ * par défaut : 4 Go (demande « 15 fichiers × 100 Mo en un lot » : un lot
+ * complet — 1,5 Go — doit tenir dans le socle du plan free).
+ */
+export const FREE_QUOTA_BYTES = MAX_USER_QUOTA_BYTES;
 
 export type StoragePlanId = "free" | "storage-pro5" | "storage-pro10";
 

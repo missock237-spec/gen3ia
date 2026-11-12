@@ -405,6 +405,8 @@ export async function genererVoixHumaineProfesseurEtPersister(params: {
   texte: string;
   voix?: string;
   vitesse?: number;
+  /** Prosodie Edge-TTS : hauteur en Hz (−50..+50, défaut 0 — registre voix). */
+  pitch?: number;
 }): Promise<MediaNeuralGenere | null> {
   const persister = async (
     œuvre: { buffer: Buffer; mime: string; meta: Record<string, unknown> },
@@ -436,6 +438,7 @@ export async function genererVoixHumaineProfesseurEtPersister(params: {
         texte: params.texte,
         ...(params.voix !== undefined ? { voix: params.voix } : {}),
         ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+        ...(params.pitch !== undefined ? { pitch: params.pitch } : {}),
       });
       return await persister(œuvre);
     } catch (erreur) {
@@ -450,6 +453,7 @@ export async function genererVoixHumaineProfesseurEtPersister(params: {
       texte: params.texte,
       ...(params.voix !== undefined ? { voix: params.voix } : {}),
       ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+      ...(params.pitch !== undefined ? { pitch: params.pitch } : {}),
     });
     return await persister(œuvre);
   } catch (erreur) {

@@ -27,6 +27,7 @@ import {
   convertFileBuffer,
   convertUploadedFile,
   detectCsvDelimiter,
+  IMPORT_MAX_FILE_BYTES,
   loadImportedFilesContext,
   parseCsv,
   pdfToText,
@@ -129,9 +130,9 @@ describe("convertUploadedFile — conversion réelle par type", () => {
     expect(result.note).toMatch(/JSON invalide/);
   });
 
-  it("refuse les fichiers trop volumineux", async () => {
+  it("refuse les fichiers trop volumineux (au-delà de 100 Mo — politique unifiée)", async () => {
     const big = new File([new Uint8Array(10)], "huge.txt", { type: "text/plain" });
-    Object.defineProperty(big, "size", { value: 52_500_000 });
+    Object.defineProperty(big, "size", { value: IMPORT_MAX_FILE_BYTES + 1 });
     await expect(convertUploadedFile(big)).rejects.toThrow(/trop volumineux/);
   });
 });

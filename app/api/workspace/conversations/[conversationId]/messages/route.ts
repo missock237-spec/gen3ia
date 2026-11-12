@@ -50,7 +50,7 @@ const ConnectorSchema = z
 
 const BodySchema = z.object({
   message: z.string().trim().min(1).max(20000),
-  // Politique unifiée des pièces jointes : 10 fichiers × 50 Mo max.
+  // Politique unifiée des pièces jointes : 15 fichiers × 100 Mo max.
   attachments: z.array(AttachmentSchema).max(ATTACHMENT_MAX_FILES).optional(),
   projectId: z.string().trim().min(1).max(128).optional(),
   provider: z.string().trim().max(60).optional(),

@@ -28,9 +28,14 @@ import { executeTool } from "@/lib/tools/executor";
 
 // RECHERCHE WEB TEMPS RÉEL (vérification propriétaire 2026-11-11) : la
 // sortie RÉELLE de l'outil web.search rejoint le canal knowledge de la
-// synthèse finale — le pont connaissances cite alors les sources web
-// (titre + URL) au lieu d'une méthode générique sans sources.
-import { blocContexteDepuisSortieRecherche } from "./synthese-recherche-web";
+// synthèse finale. DÉMANDE PROPRIÉTAIRE « rapport sans sources » : la
+// réponse visible ne liste PLUS automatiquement de sources/URLs — elle
+// livre le RAPPORT (lib/recherche-web/rapport) ; les résultats bruts
+// restent un canal interne (pont connaissances) pour ancrer la synthèse.
+import {
+  blocContexteDepuisSortieRecherche,
+  rapportDepuisSortieRecherche,
+} from "./synthese-recherche-web";
 import { VIDEO_ASPECT_RATIOS, sanitizeProductionOptions } from "@/lib/tools/media/create-video";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -876,10 +881,12 @@ async function summarizePlanTurn(
   onDelta?: (delta: string) => Promise<void> | void,
   sortieRechercheWeb?: unknown,
 ): Promise<string> {
-  // RECHERCHE WEB TEMPS RÉEL : la sortie réelle de web.search devient le
-  // canal knowledge de la synthèse — le pont connaissances (seul canal que
-  // le moteur neuronal lit) cite alors les sources RÉELLES avec URL.
+  // RECHERCHE WEB TEMPS RÉEL : la sortie réelle de web.search alimente DEUX
+  // canaux distincts — 1) le RAPPORT utilisateur (visible, sans sources) au
+  // repli déterministe ; 2) le canal knowledge interne (bloc pont avec URL)
+  // que seul le moteur de synthèse lit pour ancrer sa réponse.
   const blocRecherche = blocContexteDepuisSortieRecherche(sortieRechercheWeb);
+  const rapportRecherche = rapportDepuisSortieRecherche(sortieRechercheWeb);
   const knowledgeContext =
     [ctx.knowledgeContext, blocRecherche].filter(Boolean).join("\n\n---\n\n") || undefined;
   const deterministic = [
@@ -892,8 +899,9 @@ async function summarizePlanTurn(
         return `${mark} ${s.title}${s.output ? ` — ${s.output.slice(0, 300)}` : ""}`;
       })
       .join("\n"),
-    // Repli déterministe honnête : les sources RÉELLES y figurent aussi.
-    blocRecherche ? `\nSources web réelles trouvées :\n${blocRecherche}` : "",
+    // Repli déterministe honnête : le RAPPORT de recherche (pas la liste
+    // des sources) — l'utilisateur ne voit que la matière analysée.
+    rapportRecherche ? `\n${rapportRecherche}` : "",
     artifacts.length > 0
       ? `\nArtefacts produits (téléchargement direct) :\n${artifacts
           .map((a) => `- [${a.title}](/api/files/artifacts/${a.id}?redirect=1)`)
@@ -914,6 +922,9 @@ async function summarizePlanTurn(
             "Tu synthétises le résultat d'un plan d'exécution pour l'utilisateur de Gen3ia. " +
             "Style : concis, factuel, orienté résultat. Mentionne les artefacts créés et, s'il y en a, " +
             "les actions sensibles qui attendent sa validation. Pas de markdown de titre (#). " +
+            "RECHERCHE WEB SANS LISTE DE SOURCES : quand un canal recherche web est fourni (rapport), " +
+            "appuie-toi sur ce rapport et ne produis JAMAIS de liste automatique de sources, de liens " +
+            "ni d'URLs ; les détails bruts ne sont cités que si l'utilisateur les demande explicitement. " +
             "RÈGLE ABSOLUE D'HONNÊTETÉ : une étape marquée [failed] n'est PAS livrée — ne dis JAMAIS " +
             "qu'un résultat est livré/terminé/produit si l'étape correspondante est en échec ; cite " +
             "explicitement chaque échec et ce qui reste à faire. Les étapes [done] seules peuvent " +

@@ -38,7 +38,7 @@ export const VIDEO_LIMITS = {
   maxScenes: envInt("VIDEO_MAX_SCENES", 400),
   /** Résolution maximale (4K possible si infrastructure le permet). */
   maxResolution: ["480p", "720p", "1080p", "1440p", "4K"] as const,
-  /** Taille maximale d'un média importé/enregistré (alignée PJ : 50 Mo). */
+  /** Taille maximale d'un média importé dans le STUDIO VIDÉO (50 Mo — distinct du canal pièces jointes 100 Mo ; surchargeable via VIDEO_MAX_MEDIA_BYTES). */
   maxMediaBytes: envInt("VIDEO_MAX_MEDIA_BYTES", 50 * 1024 * 1024),
   /** Taille maximale d'un rendu final (4K 60 min ~ plafond raisonnable). */
   maxRenderBytes: envInt("VIDEO_MAX_RENDER_BYTES", 8 * 1024 * 1024 * 1024),

@@ -34,6 +34,7 @@ export const TRAINING_AUDIT_ACTIONS = [
   "analysis.generated",
   "plan.updated",
   "plan.accepted",
+  "project.entrainement",
   "job.created",
   "job.cancelled",
   "export.prepared",

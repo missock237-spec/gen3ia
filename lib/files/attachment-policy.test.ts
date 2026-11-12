@@ -10,33 +10,33 @@ import {
 
 /**
  * POLITIQUE UNIFIÉE DES PIÈCES JOINTES (exigence production) :
- * 10 fichiers maximum par message, 50 Mo maximum par fichier — une seule
+ * 15 fichiers maximum par message, 100 Mo maximum par fichier — une seule
  * source de vérité partagée par TOUTES les surfaces (composer, chat agent,
  * import, Knowledge).
  */
 describe("politique unifiée des pièces jointes", () => {
-  it("fixe les limites de production : 10 fichiers × 50 Mo", () => {
-    expect(ATTACHMENT_MAX_FILES).toBe(10);
-    expect(ATTACHMENT_MAX_FILE_BYTES).toBe(50 * 1024 * 1024);
+  it("fixe les limites de production : 15 fichiers × 100 Mo", () => {
+    expect(ATTACHMENT_MAX_FILES).toBe(15);
+    expect(ATTACHMENT_MAX_FILE_BYTES).toBe(100 * 1024 * 1024);
     expect(ATTACHMENT_MAX_TOTAL_BYTES).toBe(ATTACHMENT_MAX_FILES * ATTACHMENT_MAX_FILE_BYTES);
   });
 
   it("le libellé canonique mentionne les deux limites", () => {
     const label = attachmentLimitLabel();
-    expect(label).toContain("10");
-    expect(label).toContain("50");
+    expect(label).toContain("15");
+    expect(label).toContain("100");
   });
 
   describe("validateAttachment", () => {
-    it("accepte un fichier à la limite exacte (50 Mo)", () => {
+    it("accepte un fichier à la limite exacte (100 Mo)", () => {
       const verdict = validateAttachment({ name: "gros-fichier.pdf", size: ATTACHMENT_MAX_FILE_BYTES });
       expect(verdict).toEqual({ ok: true });
     });
 
-    it("rejette au-delà de 50 Mo avec un message lisible", () => {
+    it("rejette au-delà de 100 Mo avec un message lisible", () => {
       const verdict = validateAttachment({ name: "video.mp4", size: ATTACHMENT_MAX_FILE_BYTES + 1 });
       expect(verdict.ok).toBe(false);
-      if (!verdict.ok) expect(verdict.reason).toMatch(/50 Mo/);
+      if (!verdict.ok) expect(verdict.reason).toMatch(/100 Mo/);
     });
 
     it("rejette un fichier vide", () => {

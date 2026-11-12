@@ -30,6 +30,14 @@ const TOOL_LABELS: Record<string, string> = {
   "ads.publish": "Publication publicitaire",
   "github.create_repository": "Création de dépôt GitHub",
   "voice.speak": "Synthèse vocale parlée",
+  "musique.creer": "Création de musique",
+  "code.exec": "Exécution de code sandboxée",
+  "code.inspect": "Analyse statique de code",
+  "web.http": "Requête HTTP directe",
+  "web.dns": "Résolution DNS",
+  "dev.fmt": "Formatage et encodages",
+  "dev.regex": "Testeur d'expressions régulières",
+  "artefacts.audit": "Audit des artefacts",
   // it.58 : voice.list / phone.call retirés (fantômes — exécuteurs externes
   // retirés de la plateforme).
   "code.execute": "Exécution de code",

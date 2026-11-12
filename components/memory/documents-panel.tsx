@@ -40,7 +40,7 @@ function formatDate(iso: string): string {
 }
 
 /**
- * Documents réellement stockés : téléversement par lots (10 fichiers max,
+ * Documents réellement stockés : téléversement par lots (15 fichiers max,
  * 100 Mo max par fichier) avec progression par chunk, téléchargement via
  * URL signée et suppression définitive.
  */
@@ -69,7 +69,7 @@ export function DocumentsPanel(props: {
   const startUpload = async (selected: File[]) => {
     if (selected.length === 0 || uploading) return;
     if (selected.length > MAX_FILES_PER_BATCH) {
-      props.onNotify(`Maximum ${MAX_FILES_PER_BATCH} fichiers par lot. Seuls les 10 premiers seront envoyés.`);
+      props.onNotify(`Maximum ${MAX_FILES_PER_BATCH} fichiers par lot. Seuls les ${MAX_FILES_PER_BATCH} premiers seront envoyés.`);
     }
     abortRef.current = false;
     setUploading(true);
@@ -156,7 +156,7 @@ export function DocumentsPanel(props: {
           type="file"
           multiple
           disabled={uploading}
-          aria-label="Sélectionner jusqu'à 10 fichiers à stocker"
+          aria-label={`Sélectionner jusqu'à ${MAX_FILES_PER_BATCH} fichiers à stocker`}
           className="hidden"
           onChange={(event) => {
             const selected = Array.from(event.target.files ?? []);

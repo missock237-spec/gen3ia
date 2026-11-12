@@ -25,6 +25,42 @@
    Toutes les classes g3-* conservent leur nom (contrat API).
    ============================================================ */
 
+/* ============================================================
+   PALETTE OFFICIELLE GEN3IA — RÉFÉRENCE (thème professionnel)
+   ------------------------------------------------------------
+   Identité 2 COULEURS (violet + cyan, Task 125) ; tout le reste
+   est neutre. RÈGLE : aucune page/composant n'écrit de hex hors
+   palette — il consomme var(--g3-*). Les tokens ci-dessous sont
+   définis dans LES DEUX modes (:root sombre et bloc clair) avec
+   une parité stricte (verrouillé par tests/unit/theme-consistency).
+   ------------------------------------------------------------
+   Famille         Sombre « Nebula »          Clair « Porcelaine »
+   primaire        #7C5CFF (verrou)           #6C48FF
+   primaire-foncé  #9E85FF (--g3-primary-…    #5633E8
+                   strong)
+   accent          = primaire-foncé           = primaire-foncé
+                   (texte-safe 6.7:1)         (texte-safe 6.9:1)
+   secondaire/cyan #2AD4E8                    #0899B4
+   succès          #2AD4E8 (famille cyan)     #0A6E82
+   avertissement   #9E85FF (famille violet)   #6C48FF
+   danger          #B18AFF (famille violet)   #5B2BE0
+   info            #7FE9F5                    #0E5F73
+   fonds bg/surface#05060C / #0B0D17          #EFF7FB / #FFFFFF
+   ------------------------------------------------------------
+   NEUTRES 50 → 950 : échelle --g3-neutral-50 … --g3-neutral-950
+   définie dans les deux modes (mêmes ancrages que les surfaces et
+   encres, luminance inversée). Les valeurs intermédiaires non
+   ancrées (100/500/600/700) servent de marches de réserve : les
+   utiliser plutôt que d'introduire un gris brut.
+   ------------------------------------------------------------
+   CONTRASTES TEXTE MESURÉS (script WCAG, ≥ 4.5:1 exigé) :
+   sombre (sur surface #0B0D17) — texte 17.8 · secondaire 12.1 ·
+     muted 7.5 · faint 5.3 · accent/primaire-foncé 6.7 · spike 11.3
+   clair (sur #FFFFFF) — texte 17.4 · secondaire 9.1 · muted 6.4 ·
+     faint 5.2 · accent 6.9 · info 7.2 · succès-strong 7.4 ·
+     avertissement-fort 9.4 · danger-fort sur soft 7.3+
+   ============================================================ */
+
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: var(--font-display), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -129,6 +165,49 @@
   --g3-glow-ring: 0 0 0 1px rgba(124, 92, 255, 0.26), 0 8px 40px -8px rgba(124, 92, 255, 0.26);
 
   /* ───────────────────────────────────────────────────────────
+     COMPLÉTUDE DE TOKENS (Task THEME — concordance des couleurs)
+     Ces noms étaient CONSOMMÉS par des pages/composants (mobile,
+     code, cortex, atelier entraînement, chat…) sans jamais être
+     définis : ce sont donc les valeurs de secours codées en dur,
+     HORS palette (#6c7bff, #14141b…), qui s'affichaient. Les
+     définir ici ré-aligne ces surfaces sur la palette officielle.
+     Définis en miroir dans le bloc clair (parité des tokens).
+     ─────────────────────────────────────────────────────────── */
+  /* Accent = primaire-foncé : suffit en TEXTE (≥ 4.5:1 sur tous
+     les fonds des deux modes). Sur les rares fonds pleins portés
+     par cet accent, la couche de compatibilité ci-dessous reforce
+     une encre lisible (sombre) / le blanc (clair). */
+  --g3-accent: var(--g3-primary-strong);
+  /* Carte / panneau / surface secondaire : mêmes traitements que
+     .g3-card (surface et élévation officielles, plus de cartes
+     grises ou bleu-nuit divergentes selon les pages). */
+  --g3-card: var(--g3-surface);
+  --g3-panel: var(--g3-elevated);
+  --g3-surface-2: var(--g3-elevated);
+  /* Encre de premier plan (états hover de liens) = texte du thème. */
+  --g3-fg: var(--g3-text);
+  /* Bordure d'état succès (cyan), miroir de --g3-info-border. */
+  --g3-success-border: rgba(42, 212, 232, 0.40);
+
+  /* ───────────────────────────────────────────────────────────
+     NEUTRES « Nebula » 50 → 950 (échelle documentée en tête).
+     Ancrages : 50 = encre texte · 200 = encre secondaire ·
+     300 = muted · 400 = faint · 800 = bordure · 900 = surface
+     élevée · 950 = fond. Marches intermédiaires = réserves.
+     ─────────────────────────────────────────────────────────── */
+  --g3-neutral-50: #F4F5FB;
+  --g3-neutral-100: #DDE0EE;
+  --g3-neutral-200: #C7CBE4;
+  --g3-neutral-300: #9AA0C2;
+  --g3-neutral-400: #7E84A8;
+  --g3-neutral-500: #5F6585;
+  --g3-neutral-600: #454A66;
+  --g3-neutral-700: #2A2E48;
+  --g3-neutral-800: #1B1F35;
+  --g3-neutral-900: #101325;
+  --g3-neutral-950: #05060C;
+
+  /* ───────────────────────────────────────────────────────────
      AURORA OS V6 — COUCHE « NEURAL » (architecture neural-first)
      Pièce maîtresse de la V6 : le moteur neuronal Gen3 devient
      l'identité visible de la plateforme. La couche est ADDITIVE —
@@ -140,6 +219,10 @@
   --g3v6-neural-strong: #9E85FF;
   --g3v6-spike: #2AD4E8;
   --g3v6-spike-soft: rgba(42, 212, 232, 0.13);
+  /* Trou comblé (Task THEME) : consommés par components/neural/testeur-questions
+     sans jamais être définis (propriété invalide → fond/bordure perdus). */
+  --g3v6-spike-bg: var(--g3v6-spike-soft);
+  --g3v6-spike-border: var(--g3-info-border);
   /* Encre TEXTE dérivée du spike : identique au spike en sombre (#2AD4E8
      ≈ 10.8:1 sur verre orbital sombre) ; en clair le cyan brut (#2AD4E8)
      tombe à ≈ 1.8:1 sur verre blanc — l'override [data-theme="light"]
@@ -157,7 +240,7 @@
   --g3v6-glass-border: rgba(124, 92, 255, 0.22);
   /* Typographie neuronale : chiffres tabulaires (métriques), titres
      larges (pistes de vision). */
-  --g3v6-metric-font: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --g3v6-metric-font: var(--font-jet), ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   --g3v6-track: 0.26em;
   /* Motifs : grille cérébrale + halo de résonance */
   --g3v6-grid: radial-gradient(circle at 1px 1px, rgba(124, 92, 255, 0.13) 1px, transparent 0);
@@ -255,6 +338,37 @@
   --g3v6-halo-spike: 0 0 60px -14px rgba(8, 153, 180, 0.28);
   --g3v6-spike-text: #067589;
   --g3v6-neural-strong-text: #5633E8;
+  /* Trou comblé (Task THEME) : miroir sombre — consommés par
+     components/neural/testeur-questions sans jamais être définis. */
+  --g3v6-spike-bg: var(--g3v6-spike-soft);
+  --g3v6-spike-border: var(--g3-info-border);
+
+  /* ───────────────────────────────────────────────────────────
+     COMPLÉTUDE DE TOKENS — miroir exact du bloc sombre (parité
+     verrouillée). Accent = primaire-foncé clair (#5633E8, 6.9:1
+     sur blanc comme sur les fonds porcelaine). */
+  --g3-accent: var(--g3-primary-strong);
+  --g3-card: var(--g3-surface);
+  --g3-panel: var(--g3-elevated);
+  --g3-surface-2: var(--g3-elevated);
+  --g3-fg: var(--g3-text);
+  --g3-success-border: rgba(8, 153, 180, 0.35);
+
+  /* ───────────────────────────────────────────────────────────
+     NEUTRES « Porcelaine » 50 → 950 (mêmes ancrages, luminance
+     inversée). 950 (+ foncé que l'encre) : réservé aux textes des
+     îlots sombres volontaires. */
+  --g3-neutral-50: #FFFFFF;
+  --g3-neutral-100: #EFF7FB;
+  --g3-neutral-200: #E3EEF5;
+  --g3-neutral-300: #D9E6EF;
+  --g3-neutral-400: #B7D8E8;
+  --g3-neutral-500: #8FB3C4;
+  --g3-neutral-600: #567080;
+  --g3-neutral-700: #3E6478;
+  --g3-neutral-800: #1F4E5F;
+  --g3-neutral-900: #101B26;
+  --g3-neutral-950: #0A0E13;
 }
 
 /* ============================================================
@@ -2215,6 +2329,52 @@ textarea:focus-visible, [tabindex]:focus-visible {
 [data-theme="light"] :where(.g3-code, .g3-console-output, .g3-console-editor, .g3-console-input textarea, .g3-workspace-task-execution-result pre) {
   color: #7FE9F5;
 }
+
+/* ── ÎLOTS SOMBRES VOLONTAIRES en thème clair (Task THEME) ─────
+   Bulles de message client (bg-neutral-950), blocs JSON (bg-gray-950),
+   canvas IDE, boutons noirs (bg-black) : surfaces volontairement
+   proches du noir, conçues pour des encres claires. Sans réencrage,
+   la couche « text-white → encre du thème » les rendait ILLISIBLES
+   (encre bleu-nuit #101B26 sur noir ≈ 1.04:1). On ré-établit ici la
+   hiérarchie d'encres du thème sombre (verrouillée, mesurée : texte
+   18.2:1 · secondaire 12.3:1 · muted 7.7:1 sur #0A0A0A) : les règles
+   !important ci-dessus qui consomment var(--g3-text)… résolvent
+   désormais correctement À L'INTÉRIEUR de ces îlots, sans toucher au
+   reste de la page. Les noirs TRANSLUCIDES (bg-black/20…) ne sont PAS
+   couverts : leur fond effectif reste clair. */
+[data-theme="light"] :where(.bg-black, .bg-neutral-950, .bg-gray-950, .bg-slate-950, .bg-zinc-950, .bg-stone-950) {
+  color-scheme: dark;
+  --g3-text: #F4F5FB;
+  --g3-text-secondary: #C7CBE4;
+  --g3-muted: #9AA0C2;
+  --g3-faint: #7E84A8;
+}
+
+/* Fond plein porté par l'accent de marque : encre INVERSÉE garantie.
+   En clair l'accent vaut #5633E8 (primaire-foncé) : le blanc dessus
+   tient 6.9:1 ; !important pour rester prioritaire sur la règle
+   .text-white ci-dessus (même importance, ordre source postérieur). */
+[data-theme="light"] [class*="bg-[var(--g3-accent"] { color: #FFFFFF !important; }
+
+/* Boutons cyan : en thème clair, --g3-secondary (#0899B4) ne tient que
+   3.37:1 en texte courant → bascule sur l'encre info foncée (7.2:1). */
+[data-theme="light"] .g3-btn-cyan { color: var(--g3-info); }
+
+/* Pastels Tailwind « mid-tone » (badges d'état de la page publique
+   /status : bg-emerald-500/15, text-amber-600…) → familles officielles.
+   Sans remap, ces teintes vert/ambre brutes sortaient de l'identité
+   2 couleurs et cassaient le ratio en clair (text-amber-600 ≈ 3.1:1). */
+[data-theme="light"] :where(.bg-emerald-500\/15, .bg-emerald-500\/5, .bg-emerald-500) { background-color: var(--g3-success-soft) !important; }
+[data-theme="light"] :where(.bg-amber-500\/15, .bg-amber-500\/5, .bg-amber-500) { background-color: var(--g3-warning-soft) !important; }
+[data-theme="light"] :where(.text-emerald-400, .text-emerald-500, .text-emerald-600) { color: var(--g3-success-strong) !important; }
+[data-theme="light"] :where(.text-amber-400, .text-amber-500, .text-amber-600) { color: var(--g3-warning-strong) !important; }
+
+/* Neutres restants (text-neutral-600 → 950) → hiérarchie du thème.
+   Utile pour la concordance des pages publiques (status, privacy) ET
+   pour le cas système clair + thème sombre (text-neutral-900 brut
+   = #171717 sur fond #05060C ≈ 1.2:1, invisible). */
+[data-theme="light"] :where(.text-neutral-600, .text-neutral-700) { color: var(--g3-text-secondary) !important; }
+[data-theme="light"] :where(.text-neutral-800, .text-neutral-900, .text-neutral-950) { color: var(--g3-text) !important; }
 /* ============================================================
    THÈME SOMBRE — COUCHE DE COMPATIBILITÉ (pastels clairs en dur)
    « Si l'utilisateur choisit le thème sombre, TOUTE l'interface doit
@@ -2246,6 +2406,44 @@ textarea:focus-visible, [tabindex]:focus-visible {
 [data-theme="dark"] :where(.bg-gray-50, .bg-gray-100, .bg-gray-200, .bg-zinc-50, .bg-zinc-100, .bg-slate-50, .bg-slate-100, .bg-slate-200, .bg-neutral-50, .bg-neutral-100) { background-color: var(--g3-surface) !important; }
 [data-theme="dark"] :where(.text-gray-500, .text-gray-600, .text-zinc-500, .text-zinc-600, .text-slate-500, .text-slate-600) { color: var(--g3-muted) !important; }
 [data-theme="dark"] :where(.text-gray-700, .text-gray-800, .text-gray-900, .text-zinc-700, .text-zinc-800, .text-slate-700, .text-slate-800, .text-neutral-600, .text-neutral-700) { color: var(--g3-text-secondary) !important; }
+/* Neutres restants (Task THEME) : 300-500 → muted (text-neutral-500 brut
+   ne tenait que 4.66:1 sur le fond), 800-950 → texte (le cas système
+   clair + thème sombre laissait text-neutral-900/950 quasi noir sur
+   fond noir — invisible). */
+[data-theme="dark"] :where(.text-neutral-300, .text-neutral-400, .text-neutral-500) { color: var(--g3-muted) !important; }
+[data-theme="dark"] :where(.text-neutral-800, .text-neutral-900, .text-neutral-950) { color: var(--g3-text) !important; }
+
+/* ── ÎLOTS BLANCS VOLONTAIRES en thème sombre (Task THEME) ─────
+   Cartes de progression média (components/media : bg-white + encres
+   neutral-*) conçues comme cartes CLAIRES sur l'atelier sombre. La
+   couche sombre ci-dessus remappait leurs encres vers des valeurs
+   claires → texte quasi blanc sur carte blanche (≈ 1.2:1). On
+   ré-encode l'îlot avec la hiérarchie claire « Porcelaine » (mesurée :
+   texte 17.4:1 · secondaire 9.1:1 · muted 6.2:1 sur #F6F8FB) ; les
+   remaps !important qui consomment var(--g3-*) résolvent alors à
+   l'intérieur de l'îlot. bg-white/XX translucide non couvert. */
+[data-theme="dark"] :where(.bg-white) {
+  color-scheme: light;
+  --g3-surface: #F6F8FB;
+  --g3-elevated: #EDF2F7;
+  --g3-text: #101B26;
+  --g3-text-secondary: #1F4E5F;
+  --g3-muted: #3E6478;
+  --g3-faint: #567080;
+}
+
+/* Pastels « mid-tone » (badges /status) → familles officielles
+   (mirroir exact de la couche claire ci-dessus). */
+[data-theme="dark"] :where(.bg-emerald-500\/15, .bg-emerald-500\/5, .bg-emerald-500) { background-color: var(--g3-success-soft) !important; }
+[data-theme="dark"] :where(.bg-amber-500\/15, .bg-amber-500\/5, .bg-amber-500) { background-color: var(--g3-warning-soft) !important; }
+[data-theme="dark"] :where(.text-emerald-400, .text-emerald-500, .text-emerald-600) { color: var(--g3-success-strong) !important; }
+[data-theme="dark"] :where(.text-amber-400, .text-amber-500, .text-amber-600) { color: var(--g3-warning-strong) !important; }
+
+/* Fond plein porté par l'accent de marque (#9E85FF en sombre) : le blanc
+   ne tient que 2.9:1 → encre inversée sombre (7.3:1), déjà l'intention
+   des composants concernés (boutons « text-black » de l'atelier). Sans
+   !important : la spécificité 0-2-0 bat les utilitaires text-white/black. */
+[data-theme="dark"] [class*="bg-[var(--g3-accent"] { color: #0A0A12; }
 /* Alphas blancs : affordances conçues sur fond sombre — en sombre elles
    restent natives (aucune règle nécessaire) ; en clair on les neutralise
    pour l'affordance (bordures invisibles → bordure du thème). */
@@ -2265,17 +2463,17 @@ textarea:focus-visible, [tabindex]:focus-visible {
    ============================================================ */
 .g3-agent-light {
   color-scheme: light;
+  /* Task THEME — correction de cycles : les affectations auto-référentielles
+     (--g3-border: var(--g3-border), etc.) créaient un CYCLE de variable
+     personnalisée → valeur « guaranteed-invalid » : les usages var()
+     descendants tombaient en invalid-at-computed-value au lieu de
+     résoudre l'encre du thème. Ces six tokens héritent désormais
+     normalement du contexte de thème (aucune redéclaration nécessaire). */
   --g3-bg: var(--g3-elevated);
   --g3-surface: var(--g3-bg);
-  --g3-elevated: var(--g3-elevated);
   --g3-deep: var(--g3-elevated);
   --g3-hover: rgba(31, 30, 26, 0.05);
-  --g3-border: var(--g3-border);
-  --g3-border-strong: var(--g3-border-strong);
   --g3-text: var(--g3-deep);
-  --g3-text-secondary: var(--g3-text-secondary);
-  --g3-muted: var(--g3-muted);
-  --g3-faint: var(--g3-faint);
   --g3-primary: #6C48FF;
   --g3-primary-strong: #5633E8;
   --g3-primary-soft: rgba(108, 72, 255, 0.10);

@@ -15,9 +15,12 @@ import { VOIX_PROFESSEUR, estVoixEspace, choisirVoixSelonPersonnage } from "@/li
  * est configuré, loi CONTRAINTE-ONDES) : le texte part vers le TTS réel
  * du professeur — voix humaine naturelle, choisie dans le roster
  * documenté (VOIX_PROFESSEUR : tongtong, chuichui, xiaochen, jam, kazi,
- * douji, luodo), vitesse réglable 0.5–2. Chaque œuvre porte la mention
- * honnête `echafaudage: true` (échafaudage supprimable : le signal
- * d'onde gen3 prendra le relais après distillation).
+ * douji, luodo), vitesse réglable 0.5–2. VOIX CONTEXTUELLE (Task 2-a
+ * AUDIO) : le REGISTRE est déduit du CONTENU (narration/annonceur/calme/
+ * enthousiaste/professionnel — voir deduireRegistreVoix) et ajuste la
+ * prosodie Edge-TTS (rate/pitch) ; la cascade existante reste intacte.
+ * Chaque œuvre porte la mention honnête `echafaudage: true` (échafaudage
+ * supprimable : le signal d'onde gen3 prendra le relais après distillation).
  *
  * MODE 2 — REPLI LOCAL HONNÊTE (professeur absent) : composition
  * harmonique neuronale déterministe (mêmes moteurs que les signaux audio
@@ -31,6 +34,136 @@ import { VOIX_PROFESSEUR, estVoixEspace, choisirVoixSelonPersonnage } from "@/li
  *    telle quelle comme storagePath de l'artefact (Task 113) ;
  *  - `audioDataUri` = repli inline quand R2 est indisponible.
  */
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * VOIX CONTEXTUELLE — REGISTRE DÉDUIT DU CONTENU (Task 2-a AUDIO)
+ * ──────────────────────────────────────────────────────────────────────────
+ * La voix doit être « ultra-réaliste et adaptée » : au-delà du choix du
+ * personnage (féminin/masculin, déjà couvert par choisirVoixSelonPersonnage),
+ * la PROSODIE Edge-TTS (rate, % et pitch, Hz) s'ajuste au REGISTRE du texte
+ * à vocaliser. Déduction 100 % déterministe (zéro LLM, aucune latence) :
+ * premières expressions qui matchent dans l'ordre de priorité ci-dessous.
+ *
+ * CORRESPONDANCE DOCUMENTÉE (rate/pitch bornés par les sliders de l'espace
+ * Edge-TTS : rate ±50 % via vitesse 0.5–1.5, pitch ±50 Hz) :
+ *  ┌────────────────┬──────────┬───────────┬─────────────────────────────┐
+ *  │ Registre       │ rate     │ pitch     │ Textes détectés             │
+ *  ├────────────────┼──────────┼───────────┼─────────────────────────────┤
+ *  │ annonceur      │ +8 %     │ +3 Hz     │ annonce, publicité, promo,  │
+ *  │                │ (1.08×)  │           │ jingle, radio, lancement    │
+ *  │ calme          │ −22 %    │ −3 Hz     │ méditation, relaxation,     │
+ *  │                │ (0.78×)  │           │ respiration, zen, sommeil   │
+ *  │ enthousiaste   │ +15 %    │ +5 Hz     │ félicitations, bravo, super,│
+ *  │                │ (1.15×)  │           │ bonne nouvelle, célébration │
+ *  │ narration      │ −8 %     │ −2 Hz     │ récit, conte, histoire,     │
+ *  │                │ (0.92×)  │           │ documentaire, légende       │
+ *  │ professionnel  │ 0 %      │ 0 Hz      │ DÉFAUT — technique, courrier│
+ *  │                │ (1.00×)  │           │ d'affaires, rapport, résumé │
+ *  └────────────────┴──────────┴───────────┴─────────────────────────────┘
+ * Priorité : registre du SUPPORT (annonceur) → humeur (calme, enthousiaste)
+ * → forme (narration) → professionnel. Un registre imposé via l'entrée
+ * `registre` du tool gagne sur la déduction ; une `vitesse` explicite gagne
+ * sur la vitesse du registre (le pitch du registre reste appliqué).
+ */
+
+export const REGISTRES_VOIX = [
+  "annonceur",
+  "calme",
+  "enthousiaste",
+  "narration",
+  "professionnel",
+] as const;
+
+export type RegistreVoix = (typeof REGISTRES_VOIX)[number];
+
+export interface ProsodieRegistre {
+  registre: RegistreVoix;
+  /** Libellé français lisible (messages / meta). */
+  label: string;
+  /** Ajustement Edge-TTS « rate » en pourcentage entiers (−50..+50). */
+  ratePourcent: number;
+  /** Ajustement Edge-TTS « pitch » en Hz (−50..+50). */
+  pitchHz: number;
+  /** Multiplicateur de vitesse équivalent (rate 0 % = 1.0). */
+  vitesse: number;
+  /** Quand ce registre s'applique (documentation lisible par le planner). */
+  quand: string;
+}
+
+export const PROSODIE_PAR_REGISTRE: Record<RegistreVoix, ProsodieRegistre> = {
+  annonceur: {
+    registre: "annonceur",
+    label: "annonceur dynamique",
+    ratePourcent: 8,
+    pitchHz: 3,
+    vitesse: 1.08,
+    quand: "annonces, publicités, promotions, jingles, lancements, radio",
+  },
+  calme: {
+    registre: "calme",
+    label: "voix calme et posée",
+    ratePourcent: -22,
+    pitchHz: -3,
+    vitesse: 0.78,
+    quand: "méditation, relaxation, respiration, sommeil, apaisement",
+  },
+  enthousiaste: {
+    registre: "enthousiaste",
+    label: "voix enthousiaste",
+    ratePourcent: 15,
+    pitchHz: 5,
+    vitesse: 1.15,
+    quand: "félicitations, bonnes nouvelles, célébrations, encouragements",
+  },
+  narration: {
+    registre: "narration",
+    label: "voix de narration",
+    ratePourcent: -8,
+    pitchHz: -2,
+    vitesse: 0.92,
+    quand: "récits, contes, histoires, documentaires, légendes, lectures",
+  },
+  professionnel: {
+    registre: "professionnel",
+    label: "voix professionnelle neutre",
+    ratePourcent: 0,
+    pitchHz: 0,
+    vitesse: 1,
+    quand: "défaut : explications techniques, courriers, rapports, résumés",
+  },
+};
+
+/** Détections par registre — PREMIER match dans l'ordre ci-dessous qui gagne. */
+const DETECTION_REGISTRES: ReadonlyArray<{ registre: RegistreVoix; re: RegExp }> = [
+  {
+    registre: "annonceur",
+    re: /annonc|publicit|\bpub\b|jingle|\bradio\b|sponsor|commerciale?|promotion|promo\b|lancement|invitation|[ée]v[ée]nement|vente flash|offre sp[ée]ciale/iu,
+  },
+  {
+    registre: "calme",
+    re: /m[ée]ditation|relax|respir|sommeil|endorm|dormir|zen|apais|d[ée]tent|calme|paisib|coh[ée]rence cardiaque/iu,
+  },
+  {
+    registre: "enthousiaste",
+    re: /f[ée]licit|bravo|\bsuper\b|g[ée]nial|excellent|magique|incroyable|bonne nouvelle|c[ée]l[ée]br|félicitons|merci beaucoup|bienvenue parmi/iu,
+  },
+  {
+    registre: "narration",
+    re: /r[ée]cit|\bconte\b|histoire|narrat|documentaire|l[ée]gende|lecture|\broman\b|chapitre|il [ée]tait une fois|intrigue/iu,
+  },
+];
+
+/**
+ * Déduit le registre vocal du texte à vocaliser (pur, déterministe) :
+ * premier match dans l'ordre de priorité, sinon « professionnel ».
+ */
+export function deduireRegistreVoix(texte: string): ProsodieRegistre {
+  const t = (texte ?? "").toLowerCase();
+  for (const d of DETECTION_REGISTRES) {
+    if (d.re.test(t)) return PROSODIE_PAR_REGISTRE[d.registre];
+  }
+  return PROSODIE_PAR_REGISTRE.professionnel;
+}
 
 const VoiceSpeakInput = z.object({
   text: z.string().min(1).max(4000).describe(
@@ -50,7 +183,14 @@ const VoiceSpeakInput = z.object({
       "(13 voix françaises : Denise, Éloïse, Vivienne, Henri, Rémy + variantes BE/CA/CH).",
   ),
   vitesse: z.number().min(0.5).max(2).optional().describe(
-    "Vitesse de parole en mode voix humaine réelle (0.5 = lent, 2 = rapide, défaut 1).",
+    "Vitesse de parole en mode voix humaine réelle (0.5 = lent, 2 = rapide, défaut 1). " +
+      "Si absente, la vitesse du REGISTRE déduit du contenu s'applique (calme 0.78, enthousiaste 1.15…).",
+  ),
+  registre: z.enum(REGISTRES_VOIX).optional().describe(
+    "Registre vocal imposé (prosodie rate/pitch Edge-TTS) : " +
+      REGISTRES_VOIX.join(", ") +
+      ". Facultatif : par défaut le registre est DÉDUIT du contenu du texte " +
+      "(annonce → annonceur +8 %/+3 Hz, méditation → calme −22 %/−3 Hz, récit → narration −8 %/−2 Hz…).",
   ),
 });
 
@@ -87,7 +227,9 @@ export const voiceSpeakTool: ToolDefinition<
     "Synthétise un AUDIO PARLÉ à partir d'un texte. VOIX HUMAINE RÉELLE via le professeur média " +
     "temporaire quand il est configuré (loi CONTRAINTE-ONDES) : voix féminine/masculine selon le " +
     "personnage (Denise/Henri — espace public Edge-TTS ; roster passerelle : tongtong, chuichui, " +
-    "xiaochen, jam, kazi, douji, luodo), vitesse 0.5–2, archivage permanent. " +
+    "xiaochen, jam, kazi, douji, luodo), prosodie CONTEXTUELLE au contenu (registre déduit du texte " +
+    "— narration/annonceur/calme/enthousiaste/professionnel — avec ajustement Edge-TTS rate/pitch ; " +
+    "imposable via `registre`), vitesse 0.5–2, archivage permanent. " +
     "Repli local honnête quand le professeur est absent : composition harmonique neuronale " +
     "déterministe — ce n'est PAS de la parole, et le résultat le signale.",
   category: "media",
@@ -97,6 +239,13 @@ export const voiceSpeakTool: ToolDefinition<
     // Défaut INTELLIGENT : la voix suit le personnage décrit dans le texte
     // (féminine/masculine, déterministe) quand aucune voix n'est imposée.
     const voixRésolue = input.voix ?? choisirVoixSelonPersonnage(input.text).voixEspace;
+    // VOIX CONTEXTUELLE (Task 2-a) : la prosodie (rate/pitch) suit le REGISTRE
+    // déduit du contenu — ou le registre imposé par le planner. Une vitesse
+    // explicite gagne sur celle du registre ; le pitch du registre reste.
+    const prosodie = input.registre
+      ? PROSODIE_PAR_REGISTRE[input.registre]
+      : deduireRegistreVoix(input.text);
+    const vitesseEffective = input.vitesse ?? prosodie.vitesse;
     // MODE 1 SANS CONFIGURATION (2026-11-12) : la cascade de PAROLE seule
     // (passerelle configurée → espace public Edge-TTS ANONYME) — la vraie
     // voix humaine ne dépend plus d'aucun fichier de configuration.
@@ -105,7 +254,8 @@ export const voiceSpeakTool: ToolDefinition<
       userId: context.userId,
       texte: input.text.trim(),
       voix: voixRésolue,
-      ...(input.vitesse !== undefined ? { vitesse: input.vitesse } : {}),
+      vitesse: vitesseEffective,
+      pitch: prosodie.pitchHz,
     }).catch(() => null);
     if (renduVoix) {
       const { urlDurableAbsolue } = await import("@/lib/media/url-durable");
@@ -122,7 +272,8 @@ export const voiceSpeakTool: ToolDefinition<
         moteur: String(renduVoix.meta.moteur ?? "professeur-voix-espace-edge-tts"),
         note:
           "Voix humaine RÉELLE (loi CONTRAINTE-ONDES — échafaudage supprimable ; le signal d'onde gen3 prendra le relais après distillation)." +
-          (typeof renduVoix.meta.voix === "string" ? ` Voix utilisée : ${renduVoix.meta.voix}.` : ""),
+          (typeof renduVoix.meta.voix === "string" ? ` Voix utilisée : ${renduVoix.meta.voix}.` : "") +
+          ` Registre : ${prosodie.registre} (${prosodie.label}) — prosodie Edge-TTS rate ${prosodie.ratePourcent > 0 ? "+" : ""}${prosodie.ratePourcent} %, pitch ${prosodie.pitchHz > 0 ? "+" : ""}${prosodie.pitchHz} Hz${input.registre ? " (imposé)" : " (déduit du contenu)"}.`,
       };
     }
     const rendu = await genererAudioNeuralEtPersister({
@@ -131,7 +282,7 @@ export const voiceSpeakTool: ToolDefinition<
       dureeSecondes: input.dureeSecondes ?? dureeDuTexte(input.text),
       frequenceEchantillonnage: 22050,
       voix: voixRésolue,
-      ...(input.vitesse !== undefined ? { vitesse: input.vitesse } : {}),
+      vitesse: vitesseEffective,
     });
 
     const estPermanent = rendu.storage === "r2" && typeof rendu.cleStockage === "string";

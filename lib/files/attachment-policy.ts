@@ -5,21 +5,21 @@
  * manipulent des pièces jointes (composer de conversation, chat d'agent
  * plein écran, import de fichiers, ingestion Knowledge, routes API) :
  *
- *  - 10 pièces jointes MAXIMUM par message ;
- *  - 50 Mo MAXIMUM par pièce jointe.
+ *  - 15 pièces jointes MAXIMUM par message ;
+ *  - 100 Mo MAXIMUM par pièce jointe.
  *
  * Module pur (aucune dépendance serveur, aucun « server-only ») : importable
  * côté client (validation immédiate avant envoi) comme côté serveur
  * (validation zod / policy — le serveur reste l'autorité finale).
  */
 
-/** Nombre maximal de pièces jointes par message. */
-export const ATTACHMENT_MAX_FILES = 10;
+/** Nombre maximal de pièces jointes par message (demande : 15 × 100 Mo simultanés). */
+export const ATTACHMENT_MAX_FILES = 15;
 
-/** Taille maximale d'une pièce jointe : 50 Mo. */
-export const ATTACHMENT_MAX_FILE_BYTES = 50 * 1024 * 1024;
+/** Taille maximale d'une pièce jointe : 100 Mo (alignée sur MAX_FILE_BYTES). */
+export const ATTACHMENT_MAX_FILE_BYTES = 100 * 1024 * 1024;
 
-/** Taille totale maximale d'un lot de pièces jointes (10 × 50 Mo). */
+/** Taille totale maximale d'un lot de pièces jointes (15 × 100 Mo). */
 export const ATTACHMENT_MAX_TOTAL_BYTES = ATTACHMENT_MAX_FILES * ATTACHMENT_MAX_FILE_BYTES;
 
 /** Libellé canonique affichable (UI) — un seul texte partout. */

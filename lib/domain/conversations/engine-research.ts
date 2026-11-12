@@ -101,12 +101,20 @@ interface ResultatWeb {
   resume?: string;
 }
 
-/** Shape défensif : web.search renvoie { results } mais toute dérive de
- *  forme (fournisseur de repli, wrapper) doit rester non bloquante. */
+/** Shape défensif : web.search renvoie { rapport, __interne.resultats }
+ *  (contrat rapport — les résultats bruts vivent dans le champ interne),
+ *  mais toute dérive de forme (fournisseur de repli, wrapper, ancien
+ *  contrat { results }) doit rester non bloquante. */
 function extraireResultats(output: unknown): ResultatWeb[] {
   let candidat: unknown = output;
-  if (candidat && typeof candidat === "object" && "results" in (candidat as Record<string, unknown>)) {
-    candidat = (candidat as Record<string, unknown>).results;
+  if (candidat && typeof candidat === "object") {
+    const objet = candidat as Record<string, unknown>;
+    const internes = (objet.__interne as { resultats?: unknown } | undefined)?.resultats;
+    if (Array.isArray(internes)) {
+      candidat = internes;
+    } else if ("results" in objet) {
+      candidat = objet.results;
+    }
   }
   if (!Array.isArray(candidat)) return [];
   const resultats: ResultatWeb[] = [];

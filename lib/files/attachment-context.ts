@@ -18,18 +18,18 @@ import { mapWithConcurrency } from "@/lib/video/concurrency";
  * Désormais : chaque pièce jointe (clé R2 permanente du propriétaire) est
  * téléchargée, convertie (texte, CSV, JSON, XLSX, DOCX, HTML, PDF natif)
  * et son contenu réel est injecté dans le prompt (chat ET planification).
- * Les budgets sont alignés sur la politique 10 fichiers × 50 Mo ; les
+ * Les budgets sont alignés sur la politique 15 fichiers × 100 Mo ; les
  * images sont annoncées comme disponibles (métadonnées + chemin R2) sans
  * extraction illusoire.
  *
- * OPTIMISATION (audit multimodal) : la boucle séquentielle (jusqu'à 10 ×
+ * OPTIMISATION (audit multimodal) : la boucle séquentielle (jusqu'à 15 ×
  * téléchargement + conversion = plusieurs secondes) est parallélisée avec
  * une concurrence bornée (4) — l'ORDRE des résultats est préservé.
  */
 
 /** Caractères injectés par fichier (aligné sur loadImportedFilesContext). */
 const PER_FILE_CHARS = 12_000;
-/** Budget total du bloc de contexte pièces jointes (10 fichiers). */
+/** Budget total du bloc de contexte pièces jointes (15 fichiers). */
 const TOTAL_CHARS = 60_000;
 /** Concurrence de lecture (téléchargement + conversion) par lot. */
 const LECTURE_PARALLELE = 4;

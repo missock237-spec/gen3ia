@@ -27,6 +27,7 @@ vi.mock("@/lib/training/quotas", () => ({
 import { requireUser } from "@/lib/security/authenticated-request";
 import { unauthorized } from "@/lib/security/http-errors";
 import { buildCatalog } from "@/lib/training/catalog";
+import { reinitialiserCacheReponsesPourTests } from "@/lib/perf/cache-reponses";
 import { GET } from "./route";
 
 const mockedRequireUser = vi.mocked(requireUser);
@@ -66,6 +67,12 @@ function getRequest(): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mockedRequireUser.mockResolvedValue({ uid: "user-1" } as never);
+  // CACHE HOT PATH (Task 9-a) : la route met son calcul global en cache
+  // (singleton process — partagé ENTRE les cas de ce fichier). Sans reset,
+  // le 2e scénario serait servi depuis le cache du 1er et les sondes
+  // mockées de ce cas ne seraient jamais consultées. Même hygiène que
+  // vi.clearAllMocks : neutraliser l'état partagé avant chaque cas.
+  reinitialiserCacheReponsesPourTests();
 });
 
 describe("GET /api/training/catalog — surface config only", () => {

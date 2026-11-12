@@ -103,6 +103,26 @@ const nextConfig: NextConfig = {
         source: "/icons/:path*",
         headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
       },
+      // Écrans de démarrage PWA (Task 9-a) : même classe de stabilité que les
+      // icônes (assets de marque remplacés au déploiement) — même politique.
+      // Le middleware (ASSETS_PUBLICS) pose la même valeur + s-maxage ; deux
+      // sources cohérentes, sémantique identique quelle que soit la couche qui
+      // gagne la fusion d'en-têtes.
+      {
+        source: "/images/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
+      // Assets de build (Task 9-a) : les chunks /_next/static portent déjà le
+      // contenu haché dans leur NOM de fichier → cache navigateur 1 AN
+      // immutable. Next.js émet déjà cet en-tête par défaut ; la déclaration
+      // explicite ci-dessous est IDEMPOTENTE (valeur identique) et verrouille
+      // le contrat quel que soit le canal de service. Ce chemin est EXCLU du
+      // matcher du middleware (décision perf : ne pas faire transiter chaque
+      // asset par le middleware Node) — d'où le réglage ici.
+      {
+        source: "/_next/static/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
       {
         source: "/og-image.png",
         headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],

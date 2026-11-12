@@ -4,6 +4,7 @@ import { composerDepuisConnaissances } from "@/lib/neural/connaissances-pont";
 import {
   blocContexteDepuisSortieRecherche,
   parserSortieRechercheWeb,
+  rapportDepuisSortieRecherche,
 } from "./synthese-recherche-web";
 
 /** Sortie RÉELLE typique de l'outil web.search (SearchResponse). */
@@ -83,5 +84,44 @@ describe("synthèse recherche web — sortie outil → bloc pont", () => {
     expect(parserSortieRechercheWeb(42)).toBeNull();
     expect(parserSortieRechercheWeb("[1,2,3]")).toBeNull();
     expect(parserSortieRechercheWeb(SORTIE_REELLE)).not.toBeNull();
+  });
+
+  it("NOUVEAU contrat du tool : les résultats bruts vivent dans __interne.resultats", () => {
+    const sortieNouvelle = {
+      rapport: "RAPPORT DE RECHERCHE : intelligence artificielle",
+      sections: 2,
+      fiabilite: "haute",
+      diagnostic: SORTIE_REELLE.diagnostic,
+      __interne: { resultats: SORTIE_REELLE.results },
+    };
+    const parsée = parserSortieRechercheWeb(sortieNouvelle);
+    expect(parsée).not.toBeNull();
+    const bloc = blocContexteDepuisSortieRecherche(sortieNouvelle);
+    expect(bloc).toContain("[1] L'actualité de l'intelligence artificielle");
+    expect(bloc).toContain("URL : https://exemple-actu.com/ia-novembre-2026");
+    // Canal INTERNE uniquement : le rapport utilisateur n'apparaît pas ici.
+    expect(rapportDepuisSortieRecherche(sortieNouvelle)).toBe(
+      "RAPPORT DE RECHERCHE : intelligence artificielle",
+    );
+  });
+
+  it("rapportDepuisSortieRecherche : chaîne vide sans rapport (échec honnête)", () => {
+    expect(rapportDepuisSortieRecherche(null)).toBe("");
+    expect(rapportDepuisSortieRecherche(undefined)).toBe("");
+    expect(rapportDepuisSortieRecherche("pas du json")).toBe("");
+    expect(rapportDepuisSortieRecherche({ results: SORTIE_REELLE.results })).toBe("");
+    expect(rapportDepuisSortieRecherche({ rapport: "   " })).toBe("");
+  });
+
+  it("rapportDepuisSortieRecherche accepte la chaîne JSON sérialisée", () => {
+    const sérialisée = JSON.stringify({
+      rapport: "RAPPORT DE RECHERCHE : bitcoin",
+      sections: 1,
+      fiabilite: "basse",
+      __interne: { resultats: [{ title: "x", url: "https://a.com" }] },
+    });
+    // Sans la garde toJSON du tool, __interne survivrait à la sérialisation
+    // (testé dans search.test.ts) — ici, la lecture ne prend que `rapport`.
+    expect(rapportDepuisSortieRecherche(sérialisée)).toBe("RAPPORT DE RECHERCHE : bitcoin");
   });
 });

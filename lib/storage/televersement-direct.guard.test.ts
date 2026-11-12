@@ -159,6 +159,41 @@ describe("garde téléversement direct — câblage source (balayage)", () => {
   });
 });
 
+describe("garde téléversement direct — bornes de lot 15 × 100 Mo (demande propriétaire)", () => {
+  it("la politique porte les nouvelles bornes : 15 fichiers, 100 Mo, socle quota 4 Go", async () => {
+    const politique = await import("./upload-policy");
+    expect(politique.MAX_FILES_PER_BATCH).toBe(15);
+    expect(politique.MAX_FILE_BYTES).toBe(100 * 1024 * 1024);
+    expect(politique.MAX_USER_QUOTA_BYTES).toBe(4 * 1024 ** 3);
+    // La politique unifiée des pièces jointes suit (même socle partagé).
+    const pieces = await import("@/lib/files/attachment-policy");
+    expect(pieces.ATTACHMENT_MAX_FILES).toBe(15);
+    expect(pieces.ATTACHMENT_MAX_FILE_BYTES).toBe(100 * 1024 * 1024);
+  });
+
+  it("la route de session dérive sa borne zod de la politique (aucune borne codée en dur)", () => {
+    const source = lit("app/api/storage/permanent/session/route.ts");
+    expect(source).toContain(".max(MAX_FILES_PER_BATCH)");
+    expect(source).not.toMatch(/\.max\(10\)/);
+  });
+
+  it("le client de téléversement et le panneau documents dérivent aussi la borne du lot", () => {
+    expect(lit("lib/storage/upload-client.ts")).toContain("MAX_FILES_PER_BATCH");
+    expect(lit("components/memory/documents-panel.tsx")).toContain("MAX_FILES_PER_BATCH");
+    // Aucune copie figée « 10 fichiers » dans les surfaces de téléversement.
+    expect(lit("components/memory/documents-panel.tsx")).not.toContain("10 fichiers");
+    expect(lit("components/memory/memory-workspace.tsx")).not.toContain("10 fichiers");
+    expect(lit("app/memory/page.tsx")).not.toContain("10 fichiers par lot");
+  });
+
+  it("le client n'ouvre la session QUE pour les fichiers validés par la politique (pré-validation inchangée)", () => {
+    const source = lit("lib/storage/upload-client.ts");
+    expect(source).toContain("validateSingleUpload");
+    expect(source).toContain('"/api/storage/permanent/session"');
+    expect(source).toContain('"/api/storage/permanent/commit"');
+  });
+});
+
 describe("garde téléversement direct — reset de cache", () => {
   it("reinitialiseCacheCorsPourTest existe et est sans effet de bord", () => {
     expect(typeof reinitialiseCacheCorsPourTest).toBe("function");

@@ -8,6 +8,7 @@ vi.mock("@/lib/storage/r2", () => ({
 vi.mock("@/lib/firebase/admin", () => ({ adminDb: {} }));
 
 import { downloadFromR2 } from "@/lib/storage/r2";
+import { ATTACHMENT_MAX_FILES } from "./attachment-policy";
 import { loadAgentAttachmentsContext } from "./attachment-context";
 
 const mockedDownload = vi.mocked(downloadFromR2);
@@ -59,7 +60,7 @@ describe("loadAgentAttachmentsContext", () => {
     expect(result.note).toContain("file.read");
   });
 
-  it("plafonne le budget total du bloc de contexte (10 fichiers × 50 Mo → 60k caractères)", async () => {
+  it("plafonne le budget total du bloc de contexte (15 fichiers × 100 Mo → 60k caractères)", async () => {
     const big = "x".repeat(20_000);
     mockedDownload.mockImplementation(() => Promise.resolve(Buffer.from(big, "utf8")) as never);
     const attachments = Array.from({ length: 10 }, (_unused, index) => ({
@@ -74,15 +75,15 @@ describe("loadAgentAttachmentsContext", () => {
     expect(result.files).toHaveLength(10);
   });
 
-  it("plafonne le nombre de pièces jointes traitées à la politique (10)", async () => {
+  it(`plafonne le nombre de pièces jointes traitées à la politique (${ATTACHMENT_MAX_FILES})`, async () => {
     mockedDownload.mockResolvedValue(Buffer.from("x") as never);
-    const attachments = Array.from({ length: 14 }, (_unused, index) => ({
+    const attachments = Array.from({ length: ATTACHMENT_MAX_FILES + 5 }, (_unused, index) => ({
       path: `${PREFIX}f-${index}.txt`,
       name: `f-${index}.txt`,
       contentType: "text/plain",
     }));
     const result = await loadAgentAttachmentsContext(USER, attachments);
-    expect(result.files).toHaveLength(10);
-    expect(mockedDownload).toHaveBeenCalledTimes(10);
+    expect(result.files).toHaveLength(ATTACHMENT_MAX_FILES);
+    expect(mockedDownload).toHaveBeenCalledTimes(ATTACHMENT_MAX_FILES);
   });
 });

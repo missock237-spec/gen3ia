@@ -26,6 +26,13 @@ import "server-only";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { PaireLangage } from "./generation/corpus";
+// DICTIONNAIRE LARGE (2026-11-13, demande propriétaire « gen3 doit reconnaître
+// toutes les abréviations ») : 462 entrées lib/langue avec désambiguïsation
+// par contexte, zones protégées (URLs, e-mails, code) et unités chiffrées.
+// Composition avec le dataset : le dictionnaire large traite EN PREMIER
+// (forme longue + originale conservée), le dataset complète UNIQUEMENT les
+// sigles absents du dictionnaire — jamais de double expansion.
+import { developperAbreviations, detecterAbreviations } from "@/lib/langue/abreviations";
 
 /** Ligne du dataset abréviations (sous-ensemble utile au runtime). */
 interface LigneAbreviation {
@@ -131,11 +138,26 @@ export function reconnaitreAbréviation(texte: string): { sigle: string; expansi
  * majuscule (convention typographique = désambiguïsation gratuite).
  */
 export function promptAvecAbréviations(prompt: string): string {
-  if (!charge) return prompt;
-  if (EXPANSIONS.size === 0 || prompt.length < 2) return prompt;
-  let sortie = prompt;
+  if (prompt.length < 2) return prompt;
+  // PASSAGE 1 — dictionnaire large lib/langue : expansion en forme longue
+  // avec l'originale conservée (« slt » → « salut (slt) »), zones protégées
+  // respectées, ambiguës tranchées par contexte sinon laissées intactes.
+  const etapeDictionnaire = developperAbreviations(prompt, { conserverOriginale: true });
+  // Formes RÉELLEMENT développées par le passage 1 : une occurrence ambiguë
+  // laissée intacte (ou dans une zone protégée) garde le droit au dataset.
+  const dejaDeveloppees = new Set(
+    detecterAbreviations(prompt)
+      .filter((occurrence) => occurrence.expansion !== null)
+      .map((occurrence) => occurrence.abreviation.toLowerCase()),
+  );
+  if (!charge || EXPANSIONS.size === 0) return etapeDictionnaire;
+  // PASSAGE 2 — dataset datasets/abbreviations : complète UNIQUEMENT les
+  // sigles que le dictionnaire large n'a pas déjà développés (pas de double
+  // parenthèse, pas de re-expansion d'une forme déjà traitée).
+  let sortie = etapeDictionnaire;
   for (const [clé, expansion] of EXPANSIONS) {
     if (expansion.length < 4) continue; // expansions triviales inutiles
+    if (dejaDeveloppees.has(clé.toLowerCase())) continue; // déjà géré par le passage 1
     // CASSE ORIGINALE du sigle (« SaaS », « API », « mdr ») : match exact —
     // un mot minuscule inconnu (« cap ») ne déclenche jamais « CAP ».
     const original = ORIGINAUX.get(clé) ?? clé;

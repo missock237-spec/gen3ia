@@ -15,6 +15,7 @@ import {
   ingestKnowledgeDocument,
   KnowledgeDocumentRecord,
 } from "@/lib/knowledge/ingestion";
+import { ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     // ── Ingestion par JSON ───────────────────────────────────────────────
     if (contentType.includes("application/json")) {
       const raw = await request.json().catch(() => ({})) as Record<string, unknown>;
-      // Canal STOCKAGE PERMANENT (R2) : gros fichiers (jusqu'à 50 Mo) sans
+      // Canal STOCKAGE PERMANENT (R2) : gros fichiers (jusqu'à 100 Mo) sans
       // limite de corps serverless — cloisonnement vérifié avant lecture.
       if (typeof raw.path === "string") {
         const body = PERMANENT_BODY_SCHEMA.parse(raw);
@@ -145,7 +146,12 @@ export async function POST(request: NextRequest) {
 
       const files = form.getAll("files").filter((entry): entry is File => entry instanceof File);
       if (files.length === 0) return NextResponse.json({ error: "Aucun fichier reçu." }, { status: 422 });
-      if (files.length > 10) return NextResponse.json({ error: "10 fichiers maximum par lot." }, { status: 422 });
+      if (files.length > ATTACHMENT_MAX_FILES) {
+        return NextResponse.json(
+          { error: `${ATTACHMENT_MAX_FILES} fichiers maximum par lot.` },
+          { status: 422 },
+        );
+      }
 
       const results: Array<{ name: string; status: "indexed" | "empty" | "failed"; documentId?: string; chunkCount?: number; error?: string }> = [];
       for (const file of files) {

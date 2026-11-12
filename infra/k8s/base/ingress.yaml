@@ -39,9 +39,14 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     # ---------- Corps des requêtes ----------
-    # 25 m : uploads utilisateur (assets vidéo/images via /api/*) — aligné
-    # sur les limites pratiques constatées côté R2/S3. Ne pas monter sans
-    # raison : c'est aussi une garde anti-abus.
+    # 25 m : garde anti-abus pour le canal DIRECT (/api/storage/permanent POST,
+    # /api/files/import multipart, captures…). Les GROS fichiers (jusqu'à
+    # 100 Mo, lots de 15 — politique lib/storage/upload-policy.ts) ne
+    # traversent PAS cet ingress : le navigateur dépose chaque partie (8 Mo)
+    # DIRECTEMENT chez R2 via des URLs présignées (multipart, lib/storage/
+    # upload-client.ts) — l'ingress ne porte que les sessions JSON de quelques
+    # Ko. Monter cette valeur sans raison exposerait la RAM des pods (lectures
+    # Buffer en mémoire) sans rien ajouter au canal 100 Mo.
     nginx.ingress.kubernetes.io/proxy-body-size: "25m"
     # ---------- SSE / WebSocket (cf. note en en-tête) ----------
     nginx.ingress.kubernetes.io/proxy-buffering: "off"

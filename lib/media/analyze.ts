@@ -38,7 +38,13 @@ import type { MessageAttachment } from "@/lib/domain/conversations/types";
  * invention.
  */
 
-/** Plafond par média analysé (parité politique pièces jointes : 50 Mo). */
+/**
+ * Plafond par média ANALYSÉ (budget de traitement ffprobe/ffmpeg, 50 Mo).
+ * POLITIQUE PIÈCES JOINTES : 100 Mo depuis le lot « 15 × 100 Mo » — un média
+ * joint de 50–100 Mo reste ACCEPTÉ au téléversement mais son analyse locale
+ * est indisponible (fail-soft, message honnête dans le contexte). Augmenter
+ * ici double la mémoire de traitement : passer par VIDEO_MAX_MEDIA_BYTES.
+ */
 const MAX_ANALYSE_OCTETS = VIDEO_LIMITS.maxMediaBytes;
 
 /** Durée max de récupération d'une source distante. */

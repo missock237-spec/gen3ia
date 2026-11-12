@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * Task 150 — Plans de stockage permanent.
  *
- * 1 Go offert à chaque compte (plan free), 5 Go pour 2,5 €/mois et 10 Go
- * pour 5 €/mois. Renouvellement lazy idempotent (référence déterministe par
- * période), retour au plan free sans destruction des fichiers quand le
- * portefeuille ne couvre plus l'échéance.
+ * 4 Go offerts à chaque compte (plan free — socle MAX_USER_QUOTA_BYTES de la
+ * politique de téléversement : un lot complet de 15 × 100 Mo = 1,5 Go doit
+ * tenir), 5 Go pour 2,5 €/mois et 10 Go pour 5 €/mois. Renouvellement lazy
+ * idempotent (référence déterministe par période), retour au plan free sans
+ * destruction des fichiers quand le portefeuille ne couvre plus l'échéance.
  */
 
 const docGet = vi.fn();
@@ -79,7 +80,9 @@ describe("catalogue des plans", () => {
     const free = findStoragePlan("free");
     const pro5 = findStoragePlan("storage-pro5");
     const pro10 = findStoragePlan("storage-pro10");
-    expect(free?.quotaBytes).toBe(1024 ** 3);
+    // Socle free DÉRIVÉ de la politique de téléversement (4 Go) : un lot
+    // de 15 × 100 Mo (1,5 Go) tient dans le quota de base.
+    expect(free?.quotaBytes).toBe(4 * 1024 ** 3);
     expect(free?.priceMinor).toBe(0);
     expect(pro5?.quotaBytes).toBe(5 * 1024 ** 3);
     expect(pro5?.priceMinor).toBe(250); // 2,5 €/mois
@@ -95,10 +98,10 @@ describe("catalogue des plans", () => {
 });
 
 describe("getStorageProfile", () => {
-  it("accorde le plan free (1 Go) à un compte sans historique", async () => {
+  it("accorde le plan free (4 Go) à un compte sans historique", async () => {
     const profile = await getStorageProfile("u-new");
     expect(profile.plan.id).toBe("free");
-    expect(profile.plan.quotaBytes).toBe(1024 ** 3);
+    expect(profile.plan.quotaBytes).toBe(4 * 1024 ** 3);
     expect(profile.renewalAt).toBeNull();
     expect(reserveFundsMock).not.toHaveBeenCalled();
   });
@@ -135,7 +138,7 @@ describe("getStorageProfile", () => {
     const profile = await getStorageProfile("u-broke");
     expect(profile.plan.id).toBe("free");
     expect(profile.licenceExtraBytes).toBe(600 * GO);
-    expect(await getQuotaBytesForUser("u-broke")).toBe(601 * GO); // 1 Go free + licence
+    expect(await getQuotaBytesForUser("u-broke")).toBe(604 * GO); // 4 Go free + licence
   });
 
   it("une panne de lecture des licences ne masque jamais le plan (repli à zéro)", async () => {
@@ -163,7 +166,7 @@ describe("getStorageProfile", () => {
     planStore = { planId: "storage-pro5", renewalAt: ts(Date.now() - DAY) };
     const profile = await getStorageProfile("u-broke");
     expect(profile.plan.id).toBe("free");
-    expect(profile.plan.quotaBytes).toBe(1024 ** 3);
+    expect(profile.plan.quotaBytes).toBe(4 * 1024 ** 3);
     expect(profile.lastRenewalError).toContain("Insufficient wallet balance");
     expect(planStore).toMatchObject({ planId: "free", renewalAt: null });
   });

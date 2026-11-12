@@ -61,6 +61,11 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import CarteAutoApprentissage from "@/components/chat/auto-apprentissage-carte";
 import IndicateurMoteur from "@/components/chat/indicateur-moteur";
 import { CarteVideoFil } from "@/components/chat/carte-video-fil";
+import {
+  IndicateurReflexion,
+  phaseDepuisEvenement,
+  type PhaseReflexion,
+} from "./indicateur-reflexion";
 import { authFetch } from "@/lib/firebase/auth-client";
 import {
   fusionnerHistoriqueServeur,
@@ -546,13 +551,17 @@ interface MessageViewProps {
   m: NovaMessage;
   dernierBot: boolean;
   dernierUser: boolean;
+  /** RÉFLEXION VIVANTE (demande propriétaire) : phase réelle du flux +
+   *  libellé serveur — affichés tant que la bulle est vide (attente). */
+  phase: PhaseReflexion;
+  libelleFlux: string | null;
   onCopier: (texte: string) => void;
   onRegenerer: () => void;
   onModifier: () => void;
   onFeedback: (m: NovaMessage, note: "up" | "down") => void;
 }
 
-const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser, onCopier, onRegenerer, onModifier, onFeedback }: MessageViewProps) {
+const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser, phase, libelleFlux, onCopier, onRegenerer, onModifier, onFeedback }: MessageViewProps) {
   const bot = m.role === "assistant";
   const blocs = React.useMemo(() => (bot ? blocsMarkdown(m.content || "") : []), [bot, m.content]);
   const [debugOuvert, setDebugOuvert] = React.useState(false);
@@ -572,11 +581,11 @@ const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser
         <div className="nova-bulle">
           {bot ? (
             m.enCours && !m.content ? (
-              <div className="nova-frappe" aria-label="Gen3ia prépare une réponse">
-                <span className="dot" />
-                <span className="dot" />
-                <span className="dot" />
-              </div>
+              /* RÉFLEXION VIVANTE (demande propriétaire : « gen3 doit montrer
+               * qu'il est en pleine réflexion ») : remplace les trois points
+               * muets par l'indicateur de phase réelle (libellé annoncé via
+               * aria-live, disparaît au premier delta / au done). */
+              <IndicateurReflexion phase={phase} libelle={libelleFlux} />
             ) : (
               <>
                 {blocs.map((bloc, i) =>
@@ -715,6 +724,12 @@ export default function NovaChat() {
   }>({ enCours: false, mode: null, resultats: [], erreur: null });
   const [enCours, setEnCours] = React.useState(false);
   const [statut, setStatut] = React.useState("Prête — demandez-lui tout");
+  /* RÉFLEXION VIVANTE (demande propriétaire : « gen3 doit montrer à
+   * l'utilisateur qu'il est en pleine réflexion ») : la phase est déduite
+   * UNIQUEMENT des événements réels du flux (status/run_created/step_update)
+   * et le libellé serveur prime — aucune phase n'est jamais inventée. */
+  const [phaseReflexion, setPhaseReflexion] = React.useState<PhaseReflexion>("reflexion");
+  const [libelleFlux, setLibelleFlux] = React.useState<string | null>(null);
   const [sidebarOuverte, setSidebarOuverte] = React.useState(false);
   const [reduite, setReduite] = React.useState(false); // GLM : volet latéral repliable (desktop)
   const [popOutils, setPopOutils] = React.useState(false);
@@ -1361,6 +1376,10 @@ export default function NovaChat() {
       controleurRef.current = controller;
       setEnCours(true);
       setStatut("Gen3ia écrit…");
+      // RÉFLEXION VIVANTE : nouvelle requête → l'indicateur du fil repart
+      // de « gen3 réfléchit… » (jamais d'une phase d'un tour précédent).
+      setPhaseReflexion("reflexion");
+      setLibelleFlux(null);
 
       const def = EFFORTS[effortRef.current];
       // Plugins : les connecteurs activés (apps externes + « api-<id> »)
@@ -1422,9 +1441,15 @@ export default function NovaChat() {
             return; // ligne partielle/invalide : ignorée
           }
           switch (event.type) {
-            case "status":
+            case "status": {
               setStatut(event.label);
+              // RÉFLEXION VIVANTE : le libellé RÉEL du serveur prime dans le
+              // fil ; la phase ne bouge que si l'événement en porte une.
+              setLibelleFlux(event.label || null);
+              const prochaine = phaseDepuisEvenement(event);
+              if (prochaine) setPhaseReflexion(prochaine);
               break;
+            }
             case "message_delta":
               recu = true;
               contenu += event.delta;
@@ -1537,10 +1562,23 @@ export default function NovaChat() {
             }
             case "error":
               throw new Error(event.message || "Erreur en cours de génération.");
+            case "run_created":
+              // RÉFLEXION VIVANTE : un plan d'exécution vient d'être créé →
+              // « gen3 organise sa réponse… » (phase réelle du flux).
+              setPhaseReflexion("planification");
+              break;
+            case "step_update": {
+              // RÉFLEXION VIVANTE : étape du run (outil réel appelé → «
+              // utilise ses outils » ; compréhension → « analyse votre
+              // demande »…). null = l'étape ne porte rien d'affichable.
+              const prochaine = phaseDepuisEvenement(event);
+              if (prochaine) setPhaseReflexion(prochaine);
+              break;
+            }
             default:
-              // run_created / step_update / approval_created / artifact_created /
-              // billing : non rendus dans cette UI épurée — la persistance
-              // serveur reste consultable dans /workspace/conversations.
+              // approval_created / artifact_created / billing :
+              // non rendus dans cette UI épurée — la persistance serveur
+              // reste consultable dans /workspace/conversations.
               break;
           }
         };
@@ -1593,6 +1631,11 @@ export default function NovaChat() {
         controleurRef.current = null;
         setEnCours(false);
         setStatut("Prête — demandez-lui tout");
+        // RÉFLEXION VIVANTE : tour terminé (done / erreur / arrêt) →
+        // remise à zéro propre ; l'indicateur a déjà disparu du fil dès la
+        // première réponse (garde `enCours && !content` sur la bulle).
+        setPhaseReflexion("reflexion");
+        setLibelleFlux(null);
         sauvegarder();
         dernierTourVocalRef.current = false; // tour terminé : réarmement voix
       }
@@ -2378,6 +2421,8 @@ export default function NovaChat() {
                   m={m}
                   dernierBot={i === idxBot}
                   dernierUser={i === idxUser && idxUser > idxBot}
+                  phase={phaseReflexion}
+                  libelleFlux={libelleFlux}
                   onCopier={copierPressePapiers}
                   onRegenerer={() => {
                     void regenerer();

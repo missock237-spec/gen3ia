@@ -23,7 +23,9 @@ export const TTL_CACHE_MS = 10 * 60 * 1000;
 /** Entrée de cache : composition + horodatage. La composition est figée au
  *  type exact du moteur (source union fermée) pour préserver le contrat.
  *  it.114 — les trois sources des compartiments calculables sont ajoutées
- *  (union miroir de SourceLangage du moteur — import interdit : cycle). */
+ *  (union miroir de SourceLangage du moteur — import interdit : cycle).
+ *  Studio — « memoire_utilisateur » ajoutée (miroir de SourceLangage : la
+ *  réponse entraînée du Studio peut rejoindre le cache par composer()). */
 interface EntreeCache {
   composition: {
     texte: string;
@@ -37,7 +39,9 @@ interface EntreeCache {
       | "vocation"
       | "compartiment_math"
       | "compartiment_monde"
-      | "compartiment_terminal";
+      | "compartiment_terminal"
+      | "memoire_utilisateur"
+      | "memoire_dev_web";
     theme?: string;
     scoreAppariement?: number;
     clePair?: string;

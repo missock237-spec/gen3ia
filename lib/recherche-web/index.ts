@@ -19,6 +19,12 @@ import { lirePagePourRecherche } from "./extraction/navigation-playwright";
 import { validerDatePublication } from "./verification/verification-sources";
 import type { PageExtraite, ReponseRechercheWeb, ResultatVerifie } from "./types";
 
+// RAPPORT UTILISATEUR (demande propriétaire « recherche sans sources ») :
+// la sortie visible de la recherche web est un rapport détaillé et
+// autonome — construit par le module pur lib/recherche-web/rapport.
+export { construirRapportRecherche, evaluerFiabilite } from "./rapport";
+export type { RapportRecherche, ResultatPourRapport, FiabiliteRapport } from "./rapport";
+
 /** Budget de lecture des pages : la recherche reste réactive. */
 const PAGES_LUES_MAX = 3;
 

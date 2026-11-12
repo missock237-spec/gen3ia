@@ -279,14 +279,19 @@ describe("UI chat — le média apparaît VRAIMENT dans la conversation", () => 
   // serveur stocke la progression en 0..1 (contrat UI ×100) — la carte du
   // fil appliquait Math.round() NU : la barre restait à 0 % pendant toute
   // la production. Verrou : conversion tolérante + monotone + état conservé.
-  it("la barre du fil convertit le contrat 0..1 en POURCENTAGE (×100) — barre qui AUGMENTE", () => {
+  it("la carte du fil convertit le contrat 0..1 en POURCENTAGE (×100) — carré qui AUGMENTE", () => {
+    // Conversion tolérante identique à la carte workspace (0..1 → %),
+    // externalisée dans le module de logique pure (pattern du dépôt :
+    // composant .tsx non importable sous vitest → module sœur .ts).
+    const sourceLogique = lire("components/chat/carte-video-fil-logique.ts");
+    expect(sourceLogique).toContain("export function pourcentageDepuis");
+    expect(sourceLogique).toContain("valeur <= 1 ? valeur * 100 : valeur");
+    expect(sourceLogique).toContain("Math.max(0, Math.min(100");
     const source = lire("components/chat/carte-video-fil.tsx");
-    // Conversion tolérante identique à la carte workspace (0..1 → %).
-    expect(source).toContain("function pourcentageDepuis");
-    expect(source).toContain("valeur <= 1 ? valeur * 100 : valeur");
-    expect(source).toContain("Math.max(0, Math.min(100");
-    // La valeur affichée dans le fil est le pourcentage converti —
-    // plus JAMAIS un Math.round() nu sur la valeur 0..1 brute.
+    // La carte du fil importe la logique partagée (plus JAMAIS un
+    // Math.round() nu sur la valeur 0..1 brute).
+    expect(source).toContain("carte-video-fil-logique");
+    expect(source).toContain("pourcentageDepuis(st.progress)");
     expect(source).not.toContain("Math.round(etat.progress)");
     expect(source).toContain("const progression = etat.type === \"progression\" ? etat.progress : 0");
   });

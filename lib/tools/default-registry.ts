@@ -46,6 +46,23 @@ import { analyzeMediaTool } from "@/lib/tools/media/analyze-media";
 // audio mais aucun exécuteur n'existait (échec « Unknown tool » garanti).
 // Synthèse harmonique neuronale locale, honnête (pas de parole naturelle).
 import { voiceSpeakTool } from "@/lib/tools/media/voice-speak";
+// musique.creer RÉEL : composition musicale algorithmique déterministe
+// (styles, accords, mélodie, percussions) rendue WAV→MP3 via FFmpeg et
+// persistée — l'utilisateur reçoit un vrai fichier audio de la durée demandée.
+import { musiqueCreerTool } from "@/lib/tools/media/musique";
+// BOÎTE À OUTILS DÉV (demande propriétaire 2026-11-13 : « donne à gen3 tous
+// les outils dont il a besoin dans le code et le développement web ») :
+// exécution JS sandboxée, analyse statique, HTTP SSRF-gardé, DNS réel,
+// formatage JSON/base64/hash/URL, testeur d'expressions régulières.
+import { outilCodeExec } from "@/lib/tools/code/exec";
+import { outilCodeInspect } from "@/lib/tools/code/inspect";
+import { outilWebHttp } from "@/lib/tools/code/http";
+import { outilWebDns } from "@/lib/tools/code/dns";
+import { outilDevFmt } from "@/lib/tools/code/fmt";
+import { outilDevRegex } from "@/lib/tools/code/regex";
+// artefacts.audit — audit multi-conversations : lister ce que gen3 a créé
+// ou que l'utilisateur a donné, lire, modifier avec historique de versions.
+import { artefactsAuditTool } from "@/lib/tools/files/artefacts-audit";
 import {
   notionCreatePageTool,
   notionSearchTool,
@@ -189,6 +206,20 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(analyzeMediaTool);
   // voice.speak RÉEL : la promesse AUDIO RULE devient une capacité vraie.
   registry.register(voiceSpeakTool);
+  // musique.creer RÉEL : la demande « crée une musique de 2 min » produit un
+  // vrai fichier audio persisté et livré dans la conversation.
+  registry.register(musiqueCreerTool);
+  // BOÎTE À OUTILS DÉV : toujours enregistrés — web.http/web.dns échouent
+  // honnêtement (SSRF-guard, ENOTFOUND), code.exec est sandboxé (vm, timeout).
+  registry.register(outilCodeExec);
+  registry.register(outilCodeInspect);
+  registry.register(outilWebHttp);
+  registry.register(outilWebDns);
+  registry.register(outilDevFmt);
+  registry.register(outilDevRegex);
+  // artefacts.audit : audit des créations gen3 et des apports utilisateur
+  // (toutes conversations) — lecture et modification avec versions.
+  registry.register(artefactsAuditTool);
   if (process.env.NOTION_API_TOKEN) {
     registry.register(notionSearchTool);
     registry.register(notionCreatePageTool);

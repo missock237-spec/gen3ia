@@ -203,6 +203,24 @@ const MOTS_CLES_DOMAINES: Readonly<Record<string, readonly string[]>> = {
   voice_speech: ["transcription", "voix", "prononciation", "fleurs", "parole"],
   audio_understanding: ["audio", "son", "fréquence", "frequence", "amplitude", "décibel", "decibel", "enregistrement", "wav"],
   multimodal_v4: ["multimodal", "snapshot", "bande", "cortex", "onde", "fenêtre", "fenetre", "asset"],
+  // it.150 — domaine « développement web » (demande propriétaire : « l'entraîner
+  // sur le dev web ET le DNS »). Termes SPÉCIFIQUES dev web/DNS uniquement :
+  // les termes génériques (« fonction », « variable », « javascript »…) restent
+  // dans leurs domaines d'origine (code_v4, security_v4 — ordre de priorité :
+  // les entrées précédentes gagnent en cas d'égalité de score).
+  "developpement-web": [
+    "html", "css", "flexbox", "grid-template", "css grid", "media query",
+    "responsive", "custom property", "dark mode", "typescript", "node.js",
+    "promise", "async", "await", "react", "jsx", "usestate", "useeffect",
+    "hook", "next.js", "app router", "server component", "client component",
+    "cors", "preflight", "etag", "cdn", "csp", "content-security-policy",
+    "clickjacking", "dns", "cname", "enregistrement mx", "mx ", "ttl",
+    "dnssec", "spf", "dkim", "dmarc", "nxdomain", "servfail", "zone dns",
+    "serveur autoritaire", "résolveur", "resolveur", "propagation dns",
+    "dig ", "web vitals", "lighthouse", "lcp", "wcag", "accessibilité",
+    "accessibilite", "a11y", "aria-", "sémantique", "semantique",
+    "lecteur d'écran",
+  ],
 };
 
 /** Identifie le domaine d'une requête par recouvrement de mots-clés
@@ -222,9 +240,213 @@ export function identifieDomaine(motif: string): string | null {
   return meilleur;
 }
 
+// ─── DOMAINE « DÉVELOPPEMENT WEB » (it.150) — annexe consultable ────────────
+
+/** Domaine dev web + DNS (demande propriétaire : « l'entraîner sur le dev web
+ * ET le DNS »). Enregistré À CÔTÉ des 19 domaines canoniques : la structure
+ * mesurée 19 × 7 = 133 compartiments (MESURES_MEMOIRE, TOTAUX) est inchangée ;
+ * le domaine dev web vit dans une ANNEXE dédiée, indexée en totalité et
+ * consultable par la même voie « mémorisée » (voir repondreIngestion). */
+export const DOMAINE_DEVELOPPEMENT_WEB = "developpement-web";
+
+/** Sous-thèmes du domaine — identiques aux corpus commis
+ * lib/neural/generation/corpus-dev-web-*.ts (thèmes « developpement-web:X »). */
+export const SOUS_THEMES_DEV_WEB = [
+  "html-css",
+  "js-ts",
+  "react-next",
+  "http-securite",
+  "perf-a11y",
+  "dns",
+] as const;
+
+export type SousThemeDevWebMemoire = (typeof SOUS_THEMES_DEV_WEB)[number];
+
+/** Unité mémoire dev web (paire question → réponse précise, sous-thème tracé). */
+export interface UniteDevWebMemoire {
+  readonly motif: string;
+  readonly reponse: string;
+  readonly sousTheme: string;
+}
+
+/** Seuil de consultation de l'annexe (même philosophie que la voie
+ * « mémorisée » : pas de faux positif — en dessous, on ne répond pas). */
+export const SEUIL_CONSULTATION_DEV_WEB = 0.34;
+
+/** Provenance tracée pour l'ingestion du corpus commis dev web. */
+export const SOURCE_CORPUS_DEV_WEB = "corpus-commis:developpement-web";
+
+/** Mots-outils français étendus du tokenizer annexe (les interrogatifs et
+ * élisions n'apportent rien au recouvrement sémantique). Accents neutralisés. */
+const TOKENS_STOP_DEV_WEB: ReadonlySet<string> = new Set([
+  ...TOKEN_STOP,
+  "qu", "quest", "cest", "pourquoi", "comment", "peut", "on", "veux",
+  "faire", "faut", "sert", "quelle", "quel", "dire", "explique", "dis",
+]);
+
+/** Tokenize annexe : casse neutralisée, accents neutralisés, mots-outils écartés. */
+function tokensDevWeb(texte: string): string[] {
+  return texte
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .split(/[^a-z0-9]+/)
+    .filter((m) => m.length > 1 && !TOKENS_STOP_DEV_WEB.has(m));
+}
+
+/**
+ * ANNEXE DÉVELOPPEMENT WEB : mémoire consultable du domaine « developpement-web »
+ * alimentée par les corpus commis (corpus-dev-web-*.ts). Contrairement à
+ * l'anneau d'ingestion (1024 enseignements, éviction), l'annexe indexe TOUT
+ * le corpus (déduplication par empreinte) — c'est la mémoire de connaissance
+ * du domaine, consultable en totalité.
+ */
+export class MemoireDeveloppementWebGen3 {
+  private readonly unites = new Map<string, UniteDevWebMemoire>();
+  private readonly ordre: string[] = [];
+  private readonly octetsParSousTheme = new Map<string, number>();
+
+  /** Ingestion d'UNE unité (empreinte + déduplication honnête). */
+  ingereUnite(unite: UniteDevWebMemoire): ResultatIngestion {
+    const motif = unite.motif.trim();
+    const reponse = unite.reponse.trim();
+    if (motif.length === 0 || reponse.length === 0) {
+      return { accepte: false, raison: "contenu-vide", empreinte: "", octets: 0 };
+    }
+    const empreinte = empreinte128(`${motif}\n${reponse}`);
+    if (this.unites.has(empreinte)) {
+      return { accepte: false, raison: "doublon", empreinte, octets: motif.length + reponse.length };
+    }
+    const octets = motif.length + reponse.length;
+    const sousTheme = unite.sousTheme.trim().length > 0 ? unite.sousTheme : "dns";
+    this.unites.set(empreinte, { motif, reponse, sousTheme });
+    this.ordre.push(empreinte);
+    this.octetsParSousTheme.set(sousTheme, (this.octetsParSousTheme.get(sousTheme) ?? 0) + octets);
+    return { accepte: true, raison: "nouveau", empreinte, octets };
+  }
+
+  /** Ingestion d'un corpus complet — résumé honnête (doublons refusés). */
+  ingereCorpus(unites: readonly UniteDevWebMemoire[]): {
+    acceptees: number;
+    doublons: number;
+    videes: number;
+    octets: number;
+    total: number;
+  } {
+    let acceptees = 0;
+    let doublons = 0;
+    let videes = 0;
+    let octets = 0;
+    for (const u of unites) {
+      const r = this.ingereUnite(u);
+      if (r.accepte) {
+        acceptees += 1;
+        octets += r.octets;
+      } else if (r.raison === "doublon") doublons += 1;
+      else videes += 1;
+    }
+    return { acceptees, doublons, videes, octets, total: unites.length };
+  }
+
+  /** Recouvrement d'une requête avec le motif d'une unité : moitié JACCARD
+   * des tokens, moitié CONTENANCE des tokens de la question dans le motif —
+   * une question courte (« qu'est-ce qu'un CNAME ») doit retrouver l'unité
+   * CNAME la plus focalisée sans être diluée par le motif complet. */
+  private scoreRequete(requete: string, unite: UniteDevWebMemoire): number {
+    const q = new Set(tokensDevWeb(requete));
+    if (q.size === 0) return 0;
+    const m = new Set(tokensDevWeb(unite.motif));
+    let inter = 0;
+    for (const x of q) if (m.has(x)) inter += 1;
+    if (inter === 0) return 0;
+    const jaccard = inter / (q.size + m.size - inter);
+    const contenance = inter / q.size;
+    return 0.5 * jaccard + 0.5 * contenance;
+  }
+
+  /** CONSULTATION : l'unité la plus proche de la question (null sous le
+   * seuil — jamais de fausse pertinence). */
+  consulte(question: string): UniteDevWebMemoire | null {
+    let meilleure: UniteDevWebMemoire | null = null;
+    let meilleurScore = 0;
+    for (const empreinte of this.ordre) {
+      const u = this.unites.get(empreinte)!;
+      const score = this.scoreRequete(question, u);
+      if (score > meilleurScore) {
+        meilleurScore = score;
+        meilleure = u;
+      }
+    }
+    if (!meilleure || meilleurScore < SEUIL_CONSULTATION_DEV_WEB) return null;
+    return meilleure;
+  }
+
+  /** CONSULTATION RICHE : unité principale + jusqu'à 2 compléments DÉJÀ
+   * pertinents pour la question (score ≥ moitié du seuil, réponses
+   * distinctes, plafond 600 caractères) — la réponse servie porte le
+   * contexte utile (TTL, priorités, exemples) sans jamais diluer sous le
+   * seuil de pertinence. */
+  consulteRiche(question: string): string | null {
+    const principale = this.consulte(question);
+    if (!principale) return null;
+    const morceaux: string[] = [principale.reponse];
+    const candidats: Array<{ unite: UniteDevWebMemoire; score: number }> = [];
+    const vue = new Set<string>([principale.reponse]);
+    for (const empreinte of this.ordre) {
+      const u = this.unites.get(empreinte)!;
+      if (u === principale || vue.has(u.reponse)) continue;
+      const score = this.scoreRequete(question, u);
+      if (score >= SEUIL_CONSULTATION_DEV_WEB / 2) {
+        candidats.push({ unite: u, score });
+      }
+    }
+    candidats.sort((a, b) => b.score - a.score);
+    let octets = principale.reponse.length;
+    for (const c of candidats.slice(0, 2)) {
+      if (octets + c.unite.reponse.length > 600) break;
+      morceaux.push(c.unite.reponse);
+      vue.add(c.unite.reponse);
+      octets += c.unite.reponse.length;
+    }
+    return morceaux.join("\n");
+  }
+
+  /** Inventaire honnête : total, octets et comptes par sous-thème. */
+  inventaire(): { total: number; octets: number; parSousTheme: Record<string, number> } {
+    const parSousTheme: Record<string, number> = {};
+    for (const u of this.unites.values()) {
+      parSousTheme[u.sousTheme] = (parSousTheme[u.sousTheme] ?? 0) + 1;
+    }
+    const octets = [...this.octetsParSousTheme.values()].reduce((s, v) => s + v, 0);
+    return { total: this.unites.size, octets, parSousTheme };
+  }
+
+  /** Unités indexées (ordre d'ingestion). */
+  litUnites(): readonly UniteDevWebMemoire[] {
+    return this.ordre.map((e) => this.unites.get(e)!);
+  }
+}
+
+/** Convertit les paires des corpus commis (thème « developpement-web:X »)
+ * en unités mémoire du domaine — typage structurel, aucune dépendance. */
+export function unitesDevWebDepuisPaires(
+  paires: readonly { motif: string; reponse: string; theme: string }[],
+): UniteDevWebMemoire[] {
+  const prefixe = `${DOMAINE_DEVELOPPEMENT_WEB}:`;
+  return paires
+    .filter((p) => p.theme.startsWith(prefixe))
+    .map((p) => ({
+      motif: p.motif,
+      reponse: p.reponse,
+      sousTheme: p.theme.slice(prefixe.length),
+    }));
+}
+
 // ─── LA MÉMOIRE DE DOMAINES ──────────────────────────────────────────────────
 
 export class MemoireDomainesGen3 {
+  /** Annexe dev web (corpus commis indexé en totalité — voir it.150). */
+  private readonly annexeDevWeb = new MemoireDeveloppementWebGen3();
   private readonly inges = new Map<string, Enseignement>();
   private readonly ordre: string[] = [];
   private readonly octetsIngesParCle = new Map<string, number>();
@@ -252,7 +474,10 @@ export class MemoireDomainesGen3 {
       return { accepte: false, raison: "doublon", empreinte, octets: contenu.length };
     }
     const domaine = params.domaine ?? identifieDomaine(params.question ?? contenu) ?? "multimodal_v4";
-    if (!DOMAINES_GEN3.includes(domaine)) {
+    // it.150 — « developpement-web » est un domaine enregistré (annexe) :
+    // l'ingestion chat/API l'accepte comme les 19 domaines canoniques.
+    const domainesConnus: readonly string[] = [...DOMAINES_GEN3, DOMAINE_DEVELOPPEMENT_WEB];
+    if (!domainesConnus.includes(domaine)) {
       return { accepte: false, raison: "domaine-inconnu", empreinte, octets: contenu.length };
     }
     const capacite = params.capacite ?? "texte";
@@ -288,6 +513,28 @@ export class MemoireDomainesGen3 {
     return { accepte: true, raison: "nouveau", empreinte, octets };
   }
 
+  /** Annexe dev web du domaine « developpement-web » (ingestion + consultation). */
+  memoireDevWeb(): MemoireDeveloppementWebGen3 {
+    return this.annexeDevWeb;
+  }
+
+  /** INGESTION DU CORPUS DEV WEB (it.150) : alimente l'annexe (index complet,
+   * sans éviction) et comptabilise les octets ACCEPTÉS dans le compartiment
+   * « developpement-web|texte » (couverture physique honnête, idempotent : un
+   * corpus déjà ingéré ne re-compte rien). */
+  ingereDevWebCorpus(
+    unites: readonly UniteDevWebMemoire[],
+    source: SourceIngestion = SOURCE_CORPUS_DEV_WEB,
+  ): { acceptees: number; doublons: number; videes: number; octets: number; total: number } {
+    const resume = this.annexeDevWeb.ingereCorpus(unites);
+    if (resume.octets > 0) {
+      const cle = `${DOMAINE_DEVELOPPEMENT_WEB}|texte`;
+      this.octetsIngesParCle.set(cle, (this.octetsIngesParCle.get(cle) ?? 0) + resume.octets);
+      this.compteurParSource.set(source, (this.compteurParSource.get(source) ?? 0) + resume.acceptees);
+    }
+    return resume;
+  }
+
   /** Voie « mémorisée » : meilleur enseignement par recouvrement de tokens. */
   repondreIngestion(motif: string): string | null {
     const q = tokensContenu(motif);
@@ -302,7 +549,17 @@ export class MemoireDomainesGen3 {
         meilleur = e;
       }
     }
-    if (!meilleur || meilleurScore < SEUIL_JACCARD_MEMORISEE) return null;
+    if (!meilleur || meilleurScore < SEUIL_JACCARD_MEMORISEE) {
+      // it.150 — la voie « mémorisée » consulte aussi l'annexe dev web :
+      // le corpus commis « developpement-web » (indexé en totalité) répond
+      // quand l'anneau d'ingestion n'a rien de pertinent. Même contrat :
+      // null sous le seuil — jamais de fausse pertinence. Version RICHE :
+      // unité principale + compléments pertinents (contexte utile).
+      const uniteRiche = this.annexeDevWeb.consulteRiche(motif);
+      if (uniteRiche !== null) return uniteRiche;
+      const unite = this.annexeDevWeb.consulte(motif);
+      return unite ? unite.reponse : null;
+    }
     return meilleur.contenu;
   }
 
@@ -365,6 +622,8 @@ export class MemoireDomainesGen3 {
     enseignements: number;
     parSource: Record<string, number>;
     dateMesure: string;
+    /** it.150 — inventaire de l'annexe du domaine « developpement-web ». */
+    developpementWeb: { total: number; octets: number; parSousTheme: Record<string, number> };
   } {
     const parSource: Record<string, number> = {};
     for (const [s, n] of this.compteurParSource.entries()) parSource[s] = n;
@@ -378,6 +637,7 @@ export class MemoireDomainesGen3 {
       enseignements: this.inges.size,
       parSource,
       dateMesure: DATE_MESURE,
+      developpementWeb: this.annexeDevWeb.inventaire(),
     };
   }
 

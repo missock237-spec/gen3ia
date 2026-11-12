@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { authFetch, readJsonSafely, useSessionAvailable } from "@/lib/firebase/auth-client";
+import { ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 import { SectionHeader } from "@/components/shells/section-header";
 import { EmptyState, LoadingState } from "@/components/shells/states";
 
@@ -236,7 +237,8 @@ export function KnowledgeConsole() {
     try {
       const form = new FormData();
       form.append("projectId", selectedProject);
-      Array.from(files).slice(0, 10).forEach((file) => form.append("files", file));
+      // Borne dérivée de la politique unifiée des pièces jointes (15 par lot).
+      Array.from(files).slice(0, ATTACHMENT_MAX_FILES).forEach((file) => form.append("files", file));
       const response = await authFetch("/api/knowledge", { method: "POST", body: form }, { timeoutMs: 180_000 });
       const data = await readJsonSafely<{ results?: ResultatImport[]; error?: string }>(response);
       if (response.status === 401) {

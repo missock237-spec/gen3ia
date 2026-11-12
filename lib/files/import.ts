@@ -29,12 +29,12 @@ import { downloadFromR2, isR2Configured, uploadToR2 } from "@/lib/storage/r2";
  *  3) contexte injecté dans les tours de conversation (contenu RÉEL, jamais
  *     le simple nom de fichier).
  *
- * DEUX canaux d'entrée (politique unifiée 10 fichiers × 50 Mo) :
+ * DEUX canaux d'entrée (politique unifiée 15 fichiers × 100 Mo) :
  *  - canal direct : FormData → /api/files/import (fichiers ≤ limite corps
  *    serverless) ;
  *  - canal R2 : { path } JSON d'un fichier DÉJÀ téléversé dans le stockage
  *    permanent (multipart présigné) — le serveur télécharge depuis R2 puis
- *    convertit : les 50 Mo passent RÉELLEMENT en production.
+ *    convertit : les 100 Mo passent RÉELLEMENT en production.
  */
 
 export const IMPORT_MAX_FILE_BYTES = ATTACHMENT_MAX_FILE_BYTES;
@@ -558,7 +558,7 @@ export async function getImportedFileContent(userId: string, id: string): Promis
 
 /**
  * Charge le contenu converti des fichiers joints et l'assemble en bloc de
- * contexte (mêmes budgets que la politique 10 fichiers × 50 Mo : 12 000
+ * contexte (mêmes budgets que la politique 15 fichiers × 100 Mo : 12 000
  * caractères par fichier, 60 000 au total, ATTACHMENT_MAX_FILES fichiers).
  *
  * DEUX sources de vérité :

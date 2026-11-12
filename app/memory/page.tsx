@@ -5,7 +5,7 @@ import { MemoryWorkspace } from "@/components/memory/memory-workspace";
 export const metadata: Metadata = {
   title: "Mémoire permanente",
   description:
-    "Stockez durablement les informations clés et les documents (jusqu'à 100 Mo par fichier, 10 fichiers par lot) que vos agents Gen3ia retrouveront à chaque mission.",
+    "Stockez durablement les informations clés et les documents (jusqu'à 100 Mo par fichier, 15 fichiers par lot) que vos agents Gen3ia retrouveront à chaque mission.",
 };
 
 export default function MemoryPage() {

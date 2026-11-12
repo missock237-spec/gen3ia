@@ -22,7 +22,7 @@ import { FieldValue, Timestamp } from "@/lib/r2fs";
  *   · l'espace de stockage R2 de l'utilisateur s'ouvre (préfixe
  *     users/<uid>/permanent/ — un fichier de bienvenue y est déposé par la
  *     route d'inscription) ;
- *   · le quota de stockage offert est de 1 Go (plan « free » de
+ *   · le quota de stockage offert est de 4 Go (plan « free » de
  *     lib/storage/plans.ts, appliqué dynamiquement par
  *     getQuotaBytesForUser — aucune création de document nécessaire) ;
  *   · l'identité plateforme + le wallet sont provisionnés (route signup).

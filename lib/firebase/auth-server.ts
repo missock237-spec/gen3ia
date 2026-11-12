@@ -3,6 +3,7 @@ import { createPublicKey, createVerify, type KeyObject } from "node:crypto";
 import type { DecodedIdToken } from "firebase-admin/auth";
 
 import { readSessionCookie } from "@/lib/server/session-cookie";
+import { requeteSortante } from "@/lib/perf/pool";
 
 /**
  * Vérification serveur des Firebase ID tokens.
@@ -59,7 +60,14 @@ async function fetchGooglePublicKeys(
     return certCache.keys;
   }
 
-  const response = await fetch(GOOGLE_CERTS_URL, { cache: "no-store" });
+  // POOL KEEP-ALIVE (Task 9-a) : les certificats Google sont re-fetchés
+  // périodiquement (max-age ~1 h) PAR INSTANCE ET PAR VÉRIFICATION kid
+  // inconnue — appels répétés vers la MÊME origine : la réutilisation de
+  // connexion (undici Agent) économise le handshake TCP/TLS à chaque
+  // fetch, et le timeout propre (5 s) garantit qu'une panne réseau ne
+  // bloque pas la vérification au-delà d'un délai borné. Comportement
+  // identique (cache: no-store, mêmes erreurs propagées).
+  const response = await requeteSortante(GOOGLE_CERTS_URL, { timeoutMs: 5_000 });
   if (!response.ok) {
     throw new Error(
       `Impossible de récupérer les certificats publics Google (HTTP ${response.status}).`,

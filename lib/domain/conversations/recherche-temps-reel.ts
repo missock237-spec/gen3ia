@@ -111,8 +111,12 @@ export async function contexteRechercheTempsReel(
 }
 
 /** Directive système ajoutée au tour quand un contexte temps réel existe :
- *  le modèle SAIT ce que le bloc contient et comment citer honnêtement. */
+ *  le modèle SAIT ce que le bloc contient et comment citer honnêtement.
+ *  DÉMANDE PROPRIÉTAIRE « rapport sans sources » : les numéros [n] du bloc
+ *  sont un repère INTERNE — la réponse ne produit JAMAIS de liste de
+ *  sources/URLs ; une citation [n] n'apparaît que si l'utilisateur demande
+ *  explicitement les sources. */
 export const DIRECTIVE_TEMPS_REEL = [
   "Une RECHERCHE WEB TEMPS RÉEL vient d'être exécutée par la plateforme gen3ia (moteurs multi-source réels, pages réellement lues) au moment de la demande.",
-  "Règles impératives : 1) toute information issue de ce bloc est citée avec son numéro de source [n] ; 2) ne JAMAIS inventer une source, un chiffre ou une date absents du bloc ; 3) si le bloc ne répond pas à la question, dis-le honnêtement et réponds avec ton expertise générale en signalant que c'est ton savoir d'entraînement, pas du temps réel ; 4) mentionne brièvement les moteurs ayant répondu et le nombre de sources uniques.",
+  "Règles impératives : 1) appuie ta réponse sur ce bloc — ne l'invente jamais ; 2) ne JAMAIS inventer une source, un chiffre ou une date absents du bloc ; 3) si le bloc ne répond pas à la question, dis-le honnêtement et réponds avec ton expertise générale en signalant que c'est ton savoir d'entraînement, pas du temps réel ; 4) ne produis JAMAIS de liste de sources, de liens, d'URLs ni de bibliographie — les numéros [n] du bloc sont un repère interne : cite [n] dans le texte uniquement si l'utilisateur demande explicitement les sources ; 5) mentionne brièvement le nombre d'informations recueillies.",
 ].join("\n");

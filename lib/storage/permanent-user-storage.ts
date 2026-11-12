@@ -46,9 +46,9 @@ function isOwnedPermanentKey(userId: string, key: string) {
 export async function storePermanentFile(params: { userId: string; filename: string; content: Buffer; contentType?: string; metadata?: Record<string, string> }) {
   if (!params.userId?.trim()) throw new Error("Permanent storage requires userId.");
   if (params.content.length === 0 || params.content.length > MAX_FILE_BYTES) throw new Error("File exceeds the permanent storage limit.");
-  // Quota effectif du plan (free 1 Go / 5 Go / 10 Go — Task 150) : le chemin
-  // direct (piece jointe chat, capture camera) est soumis au meme plafond
-  // que les televersements multipart.
+  // Quota effectif du plan (free 4 Go / 5 Go / 10 Go — Task 150 + socle
+  // MAX_USER_QUOTA_BYTES) : le chemin direct (piece jointe chat, capture
+  // camera) est soumis au meme plafond que les televersements multipart.
   const usage = await getUserStorageUsage(params.userId);
   if (usage.usedBytes + params.content.length > usage.quotaBytes) {
     throw new Error(`Quota de stockage depasse (${Math.round(usage.quotaBytes / 1024 ** 3)} Go). Supprimez des fichiers ou passez a un plan superieur.`);

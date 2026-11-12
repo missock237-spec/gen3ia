@@ -316,10 +316,13 @@ describe("it.140 — le contrat des outils raconte la capacité réelle", () => 
     });
     expect(valide.success).toBe(true);
     const codeSource = lire("tools/media/voice-speak.ts");
-    // Câblage : l'outil passe voix (résolue selon le personnage) + vitesse au service média réel.
+    // Câblage : l'outil passe voix (résolue selon le personnage) + vitesse au
+    // service média réel — vitesse CONTEXTUELLE (registre déduit du contenu,
+    // 2026-11-13) qui laisse la priorité à une vitesse explicite du planner.
     expect(codeSource).toContain("genererAudioNeuralEtPersister");
     expect(codeSource).toContain("voix: voixRésolue");
-    expect(codeSource).toContain("vitesse: input.vitesse");
+    expect(codeSource).toContain("const vitesseEffective = input.vitesse ?? prosodie.vitesse");
+    expect(codeSource).toContain("vitesse: vitesseEffective");
     expect(codeSource).toContain("choisirVoixSelonPersonnage");
     expect(codeSource).toContain("VOIX_PROFESSEUR");
   });
