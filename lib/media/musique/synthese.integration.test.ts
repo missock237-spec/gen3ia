@@ -3,8 +3,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import ffmpegStaticModule from "ffmpeg-static";
 import { describe, expect, it } from "vitest";
+
+import { resolveFfmpegBinary } from "@/lib/video/security";
 
 import { composerMusique } from "./composition";
 import { parseStyleMusique } from "./styles";
@@ -19,21 +20,19 @@ import { synthetiserMusique } from "./synthese";
  * binaire FFmpeg n'est présent dans l'environnement de test.
  */
 
-/** Chemin du binaire FFmpeg statique du repo (dépendance ffmpeg-static). */
-function cheminFfmpegStatique(): string | null {
-  // ffmpeg-static : `export default path` (interop CJS/ESM : parfois sous default).
-  const m = ffmpegStaticModule as unknown as { default?: unknown } | string | null;
-  const chemin = typeof m === "string" ? m : ((m?.default ?? m) as string | null | undefined);
-  return typeof chemin === "string" && chemin.length > 0 ? chemin : null;
+/** Le binaire RÉSOLU par le pipeline vidéo (ffmpeg-static si le binaire
+ * existe réellement, sinon téléchargement runtime, sinon PATH) — le test
+ * vérifie le MP3 avec la MÊME source de binaire que la synthèse, jamais un
+ * chemin brut absent du runner (postinstall ffmpeg-static bloqué en CI). */
+async function binaireVerifie(): Promise<string> {
+  const resolu = await resolveFfmpegBinary();
+  if (!resolu.path) throw new Error("aucun binaire FFmpeg résolvable");
+  return resolu.path;
 }
 
 describe("intégration FFmpeg réelle — musique → MP3 jouable", () => {
-  it("convertit une composition de 10 s en MP3 valide (ID3) avec la durée exacte", async () => {
-    const ffmpeg = cheminFfmpegStatique();
-    if (!ffmpeg) {
-      console.warn("[intégration] ffmpeg-static absent — test sauté.");
-      return;
-    }
+  it("convertit une composition de 10 s en MP3 valide (ID3) avec la durée exacte", { timeout: 120_000 }, async () => {
+    const ffmpeg = await binaireVerifie();
 
     // 1) Composition réelle (10 s — rapide, mêmes moteurs que 2 min).
     const parsee = parseStyleMusique("une musique calme de 2 minutes au piano");
