@@ -142,6 +142,13 @@ export interface CreateVideoProductionJobParams {
    * (le job se comporte exactement comme un job hors chat).
    */
   conversationId?: string;
+  /**
+   * LIVRAISON MÉDIA DURABLE (2026-11-12) — origine https de la requête du
+   * lanceur (résolue par la ROUTE, jamais fournie par le client) : le lien
+   * du master livré suit l'hôte réellement navigué (cookie host-only).
+   * Sanitisée (https/localhost, bornée) ; invalide → ignorée.
+   */
+  origineClient?: string;
 }
 
 export interface CreateVideoProductionJobResult {
@@ -257,6 +264,19 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
   // Task 107-a — conversation d'origine persistée SEULEMENT si valide
   // (pas de champ undefined sale : Firestore les rejette).
   const conversationId = normalizeConversationId(params.conversationId);
+  // LIVRAISON MÉDIA DURABLE (2026-11-12) : origine https du lanceur,
+  // sanitisée ici (l'origine vient de la ROUTE du tour, jamais d'une
+  // entrée client) ; invalide → ignorée (origine canonique à la livraison).
+  const origineValide = (() => {
+    const brut = (params.origineClient ?? "").trim().slice(0, 100);
+    if (!brut) return undefined;
+    try {
+      const url = new URL(brut);
+      return url.protocol === "https:" || url.hostname === "localhost" ? url.origin : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
   const job: VideoProductionJob = {
     id: jobId,
     userId: params.userId,
@@ -267,6 +287,7 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
     // clampée que la validation — jamais la valeur hors bornes d'origine.
     options: { ...options, derivedTargets },
     ...(conversationId ? { conversationId } : {}),
+    ...(origineValide ? { origineClient: origineValide } : {}),
     status: "queued",
     stage: "project",
     stageIndex: 0,

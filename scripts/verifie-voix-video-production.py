@@ -108,14 +108,23 @@ def envoyer(page, saisie, message: str) -> bool:
 
 
 def telecharger_audio(page, url: str) -> tuple[int, bytes]:
-    """Télécharge l'audio : data:URI décodée, sinon fetch navigateur puis
-    repli urllib direct (R2 public). Retourne (taille, premiers octets)."""
+    """Télécharge l'audio : data:URI décodée, sinon requête du CONTEXTE
+    navigateur (cookies de session + suivi 302 — l'URL DURABLE /api/media/
+    durable est authentifiée : le téléchargement sans cookie est un 401
+    ATTENDU), sinon fetch page, repli urllib (R2 public présigné).
+    Retourne (taille, premiers octets)."""
     if url.startswith("data:"):
         tete, _, corps = url.partition(",")
         if "base64" in tete:
             brut = base64.b64decode(corps)
             return len(brut), brut[:16]
         return len(corps), corps[:16].encode()
+    try:
+        reponse = page.context.request.get(url, timeout=90000)
+        donnees = reponse.body()
+        return len(donnees), donnees[:16]
+    except Exception:
+        pass
     try:
         brut = page.evaluate(
             "async (u) => { const r = await fetch(u, {credentials:'include'});"
@@ -257,12 +266,18 @@ def phase_voix(page, saisie) -> None:
     urls = re.findall(r"https?://[^\s)\]»]+", reponse_voix)
     verif("A4. URL d'écoute présente dans le fil", len(urls) >= 1,
           f"{len(urls)} URL(s)")
-    if urls:
-        taille, tete = telecharger_audio(page, urls[-1])
+    # LIVRAISON DURABLE (2026-11-12) : le lien du message doit être l'URL
+    # canonique re-signée (jamais une présignée expirable à 1 h).
+    durable = [u for u in urls if "/api/media/durable?path=" in u]
+    verif("A4b. URL DURABLE canonique (/api/media/durable) dans le message",
+          len(durable) >= 1, durable[0][:110] if durable else "absente")
+    cible = durable[-1] if durable else (urls[-1] if urls else "")
+    if cible:
+        taille, tete = telecharger_audio(page, cible)
         audio_ok = taille >= 15000 and est_audio(tete)
         verif("A5. AUDIO TÉLÉCHARGÉ = vraie parole (≥15 Ko, octets mp3/wav)",
               audio_ok, f"{taille} octets, tête={tete[:8].hex()}")
-        print(f"[audio] URL={urls[-1][:120]} taille={taille} "
+        print(f"[audio] URL={cible[:120]} taille={taille} "
               f"tête={tete[:8].hex()}", flush=True)
     else:
         verif("A5. AUDIO TÉLÉCHARGÉ (≥15 Ko, octets mp3/wav)", False,
@@ -376,11 +391,12 @@ def phase_video(page, saisie) -> None:
           livree, master_url[:120] if master_url else "")
     if master_url:
         try:
-            req = urllib.request.Request(master_url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=90) as r:
-                entetes = dict(r.headers)
-                taille_video = int(entetes.get("Content-Length", "0") or 0)
-                tete_v = r.read(16)
+            # URL DURABLE possible (/api/media/durable) → téléchargement via
+            # le contexte navigateur (cookies de session, suivi 302 R2).
+            reponse = page.context.request.get(master_url, timeout=120000)
+            donnees = reponse.body()
+            tete_v = donnees[:16]
+            taille_video = len(donnees)
             video_ok = (taille_video >= 100_000 and tete_v[4:8] == b"ftyp")
             verif("B7. MASTER VIDÉO TÉLÉCHARGEABLE (mp4 ≥100 Ko)",
                   video_ok,

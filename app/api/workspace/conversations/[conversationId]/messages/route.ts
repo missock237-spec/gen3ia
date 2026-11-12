@@ -131,6 +131,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
             agentId: body.agentId,
             webSearch: body.webSearch,
             timezone: body.timezone,
+            // LIVRAISON MÉDIA DURABLE : origine résolue par la route.
+            origineClient: request.nextUrl.origin,
           }),
       });
       return NextResponse.json({ ...result, billing });

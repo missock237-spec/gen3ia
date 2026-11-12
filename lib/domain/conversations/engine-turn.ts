@@ -43,6 +43,18 @@ export interface ConversationTurnInput {
    *  « rapide ⚡ / équilibré 🎯 / expert 🧠 » pilote fenêtre, budgets temps/
    *  contexte, self-review et directive de raisonnement (effortParameters). */
   reasoningEffort?: ReasoningEffort;
+  /**
+   * LIVRAISON MÉDIA DURABLE (2026-11-12) — origine https de la REQUÊTE de
+   * l'utilisateur (resolue par la route, jamais par le client) : les liens
+   * ABSOLUS de médias dans le texte du message suivent l'hôte que
+   * l'utilisateur navigue réellement (le cookie de session est host-only —
+   * un lien canonique apex serait un 401 pour une session www). Les
+   * lecteurs <audio>/<video> du fil utilisent l'URL RELATIVE (toujours
+   * correcte) ; ce champ ne sert QU'aux liens textuels. Aucune décision de
+   * sécurité n'en dépend (la route /api/media/durable authentifie le
+   * LECTEUR de toute façon).
+   */
+  origineClient?: string;
   /** Émetteur d'événements de flux (streaming NDJSON) — absent = API classique. */
   onEvent?: StreamEventEmitter;
 }

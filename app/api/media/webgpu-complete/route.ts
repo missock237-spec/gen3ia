@@ -93,8 +93,12 @@ export async function POST(request: NextRequest) {
     // désormais l'URL canonique re-signée (jouable à vie) ; la voix expose
     // aussi le champ structuré audioUrl (lecteur du fil).
     const { urlDurableAbsolue, urlDurableRelative } = await import("@/lib/media/url-durable");
+    // Origine de la REQUÊTE (résolue par la route) : le cookie de session
+    // est host-only — le lien doit suivre l'hôte réellement navigué.
     const lienJouable =
-      persisté.storagePath && kind !== "image" ? (urlDurableAbsolue(persisté.storagePath) ?? persisté.url) : undefined;
+      persisté.storagePath && kind !== "image"
+        ? (urlDurableAbsolue(persisté.storagePath, request.nextUrl.origin) ?? persisté.url)
+        : undefined;
     const audioUrlDurable =
       kind === "voice" && persisté.storagePath ? urlDurableRelative(persisté.storagePath) ?? undefined : undefined;
 

@@ -162,9 +162,11 @@ export async function deliverJobToConversation(job: VideoProductionJob): Promise
         if (r2Key) {
           const { urlDurableAbsolue } = await import("@/lib/media/url-durable");
           // Clés résolvables durables : permanent/ (voix…) ET video/ (masters).
+          // L'origine du lien = celle du lanceur captée au tour (cookie
+          // host-only) — repli : origine canonique.
           masterUrl = (r2Key.startsWith(`users/${job.userId}/permanent/`) ||
             r2Key.startsWith(`users/${job.userId}/video/`)
-            ? urlDurableAbsolue(r2Key)
+            ? urlDurableAbsolue(r2Key, job.origineClient)
             : undefined) ?? await createVideoPlaybackUrl(job.userId, r2Key, 900).catch(() => undefined);
         }
       } catch {

@@ -168,6 +168,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
               timezone: body.timezone,
               reasoningEffort: body.reasoningEffort,
               research: body.research,
+              // LIVRAISON MÉDIA DURABLE : origine https RÉSOLUE PAR LA
+              // ROUTE (jamais fournie par le client) — les liens de médias
+              // suivent l'hôte réellement navigué (cookie host-only).
+              origineClient: request.nextUrl.origin,
               onEvent: send,
             });
             void result;

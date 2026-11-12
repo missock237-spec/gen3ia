@@ -148,6 +148,13 @@ export interface VideoProductionJob {
    */
   conversationId?: string;
   /**
+   * LIVRAISON MÉDIA DURABLE (2026-11-12) — origine https de la requête du
+   * lanceur (captée au tour de chat) : le lien textuel du master est
+   * construit sur CETTE origine (cookie de session host-only). Absent =
+   * job hors chat ou lanceur sans origine → origine canonique.
+   */
+  origineClient?: string;
+  /**
    * Task 107-a — horodatage ISO de la livraison chat (IDEMPOTENCE) : posé
    * AVANT l'écriture du message, effacé si l'écriture échoue → jamais deux
    * messages pour un même job, jamais de message perdu silencieusement
@@ -359,6 +366,7 @@ export function normalizeJobDoc(stored: Partial<ProductionJobWithResume>, id: st
     // Task 107-a — livraison chat : champs persistés, transités tels quels
     // (compatibilité documents historiques : absents → non portés).
     ...(typeof stored.conversationId === "string" && stored.conversationId ? { conversationId: stored.conversationId } : {}),
+    ...(typeof stored.origineClient === "string" && stored.origineClient.length <= 100 ? { origineClient: stored.origineClient } : {}),
     ...(typeof stored.chatDeliveredAt === "string" && stored.chatDeliveredAt ? { chatDeliveredAt: stored.chatDeliveredAt } : {}),
     createdAt: stored.createdAt ?? nowIso(),
     updatedAt: stored.updatedAt ?? nowIso(),

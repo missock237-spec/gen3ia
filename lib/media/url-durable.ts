@@ -67,13 +67,26 @@ export function urlDurableRelative(cle: unknown): string | null {
 
 /**
  * URL durable ABSOLUE (contenu des messages PERSISTÉS : le lien du texte
- * doit rester cliquable hors de l'app). Origine canonique serveur
- * (GEN3IA_APP_ORIGIN via resolveJobOrigin — JAMAIS l'origine requête).
- * `null` si origine non résolue : l'appelant garde son URL présignée.
+ * doit rester cliquable hors de l'app). Ordre des origines :
+ *  1. `origineClient` — l'origine https de la REQUÊTE de l'utilisateur :
+ *     le cookie de session est host-only, un lien sur l'origine que
+ *     l'utilisateur navigue réellement est le seul jouable partout ;
+ *  2. origine canonique serveur (GEN3IA_APP_ORIGIN — repli cohérent).
+ * `null` si aucune origine résoluable : l'appelant garde son URL présignée.
  */
-export function urlDurableAbsolue(cle: unknown): string | null {
+export function urlDurableAbsolue(cle: unknown, origineClient?: string): string | null {
   const relative = urlDurableRelative(cle);
   if (!relative) return null;
+  const candidat = (origineClient ?? "").trim();
+  if (candidat) {
+    try {
+      const url = new URL(candidat);
+      const httpsOuLocal = url.protocol === "https:" || url.hostname === "localhost";
+      if (httpsOuLocal && !url.pathname.startsWith("//")) return url.origin + relative;
+    } catch {
+      // origine client invalide → repli canonique ci-dessous.
+    }
+  }
   const origine = resolveJobOrigin();
   return origine.ok && typeof origine.origin === "string" ? origine.origin + relative : null;
 }

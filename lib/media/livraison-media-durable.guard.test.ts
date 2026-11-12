@@ -79,6 +79,21 @@ describe("url durable — helpers purs", () => {
     expect(estClePermanenteProprietaire(42, "r2_abc")).toBe(false);
   });
 
+  it("urlDurableAbsolue : ORIGINE CLIENT prioritaire (cookie host-only)", () => {
+    vi.stubEnv("GEN3IA_APP_ORIGIN", "https://www.gen3ia.online");
+    vi.resetModules();
+    return import("@/lib/media/url-durable").then(({ urlDurableAbsolue: absolue }) => {
+      expect(absolue("users/r2_abc/permanent/x.mp3", "https://www.gen3ia.online")).toBe(
+        "https://www.gen3ia.online/api/media/durable?path=users%2Fr2_abc%2Fpermanent%2Fx.mp3",
+      );
+      // origine invalide → repli canonique, jamais d'URL falsifiable.
+      expect(absolue("users/r2_abc/permanent/x.mp3", "javascript:alert(1)")).toBe(
+        "https://www.gen3ia.online/api/media/durable?path=users%2Fr2_abc%2Fpermanent%2Fx.mp3",
+      );
+      vi.unstubAllEnvs();
+    });
+  });
+
   it("urlDurableAbsolue : origine canonique GEN3IA_APP_ORIGIN + chemin relatif", () => {
     vi.stubEnv("GEN3IA_APP_ORIGIN", "https://www.gen3ia.online");
     vi.resetModules();
@@ -145,11 +160,31 @@ describe("contrat du message — champs structurés durables de bout en bout", (
 });
 
 describe("chemin VOIX — URL durable dans le texte + champ structuré", () => {
-  it("runVoixTurn : urlDurableAbsolue dans le contenu + audioUrl persisté", () => {
+  it("runVoixTurn : urlDurableAbsolue(origineClient) dans le contenu + audioUrl persisté", () => {
     const source = lire("lib/domain/conversations/engine-media.ts");
-    expect(source).toContain("urlDurableAbsolue(rendu.cleStockage)");
+    expect(source).toContain("urlDurableAbsolue(rendu.cleStockage, ctx.origineClient)");
     expect(source).toContain("urlDurableRelative(rendu.cleStockage)");
     expect(source).toContain("audioUrl: audioUrlDurable");
+    expect(source).toContain("origineClient: ctx.origineClient");
+  });
+
+  it("les routes résolvent l'origine serveur (jamais une entrée client)", () => {
+    const stream = lire("app/api/workspace/conversations/[conversationId]/messages/stream/route.ts");
+    expect(stream).toContain("origineClient: request.nextUrl.origin");
+    const api = lire("app/api/workspace/conversations/[conversationId]/messages/route.ts");
+    expect(api).toContain("origineClient: request.nextUrl.origin");
+    const webgpu = lire("app/api/media/webgpu-complete/route.ts");
+    expect(webgpu).toContain("urlDurableAbsolue(persisté.storagePath, request.nextUrl.origin)");
+  });
+
+  it("le job vidéo porte l'origine du lanceur (livraison en arrière-plan)", () => {
+    const job = lire("lib/video/production-job.ts");
+    expect(job).toContain("origineClient?: string");
+    const queue = lire("lib/video/production-queue.ts");
+    expect(queue).toContain("origineClient?: string");
+    expect(queue).toContain('url.protocol === "https:" || url.hostname === "localhost"');
+    const delivery = lire("lib/video/production-delivery.ts");
+    expect(delivery).toContain("urlDurableAbsolue(r2Key, job.origineClient)");
   });
 
   it("voice.speak : ecouterUrl durable quand la clé permanente existe", () => {
@@ -177,7 +212,7 @@ describe("chemin VIDÉO — livraison durable + carte dans le fil", () => {
     const source = lire("lib/video/production-delivery.ts");
     expect(source).toContain("r2Key.startsWith(`users/${job.userId}/permanent/`)");
     expect(source).toContain("r2Key.startsWith(`users/${job.userId}/video/`)");
-    expect(source).toContain("urlDurableAbsolue(r2Key)");
+    expect(source).toContain("urlDurableAbsolue(r2Key, job.origineClient)");
     expect(source).toContain("videoProjectId: job.projectId");
   });
 });

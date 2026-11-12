@@ -251,7 +251,7 @@ export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult
       // résolution (texte cliquable à vie + lecteur du fil via audioUrl).
       // Repli : présignée d'origine (jamais de perte de livraison).
       const { urlDurableAbsolue, urlDurableRelative } = await import("@/lib/media/url-durable");
-      const urlJouable = (rendu.cleStockage ? urlDurableAbsolue(rendu.cleStockage) : null) ?? rendu.url;
+      const urlJouable = (rendu.cleStockage ? urlDurableAbsolue(rendu.cleStockage, ctx.origineClient) : null) ?? rendu.url;
       const audioUrlDurable = rendu.cleStockage ? urlDurableRelative(rendu.cleStockage) : undefined;
       const assistantMessage = await appendMessage({
         conversationId: ctx.conversationId,
@@ -564,6 +564,9 @@ export async function runVideoTurn(
       // complétion, le résultat est livré DANS ce fil (message + artefact)
       // même si l'utilisateur a fermé la page.
       conversationId: ctx.conversationId,
+      // LIVRAISON DURABLE : l'origine du lanceur est CAPTÉE au tour — le
+      // lien du master livré en arrière-plan suit l'hôte réellement navigué.
+      ...(ctx.origineClient ? { origineClient: ctx.origineClient } : {}),
       ...(Object.keys(params).length > 0 ? { options: params } : {}),
     });
     const paramsSummary = [
