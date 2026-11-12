@@ -424,6 +424,17 @@ def phase_video(page, saisie) -> None:
             verif("B7. MASTER VIDÉO TÉLÉCHARGEABLE (mp4 ≥100 Ko)",
                   video_ok,
                   f"{taille_video} octets, tête={tete_v[:12].hex()}")
+            # PREUVE ARCHIVÉE : le MP4 réel est déposé dans download/ pour le
+            # propriétaire (la vidéo créée par gen3, pas une description).
+            try:
+                import os as _os
+                _os.makedirs("/home/z/my-project/download", exist_ok=True)
+                chemin_master = "/home/z/my-project/download/gen3-video-production.mp4"
+                with open(chemin_master, "wb") as f_master:
+                    f_master.write(donnees)
+                print(f"[fichier] {chemin_master} ({taille_video} o.)", flush=True)
+            except Exception as e_copie:
+                print(f"[copie] impossible : {type(e_copie).__name__}", flush=True)
         except Exception as e:
             verif("B7. MASTER VIDÉO TÉLÉCHARGEABLE (mp4 ≥100 Ko)",
                   False, f"{type(e).__name__}")
