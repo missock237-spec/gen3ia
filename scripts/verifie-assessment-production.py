@@ -9,9 +9,11 @@ demander deux fois) :
   - artefact document créé (PDF téléchargeable) ;
   - le fichier est téléchargé et ses octets magiques PDF sont prouvés.
 """
+import json
 import re
 import sys
 import time
+import urllib.request
 from playwright.sync_api import sync_playwright
 
 BASE = "https://www.gen3ia.online"
@@ -186,30 +188,42 @@ try:
     # 5) TÉLÉCHARGEMENT RÉEL + octets magiques %PDF — via le LIEN réellement
     # livré dans le fil (/api/files/artifacts/{id du STORE}?redirect=1),
     # le même que l'utilisateur clique.
-    m_lien = re.search(r"/api/files/artifacts/([-A-Za-z0-9_]+)", reponse)
-    verif("6. lien de téléchargement réel dans le fil", bool(m_lien),
-          f"id={m_lien.group(1)[:30]}" if m_lien else "absent")
-    if m_lien:
+    lien = re.search(r"/api/files/artifacts/[-A-Za-z0-9_]+\?redirect=1", reponse)
+    if not lien:
+        m_id = re.search(r"/api/files/artifacts/([-A-Za-z0-9_]+)", reponse)
+        if m_id:
+            lien = re.search(r"/api/files/artifacts/[-A-Za-z0-9_]+\?redirect=1",
+                             f"/api/files/artifacts/{m_id.group(1)}?redirect=1")
+    chemin = lien.group(0) if lien else None
+    verif("6. lien de téléchargement réel dans le fil", bool(chemin),
+          chemin[:60] if chemin else "absent")
+    if chemin:
         ok_pdf = False
         taille = 0
-        tete = ""
+        tete = b""
         try:
-            rep = page.evaluate(
-                """async (chemin) => {
-                    const r = await fetch(chemin, {credentials:'include',
-                      cache:'no-store', redirect:'follow'});
-                    const b = await r.arrayBuffer();
-                    const t = new Uint8Array(b.slice(0, 8));
-                    return { statut: r.status, taille: b.byteLength,
-                             tete: Array.from(t).map(x => String.fromCharCode(x)).join('') };
-                }""", m_lien.group(0))
-            taille = rep.get("taille", 0)
-            tete = rep.get("tete", "")
-            ok_pdf = tete[:5] == "%PDF-" and taille >= 2000
-        except Exception:
-            pass
+            # Un vrai utilisateur CLIQUE le lien (navigation, pas fetch JS) :
+            # la vérification suit exactement ce comportement — session
+            # cookie Python qui suit la 302 vers l'URL signée R2.
+            import http.cookiejar
+            jar = http.cookiejar.CookieJar()
+            op = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(jar))
+            op.addheaders = [("User-Agent", UA)]
+            corps = json.dumps({"email": EMAIL, "password": PASSWORD}).encode()
+            req = urllib.request.Request(
+                BASE + "/api/auth/r2/login", corps,
+                {"Content-Type": "application/json"})
+            op.open(req, timeout=90)
+            rep = op.open(BASE + chemin, timeout=120)
+            donnees = rep.read(1 << 22)
+            taille = len(donnees)
+            tete = donnees[:8]
+            ok_pdf = tete[:5] == b"%PDF-" and taille >= 2000
+        except Exception as e:
+            print(f"[téléchargement] {type(e).__name__}", flush=True)
         verif("7. DOCUMENT PDF TÉLÉCHARGÉ (octets %PDF, ≥2 Ko)", ok_pdf,
-              f"{taille} octets, tête={tete[:5]!r}")
+              f"{taille} octets, tête={tete[:5].decode('latin1')!r}")
     else:
         verif("7. DOCUMENT PDF TÉLÉCHARGÉ (octets %PDF, ≥2 Ko)", False,
               "aucun lien")
