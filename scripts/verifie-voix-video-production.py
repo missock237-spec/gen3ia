@@ -345,6 +345,7 @@ def phase_video(page, saisie) -> None:
     pid = m_id.group(0)
     debut = time.time()
     statut, stage, progress = None, None, None
+    progression_dom = 0.0  # fix 2026-11-13 : preuve VISIBLE (carte du fil)
     while time.time() - debut < POLL_MAX_S:
         try:
             corps = page.evaluate(
@@ -363,14 +364,28 @@ def phase_video(page, saisie) -> None:
         except Exception as e:
             print(f"[poll] erreur lecture statut {type(e).__name__}",
                   flush=True)
+        # PREUVE UI (fix « la barre n'augmente pas ») : le pourcentage
+        # AFFICHÉ dans la carte du fil (DOM) doit monter avec la production.
+        try:
+            m_carte = re.search(
+                r"Production vidéo[^%]*—[^%]*\((\d{1,3})\s*%\)",
+                page.locator(".nova-fil").inner_text(timeout=5000))
+            if m_carte:
+                progression_dom = max(progression_dom, int(m_carte.group(1)))
+        except Exception:
+            pass
         if statut in ("completed", "failed", "cancelled"):
             break
         print(f"[poll] {int(time.time() - debut)}s status={statut} "
-              f"stage={stage} progress={progress}", flush=True)
+              f"stage={stage} progress={progress} carte={progression_dom:.0f}%",
+              flush=True)
         time.sleep(15)
     verif("B5. production vidéo TERMINÉE (status=completed) en ≤6,5 min",
           statut == "completed",
           f"statut final={statut} stage={stage} progress={progress}")
+    verif("B5b. BARRE DE PROGRESSION VISIBLE A AUGMENTÉ (carte du fil ≥70 %)",
+          progression_dom >= 70,
+          f"maximum observé dans le fil = {progression_dom:.0f} %")
 
     livree = False
     master_url = ""
