@@ -315,7 +315,7 @@ def phase_video(page, saisie) -> None:
     pid = ""
     titre_projet = ""
     debut_l = time.time()
-    while time.time() - debut_l < 30:
+    while time.time() - debut_l < 90:
         try:
             corps = page.evaluate(
                 "fetch('/api/video/projects',{credentials:'include',cache:'no-store'})"
@@ -327,8 +327,12 @@ def phase_video(page, saisie) -> None:
                 titre_projet = str(projet.get("title") or "")
                 m_id = re.match(r"[A-Za-z0-9-]+", pid)
                 break
-        except Exception:
-            pass
+            if time.time() - debut_l < 10 or int(time.time() - debut_l) % 30 == 0:
+                print(f"[projets] HTTP brut ({len(corps)} car.) : {corps[:160]}",
+                      flush=True)
+        except Exception as e:
+            if time.time() - debut_l < 10 or int(time.time() - debut_l) % 30 == 0:
+                print(f"[projets] erreur lecture {type(e).__name__}", flush=True)
         time.sleep(4)
     verif("B4. projet vidéo créé CÔTÉ SERVEUR (GET /api/video/projects)",
           bool(m_id),
@@ -347,11 +351,15 @@ def phase_video(page, saisie) -> None:
                 "async (pid) => { const r = await fetch("
                 "`/api/video/projects/${pid}/production`,"
                 "{credentials:'include',cache:'no-store'});"
-                " return await r.text(); }", pid)
-            donnees = json.loads(corps)
+                " return r.status + '|' + (await r.text()); }", pid)
+            code_http, _, corps_json = corps.partition("|")
+            donnees = json.loads(corps_json)
             statut = donnees.get("status")
             stage = donnees.get("stage")
             progress = donnees.get("progress")
+            if statut is None or code_http != "200":
+                print(f"[poll] brut HTTP {code_http} : {corps_json[:180]}",
+                      flush=True)
         except Exception as e:
             print(f"[poll] erreur lecture statut {type(e).__name__}",
                   flush=True)
