@@ -176,7 +176,7 @@ describe("musique.creer — chaîne heureuse (R2 permanent)", () => {
     const cle1 = (persistMock.mock.calls[0]?.[0] as { fixedKey: string }).fixedKey;
     const cle2 = (persistMock.mock.calls[1]?.[0] as { fixedKey: string }).fixedKey;
     expect(cle1).toBe(cle2);
-  });
+  }, 90_000); // composition PCM réelle — runners CI 2-3× plus lents (échec CI 21e8901)
 });
 
 describe("musique.creer — honnêteté (jamais de faux succès)", () => {
@@ -214,7 +214,7 @@ describe("musique.creer — honnêteté (jamais de faux succès)", () => {
     await expect(
       musiqueCreerTool.execute({ demande: DEMANDE_FLAGSHIP, dureeSecondes: 120 }, { userId: "user-1" }),
     ).rejects.toThrow(/illivrable/u);
-  });
+  }, 90_000); // idem — composition PCM réelle 120 s sur runner CI
 
   it("une synthèse qui jette (musique muette) ne devient JAMAIS un succès", async () => {
     syntheseMock.mockRejectedValue(new Error("Composition muette refusée (RMS 0)"));
