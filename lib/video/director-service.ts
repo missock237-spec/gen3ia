@@ -76,30 +76,69 @@ export async function buildProductionPlan(brief: string, project: VideoProject):
     "Produis le plan de production JSON.",
   ].join("\n");
 
-  const response = await generate({
-    task: "reasoning",
-    messages: [
-      { role: "system", content: DIRECTOR_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.4,
-    maxTokens: 2200,
-    requiresStructuredOutput: true,
-  });
-
-  const raw = extractJsonObject(response.text);
-  const parsed = PLAN_SCHEMA.safeParse(raw);
-  if (parsed.success) {
-    const data = parsed.data;
-    return normalizePlan({
-      ...data,
-      audience: data.audience ?? undefined,
-      platform: data.platform ?? undefined,
+  // Tentative 1 : appel direct historique. extractJsonObject PEUT lever
+  // (« Planner returned invalid JSON » — constat production sonde vidéo
+  // 2026-11-12 : job failed stage=plan) : l'échec est RATTRAPÉ ci-dessous
+  // au lieu de faire échouer toute la production.
+  try {
+    const response = await generate({
+      task: "reasoning",
+      messages: [
+        { role: "system", content: DIRECTOR_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.4,
+      maxTokens: 2200,
+      requiresStructuredOutput: true,
     });
+    const raw = extractJsonObject(response.text);
+    const parsed = PLAN_SCHEMA.safeParse(raw);
+    if (parsed.success) {
+      const data = parsed.data;
+      return normalizePlan({
+        ...data,
+        audience: data.audience ?? undefined,
+        platform: data.platform ?? undefined,
+      });
+    }
+  } catch {
+    // JSON irréparable ou appel échoué : relance STRUCTURÉE ci-dessous.
   }
-  // Repli déterministe : un plan cohérent construit depuis le projet —
-  // la production ne bloque jamais sur un refus de format du modèle.
-  return fallbackPlan(brief, project);
+
+  // Relance STRUCTURÉE (motif « repli structuré » du documentaire 7c6e432,
+  // étendu au plan vidéo) : le fournisseur est CONTRAINT au JSON validé par
+  // PLAN_SCHEMA avec UNE relance corrective injectant l'écart observé —
+  // facturée au wallet du propriétaire (même voie que les agents).
+  try {
+    const { generateStructuredForUser } = await import("@/lib/tools/agent-suite/llm-json");
+    const plan = await generateStructuredForUser({
+      userId: project.userId,
+      executionId: `director_plan_${project.id}`,
+      task: "reasoning",
+      system: DIRECTOR_SYSTEM_PROMPT,
+      user: userPrompt,
+      schema: PLAN_SCHEMA,
+      maxTokens: 2200,
+      maxAttempts: 2,
+    });
+    await appendProductionLog(project.userId, project.id, {
+      actor: "director",
+      message: "Plan accepté après relance structurée (première réponse hors JSON).",
+    });
+    return normalizePlan({
+      ...plan,
+      audience: plan.audience ?? undefined,
+      platform: plan.platform ?? undefined,
+    });
+  } catch {
+    // Repli déterministe : un plan cohérent construit depuis le projet —
+    // la production ne bloque JAMAIS sur un refus de format du modèle.
+    await appendProductionLog(project.userId, project.id, {
+      actor: "director",
+      message: "Relance structurée échouée : plan de repli déterministe appliqué.",
+    }).catch(() => undefined);
+    return fallbackPlan(brief, project);
+  }
 }
 
 function normalizePlan(plan: ProductionPlan): ProductionPlan {

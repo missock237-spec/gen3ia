@@ -251,7 +251,7 @@ export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult
         userId: ctx.userId,
         role: "assistant",
         content:
-          `Voici votre message vocal — voix ${choix.genre} réelle (${String(rendu.meta?.voix ?? "neuronale")}, ` +
+          `Voici votre message vocal — voix ${choix.genreLabel} réelle (${String(rendu.meta?.voix ?? "neuronale")}, ` +
           `${moteur === "professeur-voix-espace-edge-tts" ? "espace public Edge-TTS" : "professeur média temporaire"}, ` +
           "échafaudage — loi CONTRAINTE-ONDES). Écoutez ici : " + rendu.url,
         provider: "professeur-temporaire",
@@ -266,7 +266,7 @@ export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult
         title: ctx.message.slice(0, 80),
         url: rendu.url,
         storagePath: rendu.cleStockage,
-        note: `Voix ${choix.genre} réelle — professeur temporaire (${moteur})`,
+        note: `Voix ${choix.genreLabel} réelle — professeur temporaire (${moteur})`,
       });
       await onEvent({ type: "message_complete", message: assistantMessage });
       await onEvent({ type: "artifact_created", artifact });
@@ -276,7 +276,7 @@ export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult
         assistantMessage,
         artifacts: [artifact],
         approvals: [],
-        intent: { mode: "chat", understanding: `Message vocal réel (voix ${choix.genre}) servi par le serveur.` },
+        intent: { mode: "chat", understanding: `Message vocal réel (voix ${choix.genreLabel}) servi par le serveur.` },
       };
     }
   } catch {

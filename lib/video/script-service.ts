@@ -109,6 +109,48 @@ export interface ScriptResult {
   scenes: ScriptScene[];
 }
 
+/** Scénario de REPLI DÉTERMINISTE : construit depuis le projet (durée,
+ *  style, description) quand le moteur renvoie du JSON irréparable après
+ *  relance — la production ne bloque JAMAIS sur un refus de format
+ *  (constat production sonde vidéo 2026-11-12 : « Planner returned invalid
+ *  JSON »). Honnête : le journal de production nomme le repli. */
+export function fallbackScript(project: VideoProject): z.infer<typeof SCRIPT_SCHEMA> {
+  const sceneCount = Math.max(3, Math.min(20, Math.round(project.targetDurationSec / 9)));
+  const dureeScene = Math.max(3, Math.min(12, Math.round(project.targetDurationSec / sceneCount)));
+  const sujet = (project.description || project.title).slice(0, 300);
+  const scenes = Array.from({ length: sceneCount }, (_, i) => ({
+    id: `scene_${String(i + 1).padStart(3, "0")}`,
+    chapterId: "chapitre_1",
+    durationSec: dureeScene,
+    narration: i === 0
+      ? project.title.slice(0, 600)
+      : `${sujet} — partie ${i + 1} sur ${sceneCount}.`,
+    onScreenText: null as string | null,
+    visualPrompt: `${project.style}, cinematic wide shot, scene ${i + 1} of ${sceneCount}: ${sujet}`,
+    visualType: "image" as const,
+    subject: null as "person" | "place" | "object" | "abstract" | null,
+    cameraMotion: "slow_zoom" as const,
+    transitionIn: i === 0 ? ("fade" as const) : ("cut" as const),
+    transitionOut: i === sceneCount - 1 ? ("fade" as const) : ("cut" as const),
+    musicMood: project.musicMood ?? null,
+    soundEffects: [] as Array<(typeof SFX_NAMES)[number]>,
+    captions: true,
+  }));
+  return {
+    hook: project.title.slice(0, 600),
+    introduction: sujet || project.title,
+    chapters: [{
+      id: "chapitre_1",
+      title: project.title.slice(0, 200),
+      summary: sujet.slice(0, 800),
+      sceneIds: scenes.map((s) => s.id),
+    }],
+    scenes,
+    conclusion: `Fin — ${project.title.slice(0, 600)}`,
+    callToAction: null,
+  };
+}
+
 export async function generateScript(userId: string, projectId: string): Promise<ScriptResult> {
   const project = await getOwnedProjectOrThrow(userId, projectId);
   if (!project.description && project.status === "draft") {
@@ -124,13 +166,51 @@ export async function generateScript(userId: string, projectId: string): Promise
     ? "scènes de 4 à 12 s (durée native des clips vidéo IA), idéalement 6 à 10 s — un temps de lecture naturel"
     : "scènes de 6 à 10 s pour un documentaire, 3 à 5 s pour un Short";
 
-  const response = await generate({
-    task: "reasoning",
-    messages: [
-      { role: "system", content: SCRIPT_SYSTEM_PROMPT.replace("langue demandée", project.language).replace("rythme des scènes", scenePace) },
-      {
-        role: "user",
-        content: [
+  // Tentative 1 : appel direct historique (extractJsonObject PEUT lever,
+  // constat production sonde vidéo 2026-11-12 au stade plan — rattrapé).
+  let brut: z.infer<typeof SCRIPT_SCHEMA> | null = null;
+  try {
+    const response = await generate({
+      task: "reasoning",
+      messages: [
+        { role: "system", content: SCRIPT_SYSTEM_PROMPT.replace("langue demandée", project.language).replace("rythme des scènes", scenePace) },
+        {
+          role: "user",
+          content: [
+            `Sujet : ${project.title}`,
+            `Résumé/plan : ${chapters || project.description || project.title}`,
+            `Durée cible : ${project.targetDurationSec} secondes (~${sceneTarget} scènes de 6 à 10 s).`,
+            `Style : ${project.style}. Public : ${project.audience ?? "grand public"}. Plateforme : ${project.platform ?? "YouTube"}.`,
+            `Ton narration attendu : documentaire professionnel. Langue de narration : ${project.language}.`,
+            project.musicMood ? `Ambiance musicale : ${project.musicMood}.` : "",
+            "Écris le scénario JSON complet.",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        },
+      ],
+      temperature: 0.6,
+      maxTokens: 8000,
+      requiresStructuredOutput: true,
+    });
+    const parsed1 = SCRIPT_SCHEMA.safeParse(extractJsonObject(response.text));
+    if (parsed1.success) brut = parsed1.data;
+  } catch {
+    // JSON irréparable ou appel échoué : relance STRUCTURÉE ci-dessous.
+  }
+
+  // Relance STRUCTURÉE (motif « repli structuré » 7c6e432) : le fournisseur
+  // est CONTRAINT au JSON validé par SCRIPT_SCHEMA avec relance corrective
+  // injectant l'écart — facturée au wallet du propriétaire.
+  if (!brut) {
+    try {
+      const { generateStructuredForUser } = await import("@/lib/tools/agent-suite/llm-json");
+      brut = await generateStructuredForUser({
+        userId,
+        executionId: `script_engine_${projectId}`,
+        task: "reasoning",
+        system: SCRIPT_SYSTEM_PROMPT.replace("langue demandée", project.language).replace("rythme des scènes", scenePace),
+        user: [
           `Sujet : ${project.title}`,
           `Résumé/plan : ${chapters || project.description || project.title}`,
           `Durée cible : ${project.targetDurationSec} secondes (~${sceneTarget} scènes de 6 à 10 s).`,
@@ -138,21 +218,26 @@ export async function generateScript(userId: string, projectId: string): Promise
           `Ton narration attendu : documentaire professionnel. Langue de narration : ${project.language}.`,
           project.musicMood ? `Ambiance musicale : ${project.musicMood}.` : "",
           "Écris le scénario JSON complet.",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      },
-    ],
-    temperature: 0.6,
-    maxTokens: 8000,
-    requiresStructuredOutput: true,
-  });
-
-  const parsed = SCRIPT_SCHEMA.safeParse(extractJsonObject(response.text));
-  if (!parsed.success) {
-    throw new Error(`Scénario invalide renvoyé par le moteur : ${parsed.error.issues.slice(0, 3).map((i) => i.message).join("; ")}`);
+        ].filter(Boolean).join("\n"),
+        schema: SCRIPT_SCHEMA,
+        maxTokens: 8000,
+        maxAttempts: 2,
+      });
+      await appendProductionLog(userId, projectId, {
+        actor: "director",
+        message: "Scénario accepté après relance structurée (première réponse hors JSON).",
+      });
+    } catch {
+      // Repli déterministe : scénario minimal construit depuis le projet —
+      // la production ne bloque JAMAIS sur un refus de format du modèle.
+      brut = fallbackScript(project);
+      await appendProductionLog(userId, projectId, {
+        actor: "director",
+        message: "Relance structurée échouée : scénario de repli déterministe appliqué.",
+      }).catch(() => undefined);
+    }
   }
-  const { script, scenes } = normalizeScript(parsed.data, project);
+  const { script, scenes } = normalizeScript(brut, project);
 
   await snapshotVersion(userId, projectId, "Avant génération du scénario", "agent");
   await patchProject(userId, projectId, {

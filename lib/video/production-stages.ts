@@ -254,7 +254,7 @@ export async function narrationTaskForScene(
     userId: job.userId,
     projectId: job.projectId,
     kind: "audio_narration",
-    label: `Narration (voix ${choix.genre}) ${scene.id}`,
+    label: `Narration (voix ${choix.genreLabel}) ${scene.id}`,
     role: `narration:${scene.id}`,
     sceneId: scene.id,
     origin: "generated",

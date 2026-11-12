@@ -229,6 +229,15 @@ describe("it.140 — roster de voix du professeur (capacité réelle)", () => {
     expect(neutre.voixEspace).toBe("fr-FR-DeniseNeural - fr-FR (Female)");
   });
 
+  it("genreLabel ACCORDÉ pour les gabarits utilisateur (« voix féminine réelle », pas « voix féminin »)", () => {
+    // Sonde production 2026-11-11 : « voix féminin réelle » (accord fautif)
+    // dans le fil — l'accord grammatical fait partie du réalisme perçu.
+    const femme = choisirVoixSelonPersonnage("message vocal d'une femme");
+    expect(femme.genreLabel).toBe("féminine");
+    const homme = choisirVoixSelonPersonnage("message vocal d'un homme");
+    expect(homme.genreLabel).toBe("masculine");
+  });
+
   it("dureeWavSecondes mesure la durée RÉELLE dans l'en-tête RIFF", () => {
     expect(dureeWavSecondes(wavCanonique(3, 8000))).toBe(3);
     expect(dureeWavSecondes(wavCanonique(1.5, 22050))).toBeCloseTo(1.5, 2);

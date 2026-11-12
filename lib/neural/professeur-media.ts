@@ -106,6 +106,10 @@ export interface ChoixVoix {
   /** Voix de la passerelle interne équivalente (chemin de développement). */
   voixPasserelle: VoixProfesseur;
   genre: "féminin" | "masculin";
+  /** Adjectif ACCORDÉ pour « voix ___ » dans les messages utilisateur
+   *  (sonde production 2026-11-11 : « voix féminin réelle » était fautif —
+   *  l'accord grammatical fait partie de l'ultra-réalisme perçu). */
+  genreLabel: "féminine" | "masculine";
 }
 
 /** Choisit la voix selon le PERSONNAGE décrit dans la demande (zéro LLM) :
@@ -129,12 +133,14 @@ export function choisirVoixSelonPersonnage(demande: string): ChoixVoix {
       voixEspace: (régional?.m ?? "fr-FR-HenriNeural - fr-FR (Male)") as VoixEspace,
       voixPasserelle: "jam",
       genre: "masculin",
+      genreLabel: "masculine",
     };
   }
   return {
     voixEspace: (régional?.f ?? VOIX_ESPACE_DEFAUT) as VoixEspace,
     voixPasserelle: "tongtong",
     genre: "féminin",
+    genreLabel: "féminine",
   };
 }
 
