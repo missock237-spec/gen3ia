@@ -52,45 +52,103 @@ export interface GenererQuizParams {
   langue?: string;
 }
 
-const SYSTEME_QUIZ = (langue: string, nombre: number, format: string): string =>
-  `Tu es l'ASSESSMENT ENGINE de Gen3ia : tu génères des évaluations pédagogiques de qualité professionnelle.
-Tu réponds STRICTEMENT en JSON selon ce schéma :
-{ "title": string, "questions": [ { "question": string, "choices": string[] (2-6, QCM uniquement), "correctIndex": number (0-based, QCM uniquement), "expectedAnswer": string (réponse courte uniquement), "explanation": string } ] }
-Règles :
-- Langue : ${langue}. EXACTEMENT ${nombre} question(s).
-- Format demandé : ${format === "qcm" ? "QCM (choices + correctIndex obligatoires)" : format === "court" ? "réponses courtes (expectedAnswer obligatoire, pas de choices)" : "mixte (mélange QCM et réponses courtes)"}.
-- Chaque question évalue une notion DISTINCTE et significative du sujet.
-- « explanation » : pourquoi la réponse est correcte (1-2 phrases).
-- Distracteurs plausibles mais clairement faux ; jamais de « toutes les réponses ».
-- AUCUN texte hors JSON.`;
-
-export interface QuizGenere {
-  quiz: Quiz;
-  /** Moteur réellement utilisé — tracé honnêtement dans la livraison. */
-  moteur: "structured" | "deterministe-corpus";
+/** Produit un objet {title,questions} depuis n'importe quelle forme
+ *  plausible renvoyée par le modèle (tableau nu, question nue, wrapper). */
+function normaliserBrut(brut: unknown): unknown | null {
+  if (Array.isArray(brut)) {
+    return brut.every((q) => typeof q === "object" && q !== null)
+      ? { title: "Évaluation", questions: brut }
+      : null;
+  }
+  if (typeof brut !== "object" || brut === null) return null;
+  const rec = brut as Record<string, unknown>;
+  if (Array.isArray(rec.questions)) return brut;
+  // Objet question nu → emballé.
+  if (typeof rec.question === "string") {
+    return { title: "Évaluation", questions: [brut] };
+  }
+  // Wrapper avec un autre nom (quiz, evaluation, items, data).
+  for (const cle of ["quiz", "evaluation", "évaluation", "items", "data", "result", "resultat"]) {
+    const v = rec[cle];
+    if (Array.isArray(v)) return { title: rec.title ?? "Évaluation", questions: v };
+    if (typeof v === "object" && v !== null && Array.isArray((v as Record<string, unknown>).questions)) {
+      return v;
+    }
+  }
+  return null;
 }
+
+const SYSTEME_QUIZ = (langue: string, nombre: number, format: string): string =>
+  `Tu rédiges le contenu d'une évaluation pédagogique professionnelle pour l'utilisateur de Gen3ia. ` +
+  "Tu produis UNIQUEMENT un objet JSON valide (sans texte autour, sans bloc de code) : " +
+  '{ "title": "<titre court>", "questions": [ { "question": "...", "choices": ["..."], "correctIndex": 0, "expectedAnswer": "...", "explanation": "..." } ] }. ' +
+  "Contraintes : " +
+  `- langue ${langue} ; EXACTEMENT ${nombre} entrée(s) dans questions ; ` +
+  (format === "qcm"
+    ? "- chaque entrée a choices (2 à 6 libellés) et correctIndex (position du bon choix, 0-based) ; expectedAnswer absent ; "
+    : format === "court"
+      ? "- chaque entrée a expectedAnswer (réponse attendue) ; ni choices ni correctIndex ; "
+      : "- alternance : certaines entrées avec choices+correctIndex (QCM), d'autres avec expectedAnswer ; ") +
+  "- chaque entrée évalue une notion DISTINCTE et significative du sujet ; " +
+  "- explanation : pourquoi la réponse est correcte (1-2 phrases) ; " +
+  "- distracteurs plausibles mais clairement faux ; " +
+  "- contenu rédigé intégralement : jamais de placeholder, jamais de « … », jamais d'entrée vide.";
 
 /** Génération par le moteur (sortie structurée contrainte). */
 export async function genererQuizMoteur(params: GenererQuizParams): Promise<Quiz | null> {
   try {
     const consigne = [
-      `Sujet / corpus à évaluer :`,
+      `Sujet / matière à évaluer :`,
       (params.corpus ?? params.sujet).slice(0, 6000),
       "",
-      `Génère l'évaluation (${params.nombre} question(s), format ${params.format}).`,
+      `Rédige l'évaluation complète (${params.nombre} question(s), format ${params.format}).`,
     ].join("\n");
-    return await generateStructuredForUser({
+    const brut = await generateStructuredForUser({
       userId: params.userId,
       executionId: `assessment_${Date.now()}`,
-      task: "reasoning",
+      task: "chat",
       system: SYSTEME_QUIZ(params.langue ?? "fr", params.nombre, params.format),
       user: consigne,
       schema: QUIZ_SCHEMA,
       maxTokens: 6000,
       maxAttempts: 2,
     });
-  } catch {
-    return null;
+    return brut;
+  } catch (erreur) {
+    // Relance SANS schéma après extraction tolérante : les modèles
+    // enveloppent parfois (tableau nu, question nue) — on normalise PUIS on
+    // revalide le schéma ; en dernier recours, observabilité honnête.
+    try {
+      const consigne = `Rédige l'évaluation (${params.nombre} question(s), format ${params.format}) du sujet suivant, en répondant UNIQUEMENT par un objet JSON valide : ${(params.corpus ?? params.sujet).slice(0, 3000)}`;
+      const { generateForUser } = await import("@/lib/billing/ai-execution");
+      const { extractFirstJsonObject } = await import("@/lib/tools/agent-suite/llm-json");
+      const billed = await generateForUser({
+        userId: params.userId,
+        executionId: `assessment_repair_${Date.now()}`,
+        request: {
+          task: "chat",
+          system: SYSTEME_QUIZ(params.langue ?? "fr", params.nombre, params.format),
+          messages: [{ role: "user", content: consigne }],
+          requiresStructuredOutput: true,
+          maxTokens: 6000,
+        },
+      });
+      const candidat = normaliserBrut(extractFirstJsonObject(billed.response.text));
+      if (candidat === undefined) throw new Error("aucun objet JSON exploitable");
+      const parsed = QUIZ_SCHEMA.safeParse(candidat);
+      if (parsed.success) return parsed.data;
+      throw new Error("schéma non respecté après normalisation");
+    } catch (erreurReparation) {
+      // Observabilité honnête (diagnostic production) : la cause RÉELLE de
+      // l'échec est journalisée avant le repli — jamais d'échec muet.
+      console.warn(
+        "assessment] génération structurée indisponible :",
+        erreur instanceof Error ? erreur.message : String(erreur),
+        "| réparation :",
+        erreurReparation instanceof Error ? erreurReparation.message : String(erreurReparation),
+      );
+      return null;
+    }
   }
 }
 
@@ -166,6 +224,12 @@ export function genererQuizDeterministe(corpus: string, nombre: number): Quiz | 
 }
 
 /** Cascade complète : moteur structuré puis repli déterministe (corpus). */
+export interface QuizGenere {
+  quiz: Quiz;
+  /** Moteur réellement utilisé — tracé honnêtement dans la livraison. */
+  moteur: "structured" | "deterministe-corpus";
+}
+
 export async function genererQuiz(params: GenererQuizParams): Promise<QuizGenere | null> {
   const parMoteur = await genererQuizMoteur(params);
   if (parMoteur && parMoteur.questions.length > 0) {
