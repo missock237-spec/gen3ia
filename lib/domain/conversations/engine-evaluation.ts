@@ -89,8 +89,11 @@ function blocsQuiz(quiz: Quiz, format: AssessmentFormat): Array<Record<string, u
   return blocs;
 }
 
-/** Texte du message dans le fil : aperçu complet des questions. */
-function apercuQuiz(quiz: Quiz, moteur: string): string {
+/** Texte du message dans le fil : aperçu complet des questions + LIEN DE
+ *  TÉLÉCHARGEMENT RÉEL (id du STORE art_… — la collection conversationnelle
+ *  ne résout pas /api/files/artifacts/{id} : deux collections Firestore
+ *  distinctes, constat sonde production 46 octets « Artifact not found »). */
+function apercuQuiz(quiz: Quiz, moteur: string, idStockage: string): string {
   const lignes: string[] = [
     `Votre évaluation est prête — « ${quiz.title} » (${quiz.questions.length} question(s), moteur ${moteur === "structured" ? "génération contrainte" : "repli déterministe sur votre texte"}).`,
     "",
@@ -102,7 +105,10 @@ function apercuQuiz(quiz: Quiz, moteur: string): string {
     }
   });
   if (quiz.questions.length > 5) lignes.push(`… et ${quiz.questions.length - 5} autre(s) question(s).`);
-  lignes.push("", "Le document complet (questions + corrigé) est livré en pièce jointe téléchargeable.");
+  lignes.push(
+    "",
+    `📄 Télécharger l'évaluation complète (questions + corrigé) : [Évaluation — PDF](/api/files/artifacts/${idStockage}?redirect=1)`,
+  );
   return lignes.join("\n");
 }
 
@@ -180,7 +186,7 @@ export async function runEvaluationTurn(ctx: TurnBase): Promise<ConversationTurn
     conversationId: ctx.conversationId,
     userId: ctx.userId,
     role: "assistant",
-    content: apercuQuiz(genere.quiz, genere.moteur),
+    content: apercuQuiz(genere.quiz, genere.moteur, stocke.artifactId),
     generationStatus: "complete",
   });
   await onEvent({ type: "message_complete", message: assistantMessage });

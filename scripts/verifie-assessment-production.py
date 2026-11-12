@@ -179,64 +179,32 @@ try:
           "prête »)", prete,
           "clarification reçue (moteur indisponible)" if clarification
           else f"{len(reponse)} car.")
-    n_questions = len(re.findall(r"(?:^|[\s»])[1-9]\d?\.\s", reponse))
-    verif("5. aperçu des questions dans le fil (≥1 question numérotée)",
+    n_questions = len(re.findall(r"Complétez", reponse))
+    verif("5. aperçu des questions dans le fil (≥1 question « Complétez »)",
           n_questions >= 1, f"{n_questions} question(s) vues")
 
-    # 5) Artefact document créé côté serveur — vérité via le détail de la
-    # conversation (GET /api/workspace/conversations/{sid} → artifacts[]),
-    # même contrat que le panneau artefacts de l'UI.
-    id_doc = ""
-    cle_stockage = ""
-    debut_a = time.time()
-    while time.time() - debut_a < 75 and not cle_stockage:
-        try:
-            sid = page.evaluate("""async () => {
-              const r = await fetch('/api/workspace/conversations?limit=10',
-                {credentials:'include',cache:'no-store'});
-              const j = await r.json();
-              return (j.conversations || [])[0]?.id ?? null; }""")
-            if sid:
-                corps = page.evaluate(
-                    """async (sid) => {
-                      const r = await fetch(`/api/workspace/conversations/${sid}`,
-                        {credentials:'include',cache:'no-store'});
-                      return await r.text(); }""", sid)
-                m_cle = re.search(r'"storagePath"\s*:\s*"([^"]+)"', corps)
-                if m_cle:
-                    cle_stockage = m_cle.group(1)
-                m_id = re.search(r'"id"\s*:\s*"([-A-Za-z0-9_]+)"', corps)
-                if m_id:
-                    id_doc = m_id.group(1)
-        except Exception:
-            pass
-        if not cle_stockage:
-            time.sleep(8)
-    verif("6. artefact document créé côté serveur (storagePath résolvable)",
-          cle_stockage != "",
-          f"clé={cle_stockage[:60]}" if cle_stockage else "aucun artefact listé")
-
-    # 6) Téléchargement RÉEL + octets magiques %PDF — via l'URL signée du
-    # stockage permanent (même résolution que la carte artefact de l'UI).
-    if cle_stockage:
+    # 5) TÉLÉCHARGEMENT RÉEL + octets magiques %PDF — via le LIEN réellement
+    # livré dans le fil (/api/files/artifacts/{id du STORE}?redirect=1),
+    # le même que l'utilisateur clique.
+    m_lien = re.search(r"/api/files/artifacts/([-A-Za-z0-9_]+)", reponse)
+    verif("6. lien de téléchargement réel dans le fil", bool(m_lien),
+          f"id={m_lien.group(1)[:30]}" if m_lien else "absent")
+    if m_lien:
         ok_pdf = False
         taille = 0
         tete = ""
         try:
-            donnees = page.evaluate(
-                """async (cle) => {
-                    const r1 = await fetch(`/api/storage/permanent?path=${encodeURIComponent(cle)}`,
-                      {credentials:'include',cache:'no-store'});
-                    const j1 = await r1.json();
-                    if (!j1.url) return { erreur: "pas d'URL signée" };
-                    const r2 = await fetch(j1.url, {cache:'no-store'});
-                    const b = await r2.arrayBuffer();
+            rep = page.evaluate(
+                """async (chemin) => {
+                    const r = await fetch(chemin, {credentials:'include',
+                      cache:'no-store', redirect:'follow'});
+                    const b = await r.arrayBuffer();
                     const t = new Uint8Array(b.slice(0, 8));
-                    return { statut: r2.status, taille: b.byteLength,
+                    return { statut: r.status, taille: b.byteLength,
                              tete: Array.from(t).map(x => String.fromCharCode(x)).join('') };
-                }""", cle_stockage)
-            taille = donnees.get("taille", 0)
-            tete = donnees.get("tete", "")
+                }""", m_lien.group(0))
+            taille = rep.get("taille", 0)
+            tete = rep.get("tete", "")
             ok_pdf = tete[:5] == "%PDF-" and taille >= 2000
         except Exception:
             pass
@@ -244,7 +212,7 @@ try:
               f"{taille} octets, tête={tete[:5]!r}")
     else:
         verif("7. DOCUMENT PDF TÉLÉCHARGÉ (octets %PDF, ≥2 Ko)", False,
-              "aucun artefact")
+              "aucun lien")
     page.screenshot(path="/tmp/assessment-production.png")
     print("[capture] /tmp/assessment-production.png", flush=True)
     print(f"[extrait] {' '.join(reponse.split())[:400]}", flush=True)
