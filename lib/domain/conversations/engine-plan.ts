@@ -50,7 +50,7 @@ import type { ConversationTurnResult } from "./engine-turn";
 /* Tour « plan » — timeline, outils, approbations, artefacts           */
 /* ------------------------------------------------------------------ */
 
-export const TOOL_OUTPUT_ARTIFACTS: ReadonlySet<string> = new Set(["artifact.create", "file.create", "zip.create", "voice.speak"]);
+export const TOOL_OUTPUT_ARTIFACTS: ReadonlySet<string> = new Set(["artifact.create", "file.create", "zip.create", "voice.speak", "musique.creer"]);
 
 /* ------------------------------------------------------------------ */
 /* Garde documentaire déterministe (mode plan)                         */
@@ -755,6 +755,14 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
           // présigné expirable ni d'un artifact_created non rendu.
           const sortieMedia = (result.output ?? {}) as Record<string, unknown>;
           if (toolName === "voice.speak") {
+            const { urlDurableRelative } = await import("@/lib/media/url-durable");
+            sortieAudioDurable =
+              (typeof sortieMedia.url === "string" ? urlDurableRelative(sortieMedia.url) : null) ?? sortieAudioDurable;
+          }
+          // musique.creer (demande « crée une musique de 2 min ») : même
+          // contrat que la voix — la clé permanente devient le LIEN DURABLE
+          // du message (lecteur audio du fil re-signé à chaque résolution).
+          if (toolName === "musique.creer") {
             const { urlDurableRelative } = await import("@/lib/media/url-durable");
             sortieAudioDurable =
               (typeof sortieMedia.url === "string" ? urlDurableRelative(sortieMedia.url) : null) ?? sortieAudioDurable;
