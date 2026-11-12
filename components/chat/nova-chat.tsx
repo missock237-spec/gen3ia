@@ -960,6 +960,45 @@ export default function NovaChat() {
         } catch {
           /* historique serveur indisponible : le cache local reste affiché */
         }
+
+        // LIVRAISONS EN ARRIÈRE-PLAN (constat sonde vidéo 2026-11-12) : la
+        // production vidéo peut se TERMINER pendant que la page est fermée —
+        // le message « Votre vidéo est prête » est persisté côté serveur,
+        // mais au retour le fil actif restauré du cache local n'affichait
+        // JAMAIS ce message (hydraterSiStub ne traite que les stubs vides),
+        // contrevenant à la promesse « livrée directement dans ce fil,
+        // même si vous fermez la page ». Rattrapage DOUX du fil actif : les
+        // messages serveur absents du cache local (serverId inconnu) sont
+        // ajoutés À LA SUITE — jamais d'écrasement local, jamais de doublon
+        // (fusion par serverId), jamais pour l'invite.
+        try {
+          const convRattrapage = convsRef.current.find((c) => c.id === activeIdRef.current);
+          const sidRattrapage = convRattrapage?.serverId;
+          if (convRattrapage && sidRattrapage) {
+            const repDetail = await authFetch(`/api/workspace/conversations/${encodeURIComponent(sidRattrapage)}`);
+            if (!annule && repDetail.ok) {
+              const detail = (await repDetail.json().catch(() => ({}))) as DetailConversationServeur;
+              const serveurs = messagesDepuisServeur(detail, Date.now(), idSuivant);
+              const idsLocaux = new Set(
+                (convRattrapage.messages as Array<{ serverId?: string }>)
+                  .map((m) => m.serverId)
+                  .filter((sid): sid is string => typeof sid === "string" && sid.length > 0),
+              );
+              const nouveaux = serveurs.filter((m) => !m.serverId || !idsLocaux.has(m.serverId));
+              if (nouveaux.length > 0) {
+                convsRef.current = convsRef.current.map((c) =>
+                  c.id !== convRattrapage.id
+                    ? c
+                    : { ...c, messages: [...c.messages, ...nouveaux] },
+                );
+                setConvs(convsRef.current);
+                sauvegarder();
+              }
+            }
+          }
+        } catch {
+          /* rattrapage indisponible : le cache local reste affiché */
+        }
       }
     })();
     return () => {

@@ -351,8 +351,15 @@ def phase_video(page, saisie) -> None:
 
     livree = False
     master_url = ""
+    # Le message de livraison arrive PENDANT que la page est ouverte ou
+    # APRÈS fermeture : le rattrapage au chargement (nova-chat) doit le
+    # rendre visible après un simple RECHARGEMENT — c'est exactement le
+    # chemin testé ici (promesse « livrée dans ce fil même si vous fermez
+    # la page »).
+    page.reload(wait_until="domcontentloaded")
+    time.sleep(8)
     debut_fil = time.time()
-    while time.time() - debut_fil < 60:
+    while time.time() - debut_fil < 75:
         fil = page.locator(".nova-fil .nova-bulle")
         texte_fil = "\n".join(
             fil.nth(i).inner_text() for i in range(fil.count())
