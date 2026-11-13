@@ -516,6 +516,22 @@ export async function advanceJob(jobId: string, options: { timeBudgetMs?: number
 
     if (outcome.kind === "terminal") {
       // Statut final écrit par l'étape (finalize) — bail déjà libéré par elle.
+      // FIX « carte bloquée sur finalisation (100 %) » (production 2026-11-13) :
+      // le statut TERMINAL n'était JAMAIS répliqué dans l'instantané
+      // processus-local de progression (TTL 24 h) — la dernière écriture
+      // datait du début de l'étape (processing/finalize) et masquait, dans le
+      // GET .../render, un job Firestore pourtant `completed` : le lecteur du
+      // fil ne se résolvait plus. Miroir terminal best-effort, quelle que soit
+      // la branche d'arrivée (rendu livré, exports seuls, re-confirmé).
+      await mirrorRenderProgress(
+        {
+          ...job,
+          status: outcome.result.status,
+          stage: outcome.result.stage ?? job.stage,
+          progress: outcome.result.status === "completed" ? 1 : job.progress,
+        },
+        { projectId: job.projectId },
+      ).catch(() => undefined);
       return outcome.result;
     }
     // Le travail de CE tick est terminé : bail libéré AVANT toute re-file

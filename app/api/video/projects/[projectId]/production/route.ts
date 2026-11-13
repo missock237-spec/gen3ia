@@ -15,6 +15,7 @@ import { writeCheckpointSet } from "@/lib/db/firestore-resilient";
 import { getJob as getRenderJob } from "@/lib/video/render-queue";
 import { tickQueueConfigured, nudgePumpFromPolling } from "@/lib/queue/tick-queue";
 import { cacheGet, cacheSet } from "@/lib/cache/redis";
+import { urlDurableRelative } from "@/lib/media/url-durable";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -86,6 +87,28 @@ export async function GET(request: NextRequest, { params }: Params) {
     const jobs = await listProductionJobs(guard.context.userId, projectId);
     let job: VideoProductionJob | undefined = jobs[0];
 
+    // Clé R2 du master résolue UNE fois pour la réponse (lecteur du fil).
+    // FIX « gen3 construit la vidéo mais il ne l'envoie jamais » (capture
+    // production 17:15, 2026-11-13) : la carte du fil résolvait le lecteur
+    // via GET .../render — une chaîne à deux dépendances (lecture du job de
+    // rendu + présignature R2) qui trébuait et laissait la carte figée sur
+    // « finalisation (100 %) » pendant que le message texte annonçait
+    // « Votre vidéo est prête ». La clé master est désormais exposée
+    // DIRECTEMENT ici en URL durable RELATIVE (même origine → cookie de
+    // session automatique, re-signature fraîche à chaque résolution) : le
+    // lecteur <video> se monte dès que le master existe, même si la
+    // présignature ou la lecture du job de rendu échoue ailleurs.
+    let cleMaster: string | null = null;
+    const resoudreCleMaster = async (renderJobId: string | null | undefined): Promise<string | null> => {
+      if (!renderJobId) return null;
+      try {
+        const renderJob = await getRenderJob(renderJobId);
+        return renderJob?.output?.r2Key ?? null;
+      } catch {
+        return null;
+      }
+    };
+
     // ROBUSTESSE LIVRAISON (sonde sticky — fix captures 13:02, exigence
     // « chaque exécution réellement fournie à l'utilisateur ») : un job
     // « processing / stage=done » dont le rendu rattaché est TERMINÉ est une
@@ -109,6 +132,7 @@ export async function GET(request: NextRequest, { params }: Params) {
             job.userId,
           ).catch(() => undefined);
           job = effective;
+          cleMaster = renderJob.output?.r2Key ?? null;
         }
       } catch {
         // Lecture rendu indisponible : statut stocké conservé (comportement
@@ -128,6 +152,10 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (!current) {
       return NextResponse.json({ job: null, queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const) });
     }
+    // Lecteur durable : job terminé (stocké OU effectif) + master connu.
+    if (!cleMaster && current.status === "completed") {
+      cleMaster = await resoudreCleMaster(current.renderJobId);
+    }
     return NextResponse.json({
       jobId: current.id,
       projectId: current.projectId,
@@ -137,6 +165,12 @@ export async function GET(request: NextRequest, { params }: Params) {
       progress: current.progress,
       error: current.error ?? null,
       renderJobId: current.renderJobId ?? null,
+      // LECTEUR DURABLE DU FIL (fix 2026-11-13) : URL relative
+      // /api/media/durable?path=… du master — la carte <video> la consomme
+      // telle quelle (cookie de session automatique, re-signature fraîche à
+      // chaque résolution, jouable à vie). Absente tant que le master
+      // n'existe pas — l'appelant garde son chemin de secours (/render).
+      masterUrl: cleMaster ? urlDurableRelative(cleMaster) : null,
       timeline: current.timeline,
       sceneCursor: current.sceneCursor,
       title: current.title,

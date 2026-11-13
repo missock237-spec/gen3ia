@@ -437,6 +437,16 @@ describe("stageFinalize — idempotence", () => {
     expect(saveMock.mock.calls[0][2]).toMatchObject({ status: "completed", stage: "finalize", progress: 1 });
     expect(result.status).toBe("completed");
     expect(result.done).toBe(true);
+    // FIX « carte bloquée sur finalisation (100 %) » (production 2026-11-13) :
+    // le statut TERMINAL est répliqué dans l'instantané processus-local de
+    // progression (sinon le GET .../render montrait encore `processing`
+    // pendant 24 h et le lecteur du fil ne se résolvait plus jamais).
+    expect(vi.mocked(setJobProgress)).toHaveBeenCalledWith(
+      "job-1",
+      1,
+      "completed",
+      expect.objectContaining({ stage: "finalize", projectId: expect.any(String) }),
+    );
   });
 
   it("premier passage (chemin nominal) : upload + settle + écriture finale complétée", async () => {

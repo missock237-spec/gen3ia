@@ -403,3 +403,69 @@ describe("traceparent W3C (Task K — tracing distribué)", () => {
     );
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// HÔTE CANONIQUE (fix 2026-11-13 « gen3 construit la vidéo mais il ne
+// l'envoie jamais ») : le cookie de session est host-only — un lien média
+// durable persisté sur l'apex renvoyait 401 à une session www (et
+// inversement). L'apex est redirigé 308 vers www pour GET/HEAD : les vieux
+// liens déjà persistés dans les conversations se réparent AU CLIC.
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("hôte canonique — l'apex gen3ia.online est redirigé 308 vers www", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  function requestSur(hote: string, pathname = "/api/media/durable?path=users%2Fu1%2Fvideo%2Fp1%2Frenders%2Fmaster.mp4", method = "GET"): NextRequest {
+    return new NextRequest(`https://${hote}${pathname}`, { method, headers: { "x-forwarded-host": hote } });
+  }
+
+  it("GET apex /api/media/durable → 308 vers www.gen3ia.online, chemin + query conservés", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await middleware(requestSur("gen3ia.online"));
+    expect(response.status).toBe(308);
+    const cible = response.headers.get("location");
+    expect(cible).toBe("https://www.gen3ia.online/api/media/durable?path=users%2Fu1%2Fvideo%2Fp1%2Frenders%2Fmaster.mp4");
+  });
+
+  it("GET apex / → 308 vers www.gen3ia.online/", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await middleware(requestSur("gen3ia.online", "/"));
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe("https://www.gen3ia.online/");
+  });
+
+  it("HEAD apex → redirigé aussi (navigation)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await middleware(requestSur("gen3ia.online", "/", "HEAD"));
+    expect(response.status).toBe(308);
+  });
+
+  it("POST apex → JAMAIS dévié (ticks QStash / webhooks signés restent directs)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await middleware(requestSur("gen3ia.online", "/", "POST"));
+    expect(response.status).not.toBe(308);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("www.gen3ia.online → aucune redirection (hôte canonique servi directement)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await middleware(requestSur("www.gen3ia.online"));
+    expect(response.status).not.toBe(308);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("préviews vercel.app et hôtes locaux → aucune redirection", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect((await middleware(requestSur("gen3ia.vercel.app"))).headers.get("location")).toBeNull();
+    expect((await middleware(requestSur("localhost"))).headers.get("location")).toBeNull();
+  });
+
+  it("hors production (dev/test) → aucune redirection même sur l'apex", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    const response = await middleware(requestSur("gen3ia.online"));
+    expect(response.status).not.toBe(308);
+    expect(response.headers.get("location")).toBeNull();
+  });
+});

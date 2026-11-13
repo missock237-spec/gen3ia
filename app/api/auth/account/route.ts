@@ -130,9 +130,9 @@ async function purgerPrefixeRacineUtilisateur(prefix: string): Promise<number> {
  * Les evenements d'audit (interet legitime securite) sont conserves mais
  * anonymises par la suppression du profil.
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request?: NextRequest) {
   try {
-    const user = await requireUser(request);
+    const user = await requireUser(request as NextRequest);
     const uid = user.uid;
 
     // 1. Donnees applicatives rattlees a l'utilisateur.
@@ -188,7 +188,7 @@ export async function DELETE(request: NextRequest) {
     // 4. Compte d'authentification Firebase. Admin SDK d'abord ; en cas
     // d'échec côté projet (ex. PROJECT_SOFT_DELETED), repli sur l'API
     // identitytoolkit avec le jeton ID présenté par l'utilisateur.
-    const idToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+    const idToken = request?.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
     try {
       await getAuth(getApp()).deleteUser(uid);
     } catch (adminError) {
@@ -213,7 +213,11 @@ export async function DELETE(request: NextRequest) {
         status: 200,
         headers: {
           "content-type": "application/json",
-          "Set-Cookie": clearSessionCookieHeader(),
+          // Domaine inter-hôtes (fix 2026-11-13) : même attribut que la pose —
+          // l'effacement atteint le cookie quelle que soit la variante posée.
+          "Set-Cookie": clearSessionCookieHeader(
+            request?.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request?.nextUrl?.hostname,
+          ),
         },
       },
     );

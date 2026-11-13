@@ -119,6 +119,16 @@ const ARTEFACT_CONTENT_SECURITY_POLICY = [
 
 const CLIENT_ACCESS_COOKIE = "gen3ia_client_access";
 
+// HÔTE CANONIQUE (fix 2026-11-13 — livraison vidéo invisible) : le cookie de
+// session est host-only, les liens médias durables persistés doivent donc
+// vivre sur LE même hôte que la session. www.gen3ia.online est l'hôte
+// canonique (sondes, version.json, CDN) ; l'apex nu est redirigé 308 vers
+// www pour les navigations GET/HEAD — y compris les liens /api/media/durable
+// déjà persistés dans d'anciennes conversations (chemin + query conservés).
+// Sémantique alignée avec lib/queue/origin.ts (mêmes hôtes autorisés).
+const HOTE_CANONIQUE = "www.gen3ia.online";
+const HOTES_APEX_CANONIQUES: ReadonlySet<string> = new Set(["gen3ia.online"]);
+
 // Identifiant de corrélation de bout en bout (audit 25-a : les réponses
 // /api/* ne portaient aucun trace-id, impossible de relier un log serveur
 // à une requête client). Même grammaire que lib/observability/logger.ts
@@ -429,6 +439,38 @@ export async function middleware(request: NextRequest) {
   // SLI : horodatage de début (performance.now() = précision sous-ms).
   const debutMs = performance.now();
   const pathname = request.nextUrl.pathname;
+
+  // ────────────────────────────────────────────────────────────────────────
+  // HÔTE CANONIQUE (fix 2026-11-13 « gen3 construit la vidéo mais il ne
+  // l'envoie jamais ») : le cookie de session est host-only — un lien média
+  // durable posé dans un message PERSISTÉ sur l'APEX (gen3ia.online) renvoie
+  // 401 pour un utilisateur dont la session vit sur www.gen3ia.online (et
+  // inversement) : la vidéo est créée, le lien existe, le clic échoue.
+  // Navigation canonisée vers www : 308 (méthode + chemin + query conservés
+  // — les vieux liens apex déjà persistés dans les conversations se
+  // réparent AU CLIC), GET/HEAD uniquement (les POST des workers/ticks et
+  // webhooks signés ne sont JAMAIS déviés — un 3xx sur un tick pourrait
+  // casser une continuation de file). Aucun effet en dev local ni sur les
+  // préviews *.vercel.app : seuls les hôtes apex exacts sont redirigés.
+  // ────────────────────────────────────────────────────────────────────────
+  const hoteTransmis = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const hote = (hoteTransmis || request.nextUrl.hostname || "").toLowerCase();
+  const methodeNaviguation = request.method === "GET" || request.method === "HEAD";
+  if (
+    process.env.NODE_ENV === "production" &&
+    methodeNaviguation &&
+    HOTES_APEX_CANONIQUES.has(hote)
+  ) {
+    const urlCanonique = new URL(request.nextUrl.toString());
+    urlCanonique.hostname = HOTE_CANONIQUE;
+    // Derrière un proxy, nextUrl peut porter un port interne — la cible
+    // canonique est https/443 implicite : port toujours nettoyé.
+    urlCanonique.port = "";
+    const redirection = NextResponse.redirect(urlCanonique, 308);
+    noterRequeteSLI(pathname, redirection.status, debutMs);
+    return redirection;
+  }
+
   const hasClientAccess = Boolean(getClientEntry(request));
   const isClientEntry = isClientRoute(pathname);
   const isAllowedClientRequest = isClientEntry || isPublicClientApi(pathname) || pathname.startsWith("/_next/") || pathname === "/favicon.ico";

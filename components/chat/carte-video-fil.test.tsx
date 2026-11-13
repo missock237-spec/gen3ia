@@ -201,3 +201,29 @@ describe("styles nova-chat.css — .nova-media-carre-* (structurel)", () => {
     expect(css).toContain(".nova-media-carte.nova-media-carte-progress figcaption {");
   });
 });
+
+describe("lecteur durable direct (fix 2026-11-13 « la vidéo n'est jamais envoyée »)", () => {
+  const carte = read(CARTE);
+
+  it("le statut de production porte le lecteur durable (st.masterUrl) → état « prete » SANS détour", () => {
+    // La carte consomme l'URL durable RELATIVE exposée par GET .../production
+    // — un seul saut (cookie de session automatique), plus de dépendance à la
+    // chaîne GET .../render + présignature R2 qui laissait la carte figée sur
+    // « finalisation (100 %) » en production.
+    expect(carte).toContain("masterUrl");
+    expect(carte).toContain('return { type: "prete", url: st.masterUrl };');
+  });
+
+  it("sans masterUrl dans la réponse → repli historique sur la résolution GET .../render", () => {
+    expect(carte).toContain('return { type: "chargement" }; // lecteur résolu séparément');
+    expect(carte).toContain("resoudreLecteur");
+  });
+
+  it("l'URL du lecteur reste CONSOMMÉE TELLE QUELLE par <video src> (aucune réécriture locale)", () => {
+    expect(carte).toContain('<video src={etat.url} controls preload="metadata" className="nova-media-video" />');
+  });
+
+  it("le parseur SSE porte aussi le champ masterUrl (contrat d'événement aligné)", () => {
+    expect(carte).toContain("masterUrl?: string | null");
+  });
+});

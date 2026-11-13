@@ -108,7 +108,35 @@ export function readSessionCookie(cookieHeader: string | null | undefined): Sess
   return null;
 }
 
-export function sessionCookieHeader(payload: Omit<SessionPayload, "exp">): string {
+/**
+ * Domaine de session pour les liens inter-hôtes (fix 2026-11-13 —
+ * « gen3 construit la vidéo mais il ne l'envoie jamais »).
+ *
+ * CONSTAT PRODUCTION : le cookie était HOST-ONLY (sans attribut Domain) —
+ * une session posée sur www.gen3ia.online n'est JAMAIS envoyée à
+ * gen3ia.online (apex) ni inversement. Les messages PERSISTÉS portent des
+ * liens média durables dont l'hôte est celui de la REQUÊTE de lancement :
+ * l'utilisateur navigait sur un hôte, cliquait un lien posé sur l'autre →
+ * 401 → « la vidéo n'a jamais été envoyée » alors que le master existe.
+ *
+ * REMÈDE : en production, pour les hôtes gen3ia.online (apex ou www), le
+ * cookie est posé avec Domain=.gen3ia.online — valable pour les deux hôtes.
+ * AUCUN autre hôte n'obtient d'attribut Domain (jamais .vercel.app — un
+ * joker partagerait le cookie avec tous les tenants de la plateforme ;
+ * localhost garde son cookie host-only).
+ */
+export function domaineSessionDepuisHote(hote: string | null | undefined): string | undefined {
+  if (process.env.NODE_ENV !== "production") return undefined;
+  const candidat = (hote ?? "").trim().toLowerCase().replace(/:\d+$/, "");
+  return candidat === "gen3ia.online" || candidat === "www.gen3ia.online"
+    ? ".gen3ia.online"
+    : undefined;
+}
+
+export function sessionCookieHeader(
+  payload: Omit<SessionPayload, "exp">,
+  hote?: string | null,
+): string {
   const value = signSessionPayload(payload);
   const attributes = [
     `${SESSION_COOKIE_NAME}=${value}`,
@@ -118,9 +146,21 @@ export function sessionCookieHeader(payload: Omit<SessionPayload, "exp">): strin
     "SameSite=Lax",
     `Max-Age=${SESSION_MAX_AGE_SECONDS}`,
   ];
+  const domaine = domaineSessionDepuisHote(hote);
+  if (domaine) attributes.push(`Domain=${domaine}`);
   return attributes.join("; ");
 }
 
-export function clearSessionCookieHeader(): string {
-  return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+export function clearSessionCookieHeader(hote?: string | null): string {
+  const attributes = [
+    `${SESSION_COOKIE_NAME}=`,
+    "Path=/",
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax",
+    "Max-Age=0",
+  ];
+  const domaine = domaineSessionDepuisHote(hote);
+  if (domaine) attributes.push(`Domain=${domaine}`);
+  return attributes.join("; ");
 }

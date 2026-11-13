@@ -81,8 +81,19 @@ export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
       return termine?.output?.playbackUrl ?? null;
     };
 
-    const statutDepuisProduction = (st: { status?: string; stage?: string; progress?: number; error?: string }): EtatCarte => {
-      if (st.status === "completed") return { type: "chargement" }; // lecteur résolu séparément
+    const statutDepuisProduction = (st: { status?: string; stage?: string; progress?: number; error?: string; masterUrl?: string | null }): EtatCarte => {
+      if (st.status === "completed") {
+        // LECTEUR DURABLE DIRECT (fix 2026-11-13 « la vidéo n'est jamais
+        // envoyée ») : le statut de production porte désormais l'URL durable
+        // RELATIVE du master (/api/media/durable?path=…) — cookie de session
+        // automatique, re-signature fraîche à chaque lecture. Un seul saut au
+        // lieu de la chaîne GET .../render + présignature qui trébuchait et
+        // laissait la carte figée sur « finalisation (100 %) » en production.
+        if (typeof st.masterUrl === "string" && st.masterUrl.length > 0) {
+          return { type: "prete", url: st.masterUrl };
+        }
+        return { type: "chargement" }; // lecteur résolu séparément
+      }
       if (st.status === "failed" || st.status === "cancelled") {
         const label = STAGES_FR[st.stage ?? ""] ?? st.stage ?? "production";
         return { type: "echec", detail: `Production interrompue (${label})${st.error ? " — " + st.error.slice(0, 160) : ""}.` };
@@ -130,7 +141,7 @@ export function CarteVideoFil({ videoProjectId }: { videoProjectId: string }) {
       source = new EventSource(`/api/video/projects/${videoProjectId}/production/stream`);
       source.onmessage = (e) => {
         try {
-          const st = JSON.parse(e.data) as { status?: string; stage?: string; progress?: number; error?: string };
+          const st = JSON.parse(e.data) as { status?: string; stage?: string; progress?: number; error?: string; masterUrl?: string | null };
           if (TERMINAUX.has(st.status ?? "")) {
             void interroger(); // terminé → résout le lecteur (URL fraîche)
           } else if (vivant) {

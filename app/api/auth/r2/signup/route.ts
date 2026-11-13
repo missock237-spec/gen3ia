@@ -189,13 +189,18 @@ export async function POST(request: NextRequest) {
     },
     {
       headers: {
-        "Set-Cookie": sessionCookieHeader({
-          uid: account.uid,
-          email: account.email,
-          name: account.displayName,
-          picture: null,
-          provider: R2_ACCOUNT_PROVIDER,
-        }),
+        // Domaine inter-hôtes (fix 2026-11-13) : hôte de la requête →
+        // Domain=.gen3ia.online en production — session valable apex ET www.
+        "Set-Cookie": sessionCookieHeader(
+          {
+            uid: account.uid,
+            email: account.email,
+            name: account.displayName,
+            picture: null,
+            provider: R2_ACCOUNT_PROVIDER,
+          },
+          request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request.nextUrl?.hostname,
+        ),
       },
     },
   );

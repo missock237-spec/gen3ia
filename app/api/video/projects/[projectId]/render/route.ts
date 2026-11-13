@@ -146,9 +146,21 @@ export async function GET(request: NextRequest, { params }: Params) {
     const jobsWithUrls = await Promise.all(
       jobs.map(async (job) => {
         const liveProgress = await getJobProgress(job.id);
+        // FIX « la vidéo n'est jamais visible dans le fil » (constat
+        // production 2026-11-13 : carte bloquée sur « finalisation (100 %) »
+        // alors que le master était livré) — l'instantané PROCESSUS-LOCAL de
+        // progression (TTL 24 h, jamais purgé au statut terminal par les
+        // étapes avant le correctif miroir) ne doit JAMAIS masquer un job
+        // TERMINAL du document Firestore : `processing` figé écrasait
+        // `completed` et le lecteur ne se résolvait plus jamais. Le point de
+        // vérité reste le document (cf. progress-store.ts) : un job terminal
+        // (ou porteur d'un master) gagne TOUJOURS contre l'instantané.
+        const statutTerminal =
+          job.status === "completed" || job.status === "failed" || job.status === "cancelled";
+        const instantaneAdmis = Boolean(liveProgress) && !statutTerminal && !job.output;
         return {
         ...job,
-        ...(liveProgress
+        ...(liveProgress && instantaneAdmis
           ? {
               progress: liveProgress.progress,
               status: liveProgress.status as typeof job.status,

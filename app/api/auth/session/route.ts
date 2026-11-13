@@ -128,17 +128,25 @@ export async function POST(request: NextRequest) {
 
     // Cookie de session signe : garde-fou si l'etat Firebase client disparait
     // (navigateurs mobiles, webviews, stockage partitionne). Pose DES QUE le
-    // jeton est valide — même en mode dégradé.
+    // jeton est valide — même en mode dégradé. Hôte transmis au cookie
+    // (fix 2026-11-13) : en production gen3ia.online, le cookie porte
+    // Domain=.gen3ia.online — la session joue sur apex ET www, les liens
+    // médias durables persistés restent cliquables quel que soit l'hôte
+    // d'origine du message.
+    const hoteSession = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request.nextUrl?.hostname;
     return NextResponse.json(body, {
       headers: {
-        "Set-Cookie": sessionCookieHeader({
-          uid: token.uid,
-          email: token.email ?? null,
-          name: token.name ?? null,
-          picture: token.picture ?? null,
-          provider,
-          ...(mfaStatus.secondFactorUsed ? { mfa: true } : {}),
-        }),
+        "Set-Cookie": sessionCookieHeader(
+          {
+            uid: token.uid,
+            email: token.email ?? null,
+            name: token.name ?? null,
+            picture: token.picture ?? null,
+            provider,
+            ...(mfaStatus.secondFactorUsed ? { mfa: true } : {}),
+          },
+          hoteSession,
+        ),
       },
     });
   } catch (error) {
@@ -185,9 +193,10 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(body);
 }
 
-export async function DELETE() {
+export async function DELETE(request?: NextRequest) {
+  const hoteSession = request?.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request?.nextUrl?.hostname;
   return new NextResponse(null, {
     status: 204,
-    headers: { "Set-Cookie": clearSessionCookieHeader() },
+    headers: { "Set-Cookie": clearSessionCookieHeader(hoteSession) },
   });
 }
