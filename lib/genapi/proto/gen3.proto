@@ -1,0 +1,119 @@
+// ============================================================================
+// gen3.proto — CONTRAT gRPC OFFICIEL de gen3 (genAPI)
+// ============================================================================
+//
+// Ce fichier EST le contrat livré aux développeurs SaaS : il voyage dans le
+// paquet client (client.key + client.crt + gen3.proto + LISEZMOI.md) généré
+// lors du provisionnement. Il décrit les trois appels disponibles sur le
+// daemon genAPI hébergé sur le VPS souverain gen3ia.
+//
+// Connexion : gRPC mTLS — le daemon exige un certificat client SIGNÉ par la
+// CA racine gen3 (livrée dans le paquet sous forme de certificat client).
+// Chaque exécution réussie est facturée en crédits Chariow (wallet) du compte
+// client ; une réservation de crédits est posée avant l'exécution puis
+// réglée (ou libérée en cas d'échec).
+//
+// Toutes les chaînes sont en français, les montants en unités mineures
+// (centimes / centimes de FCFA selon la devise du wallet).
+// ============================================================================
+
+syntax = "proto3";
+
+package gen3.v1;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service principal gen3 — accès SaaS au système d'exploitation autonome.
+// ─────────────────────────────────────────────────────────────────────────────
+service Gen3 {
+  // Sonde de disponibilité : permet à un client de vérifier la connectivité
+  // mTLS SANS consommer de crédits (aucune facturation sur Sante).
+  rpc Sante(RequeteSante) returns (ReponseSante);
+
+  // Exécution d'une inférence gen3 sur le domaine demandé. Le daemon
+  // réserve les crédits du wallet Chariow du client AVANT l'exécution
+  // (budget_credits_minor), puis règle le coût réel — ou libère la
+  // réservation si l'exécution échoue.
+  rpc ExecuterInference(RequeteInference) returns (ReponseInference);
+
+  // Suivi d'une exécution lancée par ExecuterInference (progression,
+  // état, sortie partielle). Non facturé.
+  rpc StatutExecution(RequeteStatut) returns (ReponseStatut);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sante
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Requête de sonde de santé — l'identifiant client sert au journal d'audit. */
+message RequeteSante {
+  // Identifiant du compte client gen3ia (uid Firestore/r2fs).
+  string client_uid = 1;
+}
+
+/** Réponse de sonde de santé. */
+message ReponseSante {
+  // "operational" si le daemon est prêt à servir les inférences.
+  string etat = 1;
+  // Version du socle genAPI (format semver, ex. "1.0.0").
+  string version = 2;
+  // Horodatage Unix en millisecondes de la génération de la réponse.
+  int64 horodatage = 3;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ExecuterInference
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Demande d'inférence gen3. */
+message RequeteInference {
+  // Identifiant du compte client gen3ia (uid Firestore/r2fs).
+  string client_uid = 1;
+  // Domaine métier demandé (ex. "developpement_web", "video", "analyse_donnees").
+  string domaine = 2;
+  // Entrée libre : prompt, question, consigne complète.
+  string entree = 3;
+  // Clé d'idempotence OPTIONNELLE : la même clé réutilisée évite une double
+  // facturation en cas de reprise réseau (la réservation wallet porte cette
+  // référence). Si vide, une référence aléatoire est générée.
+  string cle_idempotence = 4;
+  // Plafond de crédits que le client accepte de dépenser pour CET appel,
+  // en unités mineures. Si 0, le tarif standard par exécution s'applique
+  // (variable d'environnement GENAPI_EXECUTION_CREDITS_MINOR du daemon).
+  int64 budget_credits_minor = 5;
+}
+
+/** Résultat d'une inférence gen3. */
+message ReponseInference {
+  // Identifiant d'exécution — à repasser à StatutExecution pour le suivi.
+  string id_execution = 1;
+  // Sortie produite par le moteur (texte, code, JSON selon le domaine).
+  string sortie = 2;
+  // true si l'inférence a abouti ET a été réglée sur le wallet.
+  bool succes = 3;
+  // Crédits réellement débités en unités mineures (0 si échec).
+  int64 credits_debite_minor = 4;
+  // Message humain en cas d'échec (moteur indisponible, budget refusé…).
+  string message = 5;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StatutExecution
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Demande de suivi d'exécution. */
+message RequeteStatut {
+  // Identifiant renvoyé par ExecuterInference (champ id_execution).
+  string id_execution = 1;
+}
+
+/** État d'avancement d'une exécution. */
+message ReponseStatut {
+  // Rappel de l'identifiant demandé.
+  string id_execution = 1;
+  // "en_cours" | "terminee" | "echouee" | "introuvable".
+  string etat = 2;
+  // Progression entre 0.0 et 1.0.
+  double progression = 3;
+  // Sortie partielle ou finale (peut être vide tant que l'exécution court).
+  string sortie = 4;
+}

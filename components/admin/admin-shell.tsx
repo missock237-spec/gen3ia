@@ -4,7 +4,25 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { navPrimaryFor } from "@/components/shells/nav-registry";
+import { navPrimaryFor, type NavRole, type NavRoute } from "@/components/shells/nav-registry";
+
+/**
+ * Entrée genAPI — Agent OS gRPC (tunnels mTLS souverains, paquets à usage
+ * unique, facturation Chariow à l'exécution). Déclarée LOCALEMENT dans le
+ * shell admin : le registre global (nav-registry.ts) reste inchangé tant que
+ * la surface genAPI (routes + console) est en cours d'intégration.
+ */
+const ROUTE_ADMIN_GENAPI: NavRoute = {
+  id: "admin-genapi",
+  href: "/admin/genapi",
+  label: "genAPI",
+  icon: "⌁",
+  description: "Agent OS gRPC : clients mTLS, paquets à usage unique et journal",
+  contexts: ["admin"],
+  minRole: "admin",
+  section: "primary",
+  keywords: ["genapi", "grpc", "mtls", "certificats", "agent os", "daemon", "paquets"],
+};
 
 /**
  * AdminShell — shell opérateur de l'espace d'administration (architecture à
@@ -15,7 +33,13 @@ import { navPrimaryFor } from "@/components/shells/nav-registry";
  */
 export function AdminShell({ children, role }: { children: ReactNode; role: string }) {
   const pathname = usePathname();
-  const nav = navPrimaryFor("admin");
+  // Le rôle du layout est transmis au registre : l'appel historique sans rôle
+  // (défaut "user") échouait au test minRoleSatisfied("user", "admin") et
+  // filtrait TOUTES les entrées minRole admin (nav vide). Les entrées du
+  // registre restent inchangées ; genAPI est ajoutée en fin de liste par le
+  // shell seul (ROUTE_ADMIN_GENAPI ci-dessus).
+  const roleNav: NavRole = role === "admin" ? "admin" : role === "developer" ? "developer" : "user";
+  const nav = [...navPrimaryFor("admin", roleNav), ROUTE_ADMIN_GENAPI];
   const active = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const current = nav.find((route) => active(route.href));
 
