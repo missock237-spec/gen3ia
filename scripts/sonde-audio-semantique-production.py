@@ -12,6 +12,7 @@ Usage : python3 scripts/sonde-audio-semantique-production.py
 import re
 import sys
 import time
+import urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -27,6 +28,8 @@ MSG_MUSIQUE = "Crée une musique de piano douce et apaisante."
 
 CAPTURE_SON = "/tmp/son-semantique-production.png"
 CAPTURE_MUSIQUE = "/tmp/musique-semantique-production.png"
+FICHIER_SON = "/home/z/my-project/download/gen3-son-pluie-production.wav"
+FICHIER_MUSIQUE = "/home/z/my-project/download/gen3-musique-production.mp3"
 
 resultats = []
 
@@ -87,24 +90,29 @@ def envoyer(page, saisie, message: str) -> bool:
 
 
 def telecharger_audio(page, url: str) -> tuple[int, str, bytes]:
-    donnees = page.evaluate(
-        """async (u) => {
-            const r = await fetch(u, {credentials: 'include'});
-            const b = await r.arrayBuffer();
-            return Array.from(new Uint8Array(b.slice(0, 24)));
-        }""",
-        url,
-    )
-    tete = bytes(donnees)
-    taille = page.evaluate(
-        """async (u) => {
-            const r = await fetch(u, {credentials: 'include'});
-            const b = await r.arrayBuffer();
-            return b.byteLength;
-        }""",
-        url,
-    )
-    return taille, tete, bytes(donnees)
+    """Télécharge l'audio : requête du CONTEXTE navigateur (cookies de
+    session + suivi 302 sans contrainte CORS — l'URL DURABLE /api/media/
+    durable redirige vers R2, un fetch page échouerait sur l'origine
+    croisée), repli fetch page, repli urllib (R2 public présigné)."""
+    try:
+        reponse = page.context.request.get(url, timeout=90000)
+        donnees = reponse.body()
+        return len(donnees), donnees[:16], donnees
+    except Exception:
+        pass
+    try:
+        brut = page.evaluate(
+            "async (u) => { const r = await fetch(u, {credentials:'include'});"
+            " const b = await r.arrayBuffer();"
+            " return Array.from(new Uint8Array(b.slice(0, 1 << 25))); }",
+            url)
+        donnees = bytes(brut)
+        return len(donnees), donnees[:16], donnees
+    except Exception:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            donnees = r.read(1 << 25)
+        return len(donnees), donnees[:16], donnees
 
 
 def est_audio(tete: bytes) -> bool:
@@ -254,10 +262,16 @@ def phase_son(saisie) -> None:
           len(durable) >= 1, durable[0][:110] if durable else "absente")
     cible = durable[-1] if durable else (urls[-1] if urls else "")
     if cible:
-        taille, tete, _ = telecharger_audio(page, cible)
+        taille, tete, donnees = telecharger_audio(page, cible)
         verif("S5. AUDIO TÉLÉCHARGÉ = vraies octets audio (≥8 Ko)",
               taille >= 8000 and est_audio(tete),
               f"{taille} octets, tête={tete[:8].hex()}")
+        try:
+            with open(FICHIER_SON, "wb") as f:
+                f.write(donnees)
+            print(f"[fichier] {FICHIER_SON} ({taille} o.)", flush=True)
+        except Exception as e:
+            print(f"[fichier] non sauvegardé : {type(e).__name__}", flush=True)
         print(f"[audio-son] URL={cible[:120]} taille={taille} "
               f"tête={tete[:8].hex()}", flush=True)
     else:
@@ -292,10 +306,16 @@ def phase_musique(saisie) -> None:
           durable[0][:110] if durable else "absente")
     cible = durable[-1] if durable else (urls[-1] if urls else "")
     if cible:
-        taille, tete, _ = telecharger_audio(page, cible)
+        taille, tete, donnees = telecharger_audio(page, cible)
         verif("M5. AUDIO TÉLÉCHARGÉ = vraies octets audio (≥8 Ko)",
               taille >= 8000 and est_audio(tete),
               f"{taille} octets, tête={tete[:8].hex()}")
+        try:
+            with open(FICHIER_MUSIQUE, "wb") as f:
+                f.write(donnees)
+            print(f"[fichier] {FICHIER_MUSIQUE} ({taille} o.)", flush=True)
+        except Exception as e:
+            print(f"[fichier] non sauvegardé : {type(e).__name__}", flush=True)
         print(f"[audio-musique] URL={cible[:120]} taille={taille} "
               f"tête={tete[:8].hex()}", flush=True)
     else:
