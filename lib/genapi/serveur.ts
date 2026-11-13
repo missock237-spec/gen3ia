@@ -86,21 +86,13 @@ export function chargerContrat(cheminProto: string): PackageDefinition {
   });
 }
 
-/** Chemin par défaut du contrat (GENAPI_PROTO_PATH → module → cwd). */
+/** Chemin par défaut du contrat (GENAPI_PROTO_PATH → répertoire de travail).
+ *  JAMAIS import.meta.url : webpack (build production Next) ne résout pas
+ *  « new URL(".", import.meta.url) » — le daemon tsx/PM2 s'exécute depuis la
+ *  racine du dépôt, le cwd suffit. */
 function resoudreCheminProtoDefaut(): string {
   const env = process.env.GENAPI_PROTO_PATH?.trim();
   if (env) return env;
-  try {
-    // Résolution relative au module (tsx sur le VPS souverain, tests).
-    const candidat = path.resolve(
-      decodeURIComponent(new URL(".", import.meta.url).pathname),
-      "proto",
-      "gen3.proto",
-    );
-    return candidat;
-  } catch {
-    // import.meta indisponible dans ce contexte → repli répertoire courant.
-  }
   return path.resolve(process.cwd(), "lib", "genapi", "proto", "gen3.proto");
 }
 

@@ -73,22 +73,14 @@ function validerIdentite(uid: string, email: string): void {
 
 /**
  * Résout le chemin du contrat gen3.proto : variable GENAPI_PROTO_PATH,
- * puis résolution relative au module (tsx/daemon VPS), puis repli sur le
- * répertoire de travail (Next bundlé).
+ * puis répertoire de travail du processus (convention daemon tsx/PM2 : le
+ * dépôt racine) — JAMAIS import.meta.url : webpack (build production Next)
+ * ne résout pas « new URL(\".\", import.meta.url) » et casse la compilation
+ * (CI 150b611 : « Module not found: Can't resolve '.' »).
  */
 function resoudreCheminProto(): string {
   const env = process.env.GENAPI_PROTO_PATH?.trim();
   if (env) return env;
-  try {
-    const candidat = path.resolve(
-      decodeURIComponent(new URL(".", import.meta.url).pathname),
-      "proto",
-      "gen3.proto",
-    );
-    if (existsSync(candidat)) return candidat;
-  } catch {
-    // import.meta indisponible dans certains contextes bundlés → repli cwd.
-  }
   return path.resolve(process.cwd(), "lib", "genapi", "proto", "gen3.proto");
 }
 
