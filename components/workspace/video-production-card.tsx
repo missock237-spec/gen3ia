@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { MediaProgressFrame, formatElapsed } from "@/components/media/media-progress-frame";
-import type { MediaProgressStatus } from "@/components/media/media-progress-logic";
+import { MediaProgressSquare } from "@/components/media/media-progress-square";
+import { formatElapsed, type MediaProgressStatus } from "@/components/media/media-progress-logic";
 
 /**
  * CARTE DE PRODUCTION VIDÉO (temps réel) — Task 106-d.
@@ -22,6 +22,9 @@ import type { MediaProgressStatus } from "@/components/media/media-progress-logi
  * (URL signée R2) s'affiche AVEC les formats dérivés (TikTok/Shorts/Reels…)
  * et leurs liens de téléchargement, ainsi que les avertissements de scènes
  * (tolérance par scène Task 106-c).
+ *
+ * PROGRESSION : carré de progression (components/media/media-progress-square)
+ * — pourcentage en grand, monotone, mis à jour en direct ; plus aucune barre.
  */
 
 interface ProductionStatus {
@@ -280,11 +283,10 @@ export function VideoProductionCard({ videoProjectId, title, tone = "dark" }: { 
 
   if (!status && !loadError) {
     return (
-      <MediaProgressFrame
+      <MediaProgressSquare
         status="queued"
         stageLabel="Lancement de la production vidéo"
         tone={tone}
-        compact
         startedAt={startedRef.current}
       />
     );
@@ -294,7 +296,7 @@ export function VideoProductionCard({ videoProjectId, title, tone = "dark" }: { 
     <div className="space-y-2" data-video-production={videoProjectId}>
       {loadError && <p className="text-[11px] text-[var(--g3-muted)]">{loadError}</p>}
       {status && (
-        <MediaProgressFrame
+        <MediaProgressSquare
           status={statusToProgress(status.status)}
           stageLabel={STAGE_LABELS[status.stage] ?? "Production vidéo"}
           percent={status.status === "completed" ? 100 : percent}

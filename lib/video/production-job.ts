@@ -41,11 +41,24 @@ export const PRODUCTION_STAGE_WEIGHTS: Record<ProductionStage, [number, number]>
 
 /** Budget de RELANCE après échec d'étape (distinct du compteur informatif). */
 export const PRODUCTION_RETRY_BUDGET = 3;
-/** Visuels/narrations traités par tick au maximum (bornage serverless). */
-export const ASSET_BATCH_SIZE = 4;
+/**
+ * Visuels/narrations traités par tick au maximum (bornage serverless).
+ *
+ * Vitesse maximisée (consigne propriétaire) : 4 → 6. Le lot est exécuté par
+ * une VAGUE PARALLÈLE bornée (mapWithConcurrency, concurrence ≤
+ * VIDEO_LIMITS.maxParallelAssetGenerations = 4, échéance du tick honorée
+ * AVANT chaque démarrage de scène) : la taille du lot ne peut jamais
+ * dépasser le budget de temps — les scènes non démarrées avant l'échéance
+ * sont reprises au tick suivant (checkpoint sceneCursor). Sûreté au pire
+ * cas : tick worker (sans échéance) = ⌈6/4⌉ = 2 vagues × 110 s (sous-appel
+ * image au pire absolu : création 55 s + téléchargement 55 s bornés par
+ * AbortSignal) = 220 s < bail 230 s ; en nominal (image ~10-30 s) un lot
+ * de 6 ≈ 30-60 s.
+ */
+export const ASSET_BATCH_SIZE = 6;
 /**
  * Task 154 (reprise inter-ticks) — budget minimal pour DÉMARRER un clip IA
- * (maturation 60–180 s côté Agnes) : les ticks « sondage » courts (20–55 s)
+ * (maturation 60–180 s côté Agnes) : les ticks « sondage » courts (≤ 100 s)
  * ne démarrent rien, le tick worker (bail 230 s) prend le relais.
  */
 export const SCENE_VIDEO_MIN_START_BUDGET_MS = 120_000;
@@ -59,8 +72,18 @@ export const MAX_SCENE_FAILURES = 3;
 export const MAX_JOB_WARNINGS = 50;
 /** Bail d'un tick de production (mêmes échéances que le rendu). */
 export const PRODUCTION_LEASE_MS = 230_000;
-/** Budget de travail par défaut d'une avance « sondage » (GET responsive). */
-export const PRODUCTION_POLL_ADVANCE_BUDGET_MS = 55_000;
+/**
+ * Budget de travail par défaut d'une avance « sondage » (GET responsive).
+ *
+ * Vitesse maximisée (consigne propriétaire) : 55 s → 100 s — PLUS de travail
+ * réel accompli par tick de sondage (lots de scènes plus aboutis, moins de
+ * re-files) tout en préservant les garanties : 100 s (budget) + 110 s (le
+ * sous-appel image le plus long, DÉJÀ démarré avant l'échéance et non
+ * interruptible) = 210 s < bail 230 s (garantie du bail intacte même au
+ * pire absolu) ; marge 90 s sur maxDuration 300 s de la route GET pour la
+ * re-lecture post-tick + overhead Firestore.
+ */
+export const PRODUCTION_POLL_ADVANCE_BUDGET_MS = 100_000;
 
 export interface ProductionStageTimelineEntry {
   stage: ProductionStage;

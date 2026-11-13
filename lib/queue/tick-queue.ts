@@ -334,21 +334,28 @@ export async function enqueueDispatchTick(options: { delaySeconds: number; slotE
 }
 
 /** Enfile un tick du worker de rendu vidéo ({ jobId }). */
-export async function enqueueVideoRenderTick(jobId: string, delaySeconds = 1): Promise<TickPublishResult> {
+export async function enqueueVideoRenderTick(jobId: string, delaySeconds = 0): Promise<TickPublishResult> {
   return writeTicket({
     kind: "video-render-tick",
     body: JSON.stringify({ jobId }),
     path: VIDEO_RENDER_TICK_PATH,
+    // Défaut 0 s (vitesse maximisée, consigne propriétaire) : le ticket est
+    // DÛ IMMÉDIATEMENT — la délivrance immédiate reste tentée (délai ≤ 5 s)
+    // et si elle échoue, le pump rattrape sans délai additionnel (l'ancien
+    // défaut 1 s ne servait qu'à reporter l'échéance de rattrapage).
     delaySeconds,
   });
 }
 
 /** Enfile un tick du worker de production vidéo ({ jobId }). */
-export async function enqueueVideoProductionTick(jobId: string, delaySeconds = 1): Promise<TickPublishResult> {
+export async function enqueueVideoProductionTick(jobId: string, delaySeconds = 0): Promise<TickPublishResult> {
   return writeTicket({
     kind: "video-production-tick",
     body: JSON.stringify({ jobId }),
     path: VIDEO_PRODUCTION_TICK_PATH,
+    // Défaut 0 s (vitesse maximisée, consigne propriétaire) : même logique
+    // que le tick de rendu — échéance immédiate, délivrance immédiate
+    // tentée, pump en relais sans délai additionnel.
     delaySeconds,
   });
 }

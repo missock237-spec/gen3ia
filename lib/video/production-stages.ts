@@ -383,7 +383,7 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
       // l'échéance du tick reste dans sceneVideoTasks (persistée sur le job)
       // — le tick suivant RE-SONDE la même tâche au lieu de re-générer
       // (jamais deux coûts fournisseur pour une même scène). Les ticks
-      // « sondage » courts (20–55 s) ne DÉMARRENT rien : sans budget minimal
+      // « sondage » courts (≤ 100 s) ne DÉMARRENT rien : sans budget minimal
       // ils attendent le tick worker (bail 230 s).
       const videoDeadlineMs = deadlineMs !== null ? deadlineMs - 10_000 : null; // marge avant l'échéance du tick
       const videoTask: Promise<{ status: "fulfilled"; value: { status: "generated" | "reused" | "skipped" | "failed" | "pending" | "not_started"; error?: string } } | { status: "rejected"; reason: unknown }> =
@@ -672,12 +672,14 @@ async function stageAssets(job: VideoProductionJob, timeBudgetMs?: number): Prom
 }
 
 /**
- * VOICE : narrations par lots (MÊME chemin que POST .../generate-voice :
- * enregistrement utilisateur ou TTS ElevenLabs facturé au caractère réel),
- * sceneCursor checkpoint par scène. Aucune voix configurée ou narration
- * désactivée → avancement assumé (vidéo muette — le moteur de rendu la
- * gère explicitement) : une production autopilote ne doit pas mourir faute
- * de profil vocal, l'incident est consigné dans la timeline du job.
+ * VOICE : narrations par lots, VAGUE PARALLÈLE BORNÉE (même pattern que la
+ * vague assets — consigne propriétaire « vitesse maximale » ; MÊME chemin que
+ * POST .../generate-voice : enregistrement utilisateur ou TTS facturé au
+ * caractère réel), sceneCursor checkpoint consolidé par tick. Aucune voix
+ * configurée ou narration désactivée → avancement assumé (vidéo muette — le
+ * moteur de rendu la gère explicitement) : une production autopilote ne doit
+ * pas mourir faute de profil vocal, l'incident est consigné dans la timeline
+ * du job.
  *
  * Task 106-c — TOLÉRANCE PAR SCÈNE : même mécanique que l'étape assets.
  * Task 106-c — IDEMPOTENCE : une scène qui possède DÉJÀ une narration n'est
@@ -737,23 +739,70 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
   // la détection systémique (un no-op y comptait comme réussite avant).
   succeededInBatch += Math.max(0, scan - cursorAtTickStart - work.length);
 
+  // VAGUE PARALLÈLE BORNÉE (consigne propriétaire « vitesse maximale » —
+  // même pattern que la vague assets) : les narrations d'un lot sont des
+  // appels RÉSEAU INDÉPENDANTS (copie de l'enregistrement utilisateur vers
+  // R2, quelques secondes) — elles démarrent ENSEMBLE sous
+  // VIDEO_LIMITS.maxParallelAssetGenerations workers, l'échéance du tick est
+  // honorée AVANT chaque démarrage (shouldStart) et les résultats sont
+  // APPLIQUÉS DANS L'ORDRE des scènes : le contrat de la boucle séquentielle
+  // historique est préservé à l'identique (curseur par scène, tolérance par
+  // scène, propagation quota/transitoire, détection systémique, checkpoint
+  // consolidé). Sûreté budget : lot ≤ ASSET_BATCH_SIZE = 6 × copie R2
+  // (~secondes) sous 4 workers ≈ quelques dizaines de secondes ≪ budget.
   let processedAllWork = true;
-  for (const { scene, sceneIndex } of work) {
-    if (deadlineMs !== null && Date.now() >= deadlineMs) {
+  let tickError: unknown;
+  let haveTickError = false;
+  const outcomes = await mapWithConcurrency(
+    work,
+    Math.max(1, VIDEO_LIMITS.maxParallelAssetGenerations),
+    async ({ scene }): Promise<{ status: "done" } | { status: "fatal"; error: unknown }> => {
+      try {
+        const charactersUsed = await narrationTaskForScene(job, scene, voice, narratedSceneIds.has(scene.id));
+        if (charactersUsed > 0) {
+          // Facturation au caractère réel, PAR narration (référence unique
+          // par appel — comportement historique inchangé).
+          await billTts(job.userId, job.projectId, charactersUsed);
+        }
+        return { status: "done" };
+      } catch (error) {
+        // Task 106-c — quota/transitoire = incident d'infrastructure : PAS
+        // une faute de scène → rejet du worker (le régime de reprise du tick
+        // prendra le relais après l'application déterministe).
+        if (classifyTickError(error) !== "fatal") throw error;
+        return { status: "fatal", error };
+      }
+    },
+    {
+      // Budget temps du tick honoré AVANT chaque démarrage de scène (les
+      // non-démarrées sont reprises au prochain tick — curseur/checkpoint).
+      shouldStart: () => deadlineMs === null || Date.now() < deadlineMs,
+    },
+  );
+  // Application DÉTERMINISTE (ordre des scènes) des résultats de la vague.
+  let cursor = cursorAtTickStart;
+  for (let i = 0; i < work.length; i += 1) {
+    const outcome = outcomes[i];
+    const { scene, sceneIndex } = work[i];
+    if (outcome.status === "skipped") {
+      // Non démarrée (budget temps) : le reste du lot est repris au prochain
+      // tick — le curseur reste à la dernière scène appliquée.
       processedAllWork = false;
       break;
     }
-    const failureKey = sceneFailureKey("voice", scene.id);
-    try {
-      const charactersUsed = await narrationTaskForScene(job, scene, voice, narratedSceneIds.has(scene.id));
-      if (charactersUsed > 0) {
-        await billTts(job.userId, job.projectId, charactersUsed);
+    if (outcome.status === "rejected") {
+      // Erreur quota/transitoire : le régime de reprise du tick prend le
+      // relais — le checkpoint N'EST PAS écrit (re-traitement idempotent du
+      // lot au retour, comportement historique de l'interruption immédiate).
+      if (!haveTickError) {
+        tickError = outcome.reason;
+        haveTickError = true;
       }
-      succeededInBatch += 1;
-    } catch (error) {
-      // Task 106-c — quota/transitoire = incident d'infrastructure : PAS une
-      // faute de scène, on remonte au régime de reprise du tick.
-      if (classifyTickError(error) !== "fatal") throw error;
+      break;
+    }
+    const failureKey = sceneFailureKey("voice", scene.id);
+    if (outcome.value.status === "fatal") {
+      const error = outcome.value.error;
       sceneFailures = recordSceneFailure(sceneFailures, failureKey);
       const permanentlyIgnored = shouldSkipScene(sceneFailures, failureKey);
       warnings = appendJobWarning(
@@ -768,14 +817,22 @@ async function stageVoice(job: VideoProductionJob, timeBudgetMs?: number): Promi
       );
       fatalInBatch += 1;
       if (firstFatalError === null) firstFatalError = error;
+    } else {
+      succeededInBatch += 1;
     }
-    job.sceneCursor = sceneIndex + 1;
+    cursor = sceneIndex + 1;
   }
+  job.sceneCursor = cursor;
   // Curseur : tout le travail examiné est franchi (narrées traversées ou
   // scènes traitées) — l'échéance interrompue laisse le curseur à la
-  // dernière scène traitée (reprise au prochain tick).
+  // dernière scène appliquée (reprise au prochain tick).
   if (processedAllWork) {
     job.sceneCursor = Math.max(job.sceneCursor, scan);
+  }
+  // Erreur quota/transitoire → régime de reprise du tick (même contrat que
+  // la vague assets : propagation APRÈS l'application déterministe).
+  if (haveTickError) {
+    throw tickError instanceof Error ? tickError : new Error(String(tickError));
   }
 
   // Task 106-c — SYSTÉMIQUE : aucune narration du lot n'aboutit → régime de
@@ -973,10 +1030,14 @@ async function stageDone(job: VideoProductionJob): Promise<ProductionStageResult
     return { action: "terminal-failed", message: renderJob.errorMessage ?? "Rendu annulé." } as const;
   }
   // Rendu en cours : progression miroir (80→98 %) + re-sondage borné.
+  // Vitesse maximisée (consigne propriétaire) : re-poll 10 s → 5 s — le rendu
+  // est déjà sondé par son PROPRE flux (worker tick + pump de la file R2) :
+  // le miroir de production n'a qu'un rôle d'affichage, un re-poll plus
+  // rapproché raccourcit la détection de complétion sans coût fournisseur.
   return {
     action: "stay",
     mirrorProgress: computeProductionProgress("render", renderJob.progress, 1),
-    delaySeconds: 10,
+    delaySeconds: 5,
     detail: `Rendu en cours (${Math.round(renderJob.progress * 100)} %).`,
   } as const;
 }

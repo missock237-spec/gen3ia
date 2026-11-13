@@ -56,6 +56,22 @@ export function formatElapsed(ms: number): string {
 }
 
 /**
+ * Progression MONOTONE du carré de progression (media-progress-square) :
+ * le pourcentage affiché ne régresse JAMAIS — une série 60 → 45 → 80
+ * affiche 60 puis 80, jamais 45. Protège contre un statut serveur
+ * incohérent (valeur qui recule entre deux événements SSE ou deux sondes).
+ *
+ * `precedent` = maximum déjà affiché (null au premier rendu) ;
+ * `suivant` = nouvelle valeur brute (bornée par clampPercent avant comparaison).
+ */
+export function maxPercentMonotone(precedent: number | null, suivant: number | null): number | null {
+  const borne = clampPercent(suivant);
+  if (borne === null) return precedent;
+  if (precedent === null) return borne;
+  return Math.max(precedent, borne);
+}
+
+/**
  * Progression réelle côté client pour les lots multi-éléments (storyboard…) :
  * ready / total exprimé en pourcentage borné 0..100, null si total invalide.
  */

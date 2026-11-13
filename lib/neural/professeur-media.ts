@@ -1014,9 +1014,34 @@ interface TâcheVidéo {
   video?: string;
 }
 
+/** Amélioration déterministe du prompt VIDÉO (sujet INTACT, rendu réaliste).
+ *  Miroir vidéo de durcirPromptImage : si le prompt ne porte DÉJÀ un marqueur
+ *  de réalisme (photograph / photoreal / photoréaliste / hyper-ultra-réaliste
+ *  / réaliste / cinématique / cinematic / hd / 4k — casse et accents ignorés),
+ *  les noyaux du rendu réaliste vidéo sont ajoutés À LA SUITE du sujet
+ *  demandé, jamais à la place. Le rendu ultra-réaliste est donc AUTOMATIQUE :
+ *  l'utilisateur n'a jamais besoin de le demander lui-même. */
+export function durcirPromptVideo(prompt: string): string {
+  const brut = prompt.trim();
+  const bas = brut.toLowerCase();
+  const déjàRéa = /(photograph|photoreal|photor[eé]aliste|hyper[- ]?r[eé]aliste|ultra[- ]?r[eé]aliste|r[eé]aliste|cin[eé]matique|cinematic|\bhd\b|\b4k\b)/.test(bas);
+  if (déjàRéa) return brut.slice(0, 1500);
+  const noyaux = [
+    brut,
+    "vidéo réaliste",
+    "rendu photoréaliste",
+    "mouvement de caméra fluide",
+    "lumière naturelle",
+    "détails nets",
+    "haute définition",
+  ];
+  return noyaux.join(", ").slice(0, 1500);
+}
+
 /** Génère une VIDÉO réaliste via le professeur (échafaudage).
- *  Sondage borné (défaut 240 s) — au-delà, échec honnête (le client
- *  retombe sur les moteurs locaux). */
+ *  Le prompt est durci automatiquement (durcirPromptVideo — réalisme garanti
+ *  sans que l'utilisateur ait à le demander). Sondage borné (défaut 240 s) —
+ *  au-delà, échec honnête (le client retombe sur les moteurs locaux). */
 export async function professeurVideo(params: {
   prompt: string;
   ratio?: string;
@@ -1025,13 +1050,18 @@ export async function professeurVideo(params: {
 }): Promise<ŒuvreProfesseur> {
   const config = await configurationProfesseurAsync();
   if (!config) throw new Error("Professeur média absent (configuration manquante).");
-  const prompt = params.prompt.trim().slice(0, 1500);
-  if (prompt.length < 4) throw new Error("Professeur vidéo : prompt trop court.");
+  const brut = params.prompt.trim();
+  if (brut.length < 4) throw new Error("Professeur vidéo : prompt trop court.");
+  // Réalisme automatique : le sujet demandé est préservé mot à mot, les
+  // noyaux de rendu réaliste ne s'ajoutent que s'il n'en porte pas déjà.
+  const prompt = durcirPromptVideo(brut);
   const taille = TAILLES_VIDEO[params.ratio ?? "16:9"] ?? "1280x720";
   const durée = Math.min(10, Math.max(5, Math.round(params.duréeSecondes ?? 5)));
 
   // Création de tâche avec re-tentatives (429 « Too many requests » du
-  // professeur : quota concurrent — on espace au lieu d'échouer net).
+  // professeur : quota concurrent — on espace au lieu d'échouer net ;
+  // 30 s puis 60 s : backoff raccourci pour livrer plus vite tout en
+  // gardant la fiabilité des 3 essais).
   let tâche: TâcheVidéo | null = null;
   for (let essai = 0; essai < 3; essai += 1) {
     const création = await fetchAvecDélai(
@@ -1041,6 +1071,12 @@ export async function professeurVideo(params: {
         headers: enTetes(config),
         body: JSON.stringify({
           prompt,
+          // Réalisme automatique : le rendu photoréaliste est garanti par le
+          // prompt durci ci-dessus (durcirPromptVideo), sans que l'utilisateur
+          // ait à demander « ultra réaliste ». La valeur « quality » de ce
+          // champ n'est documentée NULLE PART dans le dépôt (aucune preuve
+          // locale des valeurs admises ni des latences) — on garde « speed »
+          // (seule valeur prouvée par l'usage réel) et on n'invente rien.
           quality: "speed",
           with_audio: true,
           size: taille,
@@ -1056,7 +1092,7 @@ export async function professeurVideo(params: {
     }
     const corps = (await création.text()).slice(0, 200);
     if (création.status === 429 && essai < 2) {
-      await new Promise((r) => setTimeout(r, 45_000 * (essai + 1))); // 45 s puis 90 s
+      await new Promise((r) => setTimeout(r, 30_000 * (essai + 1))); // 30 s puis 60 s
       continue;
     }
     throw new Error(`Professeur vidéo ${création.status}: ${corps}`);
@@ -1064,9 +1100,12 @@ export async function professeurVideo(params: {
   if (!tâche?.id) throw new Error("Professeur vidéo : identifiant de tâche absent.");
 
   const début = Date.now();
-  const délaiMax = params.délaiMaxMs ?? 240_000;
+  const délaiMax = params.délaiMaxMs ?? 240_000; // délai global inchangé (fiabilité)
   for (;;) {
-    await new Promise((r) => setTimeout(r, 8_000));
+    // Sondage toutes les 5 s (anciennement 8 s) : résultat détecté plus tôt,
+    // livraison plus rapide — le délai global de 240 s et le téléchargement
+    // de 120 s restent inchangés (fiabilité préservée).
+    await new Promise((r) => setTimeout(r, 5_000));
     if (Date.now() - début > délaiMax) {
       throw new Error(`Professeur vidéo : délai dépassé (${Math.round(délaiMax / 1000)} s) — tâche ${tâche.id}.`);
     }

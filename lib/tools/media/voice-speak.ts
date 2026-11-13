@@ -2,31 +2,39 @@ import { z } from "zod";
 import type { ToolDefinition } from "@/lib/tools/types";
 import { genererAudioNeuralEtPersister } from "@/lib/neural/media-service";
 import { VOIX_PROFESSEUR, estVoixEspace, choisirVoixSelonPersonnage } from "@/lib/neural/professeur-media";
+import { analyserIntentionAudio } from "@/lib/neural/audio-intention";
 
 /**
- * Outil voice.speak — SYNTHÈSE VOCALE PARLÉE RÉELLE (deux modes honnêtes).
+ * Outil voice.speak — SYNTHÈSE AUDIO AVEC ROUTAGE AUTOMATIQUE DE L'INTENTION.
  *
  * Rend réel le contrat annoncé depuis longtemps au planificateur
  * (unified-agent AUDIO RULE, catalogue conversationnel) : l'outil
  * voice.speak était PROMIS mais aucun exécuteur n'existait — toute étape
  * planifiée échouait « Unknown tool: voice.speak » (audit multimodal).
  *
- * MODE 1 — VOIX HUMAINE RÉELLE (par défaut dès que le professeur média
- * est configuré, loi CONTRAINTE-ONDES) : le texte part vers le TTS réel
- * du professeur — voix humaine naturelle, choisie dans le roster
- * documenté (VOIX_PROFESSEUR : tongtong, chuichui, xiaochen, jam, kazi,
- * douji, luodo), vitesse réglable 0.5–2. VOIX CONTEXTUELLE (Task 2-a
+ * ROUTAGE AUTOMATIQUE (aucune consigne nécessaire à l'utilisateur) :
+ * l'intention de la demande est analysée DÉTERMINISTEMENT
+ * (lib/neural/audio-intention, lexique FR+EN) —
+ *  - PAROLE (« lis ce texte », « raconte-moi ») → VOIX HUMAINE
+ *    ultra-réaliste du professeur TTS (vitesse expressive automatique) ;
+ *  - SONS (pluie, vagues, orage, feu…) → moteur de design sonore
+ *    sémantique local (couches réelles) — JAMAIS lu à voix haute ;
+ *  - MUSIQUE (piano, berceuse…) → moteur scénique local ;
+ *  - hors vocabulaire → comportement historique.
+ *
+ * MODE PAROLE — VOIX HUMAINE RÉELLE (loi CONTRAINTE-ONDES) : le texte part
+ * vers le TTS réel du professeur — voix humaine naturelle, choisie dans le
+ * roster documenté (VOIX_PROFESSEUR : tongtong, chuichui, xiaochen, jam,
+ * kazi, douji, luodo), vitesse réglable 0.5–2. VOIX CONTEXTUELLE (Task 2-a
  * AUDIO) : le REGISTRE est déduit du CONTENU (narration/annonceur/calme/
  * enthousiaste/professionnel — voir deduireRegistreVoix) et ajuste la
  * prosodie Edge-TTS (rate/pitch) ; la cascade existante reste intacte.
- * Chaque œuvre porte la mention honnête `echafaudage: true` (échafaudage
- * supprimable : le signal d'onde gen3 prendra le relais après distillation).
  *
- * MODE 2 — REPLI LOCAL HONNÊTE (professeur absent) : composition
- * harmonique neuronale déterministe (mêmes moteurs que les signaux audio
- * du corps sémantique) — rythme et tons dérivés du texte. CE N'EST PAS de
- * la parole humaine naturelle ; la note du résultat le dit alors
- * explicitement, pour que ni le planner ni l'utilisateur ne soient trompés.
+ * MODE LOCAL HONNÊTE (sons/musique, ou parole sans cascade disponible) :
+ * moteur scénique local — pour les SONS c'est le VRAI rendu demandé (design
+ * sonore à couches) ; pour la PAROLE c'est un repli honnête (composition
+ * harmonique déterministe) qui se dit explicitement NON parlé, pour que ni
+ * le planner ni l'utilisateur ne soient trompés.
  *
  * Sortie compatible avec le contrat artefact du moteur conversationnel
  * (lib/domain/conversations/engine.ts) :
@@ -207,7 +215,7 @@ interface VoiceSpeakToolOutput {
   mimeType: "audio/wav" | "audio/mpeg";
   dureeSecondes: number;
   moteur: string;
-  /** Note d'honnêteté : mode voix humaine réelle vs repli local. */
+  /** Note d'honnêteté sur la nature du rendu (voix TTS / design sonore / nappe). */
   note: string;
 }
 
@@ -224,18 +232,27 @@ export const voiceSpeakTool: ToolDefinition<
   id: "voice.speak",
   name: "voice.speak",
   description:
-    "Synthétise un AUDIO PARLÉ à partir d'un texte. VOIX HUMAINE RÉELLE via le professeur média " +
-    "temporaire quand il est configuré (loi CONTRAINTE-ONDES) : voix féminine/masculine selon le " +
-    "personnage (Denise/Henri — espace public Edge-TTS ; roster passerelle : tongtong, chuichui, " +
-    "xiaochen, jam, kazi, douji, luodo), prosodie CONTEXTUELLE au contenu (registre déduit du texte " +
-    "— narration/annonceur/calme/enthousiaste/professionnel — avec ajustement Edge-TTS rate/pitch ; " +
-    "imposable via `registre`), vitesse 0.5–2, archivage permanent. " +
-    "Repli local honnête quand le professeur est absent : composition harmonique neuronale " +
-    "déterministe — ce n'est PAS de la parole, et le résultat le signale.",
+    "Synthétise un AUDIO à partir d'une demande : PAROLE → voix humaine ultra-réaliste (TTS réel du " +
+    "professeur média, voix féminine/masculine selon le personnage — Denise/Henri — espace public " +
+    "Edge-TTS ; roster " +
+    "passerelle : tongtong, chuichui, xiaochen, jam, kazi, douji, luodo), prosodie CONTEXTUELLE au " +
+    "contenu (registre déduit du texte — narration/annonceur/calme/enthousiaste/professionnel — avec " +
+    "ajustement Edge-TTS rate/pitch ; imposable via `registre`), vitesse 0.5–2, archivage permanent. " +
+    "Les demandes de SONS (pluie, vagues, orage, feu…) et de MUSIQUE sont AUTOMATIQUEMENT routées vers " +
+    "le moteur de design sonore sémantique — jamais lues à voix haute. Repli local honnête quand la " +
+    "cascade voix est indisponible : composition harmonique déterministe — ce n'est PAS de la parole, " +
+    "et le résultat le signale.",
   category: "media",
   risk: "low",
   inputSchema: VoiceSpeakInput,
   async execute(input, context): Promise<VoiceSpeakToolOutput> {
+    // ROUTAGE AUTOMATIQUE DE L'INTENTION (aucune consigne utilisateur) :
+    // « voix » → cascade TTS réel ; « son » / « musique » → JAMAIS le TTS
+    // (lire « le son de la pluie » à voix haute serait une erreur de rendu) ;
+    // « inconnu » → comportement historique (cascade, puis moteur local).
+    const intention = analyserIntentionAudio(input.text);
+    const estDesignSonore = intention.nature === "son" || intention.nature === "musique";
+
     // Défaut INTELLIGENT : la voix suit le personnage décrit dans le texte
     // (féminine/masculine, déterministe) quand aucune voix n'est imposée.
     const voixRésolue = input.voix ?? choisirVoixSelonPersonnage(input.text).voixEspace;
@@ -246,48 +263,54 @@ export const voiceSpeakTool: ToolDefinition<
       ? PROSODIE_PAR_REGISTRE[input.registre]
       : deduireRegistreVoix(input.text);
     const vitesseEffective = input.vitesse ?? prosodie.vitesse;
-    // MODE 1 SANS CONFIGURATION (2026-11-12) : la cascade de PAROLE seule
-    // (passerelle configurée → espace public Edge-TTS ANONYME) — la vraie
-    // voix humaine ne dépend plus d'aucun fichier de configuration.
-    const { genererVoixHumaineProfesseurEtPersister } = await import("@/lib/neural/media-service");
-    const renduVoix = await genererVoixHumaineProfesseurEtPersister({
-      userId: context.userId,
-      texte: input.text.trim(),
-      voix: voixRésolue,
-      vitesse: vitesseEffective,
-      pitch: prosodie.pitchHz,
-    }).catch(() => null);
-    if (renduVoix) {
-      const { urlDurableAbsolue } = await import("@/lib/media/url-durable");
-      const estPermanent = renduVoix.storage === "r2" && typeof renduVoix.cleStockage === "string";
-      const ecouter =
-        estPermanent && renduVoix.cleStockage ? (urlDurableAbsolue(renduVoix.cleStockage) ?? renduVoix.url) : renduVoix.url;
-      return {
-        ...(estPermanent ? { url: renduVoix.cleStockage } : {}),
-        storage: renduVoix.storage,
-        ...(renduVoix.storage === "inline" ? { audioDataUri: renduVoix.url } : {}),
-        ecouterUrl: ecouter,
-        mimeType: renduVoix.mime === "audio/mpeg" ? "audio/mpeg" : "audio/wav",
-        dureeSecondes: typeof renduVoix.meta.duree === "number" ? renduVoix.meta.duree : 0,
-        moteur: String(renduVoix.meta.moteur ?? "professeur-voix-espace-edge-tts"),
-        note:
-          "Voix humaine RÉELLE (loi CONTRAINTE-ONDES — échafaudage supprimable ; le signal d'onde gen3 prendra le relais après distillation)." +
-          (typeof renduVoix.meta.voix === "string" ? ` Voix utilisée : ${renduVoix.meta.voix}.` : "") +
-          ` Registre : ${prosodie.registre} (${prosodie.label}) — prosodie Edge-TTS rate ${prosodie.ratePourcent > 0 ? "+" : ""}${prosodie.ratePourcent} %, pitch ${prosodie.pitchHz > 0 ? "+" : ""}${prosodie.pitchHz} Hz${input.registre ? " (imposé)" : " (déduit du contenu)"}.`,
-      };
+
+    // MODE PAROLE SANS CONFIGURATION (2026-11-12) : la cascade de PAROLE
+    // seule (passerelle configurée → espace public Edge-TTS ANONYME) — la
+    // vraie voix humaine ne dépend plus d'aucun fichier de configuration.
+    // Les SONS et la MUSIQUE ne passent JAMAIS ici (routage automatique).
+    if (!estDesignSonore) {
+      const { genererVoixHumaineProfesseurEtPersister } = await import("@/lib/neural/media-service");
+      const renduVoix = await genererVoixHumaineProfesseurEtPersister({
+        userId: context.userId,
+        texte: input.text.trim(),
+        voix: voixRésolue,
+        vitesse: vitesseEffective,
+        pitch: prosodie.pitchHz,
+      }).catch(() => null);
+      if (renduVoix) {
+        const { urlDurableAbsolue } = await import("@/lib/media/url-durable");
+        const estPermanent = renduVoix.storage === "r2" && typeof renduVoix.cleStockage === "string";
+        const ecouter =
+          estPermanent && renduVoix.cleStockage ? (urlDurableAbsolue(renduVoix.cleStockage) ?? renduVoix.url) : renduVoix.url;
+        return {
+          ...(estPermanent ? { url: renduVoix.cleStockage } : {}),
+          storage: renduVoix.storage,
+          ...(renduVoix.storage === "inline" ? { audioDataUri: renduVoix.url } : {}),
+          ecouterUrl: ecouter,
+          mimeType: renduVoix.mime === "audio/mpeg" ? "audio/mpeg" : "audio/wav",
+          dureeSecondes: typeof renduVoix.meta.duree === "number" ? renduVoix.meta.duree : 0,
+          moteur: String(renduVoix.meta.moteur ?? "professeur-voix-espace-edge-tts"),
+          note:
+            "Voix humaine RÉELLE (loi CONTRAINTE-ONDES — échafaudage supprimable ; le signal d'onde gen3 prendra le relais après distillation)." +
+            (typeof renduVoix.meta.voix === "string" ? ` Voix utilisée : ${renduVoix.meta.voix}.` : "") +
+            ` Registre : ${prosodie.registre} (${prosodie.label}) — prosodie Edge-TTS rate ${prosodie.ratePourcent > 0 ? "+" : ""}${prosodie.ratePourcent} %, pitch ${prosodie.pitchHz > 0 ? "+" : ""}${prosodie.pitchHz} Hz${input.registre ? " (imposé)" : " (déduit du contenu)"}.`,
+        };
+      }
     }
+
+    // MODE LOCAL : design sonore sémantique (sons/musique — le VRAI rendu
+    // demandé) ou repli honnête (parole sans cascade disponible).
     const rendu = await genererAudioNeuralEtPersister({
       userId: context.userId,
       prompt: input.text.trim(),
       dureeSecondes: input.dureeSecondes ?? dureeDuTexte(input.text),
       frequenceEchantillonnage: 22050,
-      voix: voixRésolue,
-      vitesse: vitesseEffective,
+      nature: intention.nature,
+      ...(estDesignSonore ? {} : { voix: voixRésolue, vitesse: vitesseEffective }),
     });
 
     const estPermanent = rendu.storage === "r2" && typeof rendu.cleStockage === "string";
     const estProfesseur = rendu.meta?.echafaudage === true;
-    const voixUtilisée = typeof rendu.meta?.voix === "string" ? rendu.meta.voix : null;
     // LIVRAISON DURABLE (2026-11-12) : le texte final du planner cite
     // ecouterUrl — s'il était présigné (TTL 1 h), le lien du message
     // persisté mourrait (« l'audio n'est pas réellement envoyé »). Quand la
@@ -308,10 +331,11 @@ export const voiceSpeakTool: ToolDefinition<
       moteur: String(rendu.meta.moteur ?? "gen3-snn-audio-v1"),
       note: estProfesseur
         ? "Voix humaine RÉELLE générée par le professeur média temporaire (loi CONTRAINTE-ONDES — échafaudage supprimable ; le signal d'onde gen3 prendra le relais après distillation)." +
-          (voixUtilisée ? ` Voix utilisée : ${voixUtilisée}.` : "")
-        : "Audio synthétisé localement par le moteur neuronal Gen3 (composition harmonique dérivée du texte). " +
-          "Ce rendu n'est pas une parole humaine naturelle — le professeur média n'est pas configuré, " +
-          "aucune synthèse vocale parlée n'est disponible dans ce mode.",
+          (typeof rendu.meta?.voix === "string" ? ` Voix utilisée : ${rendu.meta.voix}.` : "")
+        : estDesignSonore
+          ? "Design sonore sémantique gen3 — couches réelles pluie/vagues/orage/feu… ; ce n'est pas une parole, le texte n'a jamais été lu à voix haute."
+          : "Audio synthétisé localement par le moteur neuronal Gen3 (composition harmonique dérivée du texte). " +
+            "Ce rendu n'est pas une parole humaine naturelle — le moteur local n'inclut pas de synthèse vocale parlée.",
     };
   },
 };

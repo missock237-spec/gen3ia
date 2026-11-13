@@ -17,6 +17,7 @@ import { genererVisuelScene } from "./generation/visual-scene";
 import { genererAudioScene, sceneSonore } from "./generation/audio-composition";
 import { genererVideoScene } from "./generation/video-storyboard";
 import { lexiqueMultimodal } from "./generation/lexique-serveur";
+import { analyserIntentionAudio, type NatureAudio } from "./audio-intention";
 import {
   professeurDisponibleAsync,
   professeurImage,
@@ -471,28 +472,52 @@ export async function genererVoixHumaineProfesseurEtPersister(params: {
  * d'abord vers son TTS réel — voix au choix dans VOIX_PROFESSEUR,
  * vitesse réglable ; échec = nappe neuronale honnête.
  * Cache de contenu sur (prompt, durée, fréquence, empreinte).
+ *
+ * ROUTAGE AUTOMATIQUE DE L'INTENTION (audio-intention) : la demande est
+ * analysée DÉTERMINISTEMENT —
+ *  - « voix »  : PAROLE humaine → cascade professeur TTS RÉEL avec la
+ *    vitesse expressive détectée (chemin ultra-réaliste automatique) ;
+ *  - « son » / « musique »  : JAMAIS le TTS (lire « le son de la pluie »
+ *    à voix haute serait une erreur de rendu) → moteur scénique local ;
+ *  - « inconnu » : comportement historique (TTS si professeur dispo,
+ *    sinon moteur local).
+ * L'appelant peut FORCER la nature via `nature` (override explicite) et
+ * la vitesse de parole via `vitesse` ; sinon détection automatique.
  */
 export async function genererAudioNeuralEtPersister(params: {
   userId: string;
   prompt: string;
   dureeSecondes?: number;
   frequenceEchantillonnage?: number;
+  /** Voix explicite (override de l'appelant) — sinon cascade par défaut. */
   voix?: string;
+  /** Nature audio explicite (override de l'appelant) — sinon détection. */
+  nature?: NatureAudio;
+  /** Vitesse de parole explicite — sinon vitesse expressive de l'intention. */
   vitesse?: number;
 }): Promise<MediaNeuralGenere> {
-  // PROFESSEUR TEMPORAIRE : VOIX HUMAINE RÉELLE (TTS) tant que le signal
-  // d'onde gen3 n'a pas été distillé. Échec = nappe neuronale honnête.
-  if (await professeurDisponibleAsync()) {
+  const intention = analyserIntentionAudio(params.prompt);
+  const nature: NatureAudio = params.nature ?? intention.nature;
+  const vitesse = params.vitesse ?? intention.vitesse;
+
+  // PROFESSEUR TEMPORAIRE : VOIX HUMAINE RÉELLE (TTS) — chemin PAROLE
+  // uniquement (nature « voix » ou historique « inconnu »). Les demandes
+  // de SONS et de MUSIQUE ne passent JAMAIS par le TTS : le moteur
+  // scénique local prend la main directement. Échec du TTS = nappe
+  // neuronale honnête (comportement historique préservé).
+  const cheminVoix = nature === "voix" || nature === "inconnu";
+  if (cheminVoix && (await professeurDisponibleAsync())) {
     try {
       const œuvre = await professeurVoix({
         texte: params.prompt,
         ...(params.voix !== undefined ? { voix: params.voix } : {}),
-        ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
+        ...(vitesse !== undefined ? { vitesse } : {}),
       });
-      // Clé de contenu incluant voix + vitesse : la même demande avec une
-      // autre voix ou une autre vitesse est un rendu DIFFÉRENT (jamais de
-      // cache hit servant la mauvaise voix).
-      const cle = cleCacheMedia(params.userId, "audio", `prof|${œuvre.meta.moteur}|${œuvre.meta.voix ?? "défaut"}|${params.vitesse ?? 1}|${params.prompt}`, "wav");
+      // Clé de contenu incluant voix + vitesse + nature : la même demande
+      // avec une autre voix, une autre vitesse ou une AUTRE NATURE (voix ≠
+      // son pour un même prompt) est un rendu DIFFÉRENT (jamais de cache
+      // hit servant le mauvais rendu).
+      const cle = cleCacheMedia(params.userId, "audio", `prof|${œuvre.meta.moteur}|${œuvre.meta.voix ?? "défaut"}|v${vitesse ?? 1}|${nature}|${params.prompt}`, "wav");
       const persiste = await persistGeneratedBuffer({
         userId: params.userId,
         buffer: œuvre.buffer,
@@ -505,12 +530,21 @@ export async function genererAudioNeuralEtPersister(params: {
         url: persiste.url,
         storage: persiste.storage === "r2" ? "r2" : "inline",
         mime: œuvre.mime as MediaNeuralGenere["mime"],
-        meta: { ...œuvre.meta, prompt: params.prompt, cache: "professeur" },
+        meta: {
+          ...œuvre.meta,
+          prompt: params.prompt,
+          cache: "professeur",
+          intention: {
+            nature,
+            motif: intention.motif,
+            ...(vitesse !== undefined ? { vitesse } : {}),
+          },
+        },
         generationId: `audio-${randomUUID()}`,
         ...(persiste.storagePath ? { cleStockage: persiste.storagePath } : {}),
       };
     } catch (erreur) {
-      console.warn("[m[m[m[media-neural] professeur voix indisponible — nappe neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
+      console.warn("[media-neural] professeur voix indisponible — nappe neuronale :", erreur instanceof Error ? erreur.message : String(erreur));
     }
   }
   const { reseau } = getNeuralRuntime();
@@ -538,6 +572,7 @@ export async function genererAudioNeuralEtPersister(params: {
         frequence,
         prompt,
         moteur: sceneSonore2 ? "gen3-snn-audio-v2-scene" : "gen3-snn-audio-v1-nappe",
+        intention: { nature, motif: intention.motif },
         ...metaScene(scene),
         cache: "hit",
       },
@@ -570,6 +605,7 @@ export async function genererAudioNeuralEtPersister(params: {
       octets: rendu.wav.length,
       prompt,
       moteur: sceneSonore2 ? "gen3-snn-audio-v2-scene" : "gen3-snn-audio-v1-nappe",
+      intention: { nature, motif: intention.motif },
       cache: "miss",
     },
     generationId: `audio-${randomUUID()}`,
