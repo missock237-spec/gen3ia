@@ -31,7 +31,7 @@ import { syncVoiceTrack, applyTimelinePatch } from "@/lib/video/timeline-service
 import { ensureMusicBed } from "@/lib/video/audio-engine";
 import { isOwnedVideoKey } from "@/lib/video/storage";
 import { startRenderJob, getJob } from "@/lib/video/render-queue";
-import type { VideoProject, ScriptScene, VoiceProfile, VideoTimeline } from "@/lib/video/types";
+import type { RenderJob, VideoProject, ScriptScene, VoiceProfile, VideoTimeline } from "@/lib/video/types";
 import { mergePresetEffects, PRESET_MOTION, parseEffectPreset } from "@/lib/video/effect-presets";
 import { buildMotion } from "@/lib/video/motion-service";
 import { mapWithConcurrency } from "@/lib/video/concurrency";
@@ -1021,7 +1021,27 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
 /** DONE : miroir du job de rendu — la production ne termine qu'avec lui. */
 async function stageDone(job: VideoProductionJob): Promise<ProductionStageResult> {
   if (!job.renderJobId) throw new Error("Aucun job de rendu rattaché à l'étape finale.");
-  const renderJob = await getJob(job.renderJobId);
+  let renderJob: RenderJob | null = null;
+  try {
+    renderJob = await getJob(job.renderJobId);
+  } catch {
+    // QUOTA / indisponibilité Firestore (sonde production 2026-11-14 : le job
+    // restait 5 min sur « processing / done / 81 % » alors que le rendu était
+    // terminé) : repli INSTANTANÉ sur l'instantané processus-local de
+    // progression — le miroir TERMINAL du tick de rendu (fix 2026-11-13) y
+    // écrit `completed` + r2Key dès que le master est livré. Une complétion
+    // prouvée localement ne doit JAMAIS attendre le retour du quota : la
+    // livraison chat (R2) est indépendante de Firestore.
+    const { getJobProgress } = await import("@/lib/video/progress-store");
+    const instantane = await getJobProgress(job.renderJobId).catch(() => null);
+    if (instantane && instantane.status === "completed") {
+      return { action: "terminal-completed" } as const;
+    }
+    if (instantane && (instantane.status === "failed" || instantane.status === "cancelled")) {
+      return { action: "terminal-failed", message: "Rendu terminé en échec (instantané local sous quota)." } as const;
+    }
+    throw new Error("Lecture du job de rendu indisponible (quota/incident) — reprise par backoff."); // reprise par backoff (historique)
+  }
   if (!renderJob) throw new Error(`Job de rendu ${job.renderJobId.slice(0, 8)} introuvable.`);
   if (renderJob.status === "completed") {
     return { action: "terminal-completed" } as const;

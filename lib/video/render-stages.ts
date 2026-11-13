@@ -22,6 +22,7 @@ import type {
   SfxName,
 } from "@/lib/video/types";
 import { getOwnedProjectOrThrow, logSystem, setProjectStatus } from "@/lib/video/project-service";
+import { setJobProgress } from "@/lib/video/progress-store";
 import { getAsset, listAssets } from "@/lib/video/asset-service";
 import { buildRenderPlan, buildAssForRender, buildShortsAss, renderDimensions } from "@/lib/video/render/planner";
 import {
@@ -742,6 +743,15 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
       { status: "completed", stage: "finalize", progress: 1, leaseOwner: FieldValue.delete(), leaseExpiresAt: 0, updatedAt: nowIso() },
       job.userId,
     );
+    // MIROIR TERMINAL AVEC CLÉ MASTER (fix 2026-11-14) : l'instantané
+    // processus-local porte le statut terminal + la clé R2 du master —
+    // sous quota Firestore, stageDone et le statut de production y lisent
+    // la complétion PROUVÉE et livrent l'utilisateur sans attendre.
+    await setJobProgress(job.id, 1, "completed", {
+      stage: "finalize",
+      projectId: job.projectId,
+      r2Key: job.plan?.masterR2Key ?? job.output?.r2Key ?? "",
+    }).catch(() => undefined);
     await setProjectStatus(job.userId, job.projectId, "completed");
     await cleanupJobTmp(job.id);
     await logSystem(job.projectId, `Rendu ${job.id.slice(0, 8)} déjà livré — état final reconfirmé sans re-facturation (reprise après incident).`).catch(() => undefined);
@@ -798,6 +808,14 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
     },
     job.userId,
   );
+  // MIROIR TERMINAL AVEC CLÉ MASTER (fix 2026-11-14) — voir branche
+  // « déjà livré » : la complétion prouvée localement reste livrable sous
+  // quota Firestore (stageDone + statut de production lisent l'instantané).
+  await setJobProgress(job.id, 1, "completed", {
+    stage: "finalize",
+    projectId: job.projectId,
+    r2Key: uploaded.r2Key,
+  }).catch(() => undefined);
   await setProjectStatus(job.userId, job.projectId, "completed");
   await adminDb.collection("videoProjects").doc(job.projectId).set(
     { stats: { renderedSeconds: uploaded.durationSec, billedMinor: FieldValue.increment(actualMinor) }, updatedAt: nowIso() },

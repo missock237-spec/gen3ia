@@ -121,7 +121,22 @@ export async function GET(request: NextRequest, { params }: Params) {
     // l'anti-doublon interne de la livraison empêche tout second message).
     if (job && job.status === "processing" && job.stage === "done" && job.renderJobId) {
       try {
-        const renderJob = await getRenderJob(job.renderJobId);
+        let renderJob: Awaited<ReturnType<typeof getRenderJob>> = null;
+        try {
+          renderJob = await getRenderJob(job.renderJobId);
+        } catch {
+          // QUOTA (sonde production 2026-11-14 : job figé « processing/done »
+          // alors que le master était livré) : repli INSTANTANÉ sur
+          // l'instantané processus-local de progression — le miroir TERMINAL
+          // du tick de rendu y écrit `completed` + r2Key dès que le master
+          // existe. La complétion prouvée localement ne doit JAMAIS attendre
+          // le retour du quota : la livraison chat (R2) en est indépendante.
+          const { getJobProgress } = await import("@/lib/video/progress-store");
+          const instantane = await getJobProgress<{ status?: string; r2Key?: string }>(job.renderJobId).catch(() => null);
+          if (instantane?.status === "completed") {
+            renderJob = { status: "completed", output: { r2Key: instantane.r2Key ?? "" } } as never;
+          }
+        }
         if (renderJob?.status === "completed") {
           const effective: VideoProductionJob = { ...job, status: "completed", progress: 1 };
           await deliverJobToConversation(effective);

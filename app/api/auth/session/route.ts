@@ -193,8 +193,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(body);
 }
 
-export async function DELETE(request?: NextRequest) {
-  const hoteSession = request?.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request?.nextUrl?.hostname;
+export async function DELETE(request?: Request | NextRequest) {
+  const hoteSession = request?.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || (request && "nextUrl" in request ? request.nextUrl?.hostname : undefined);
   return new NextResponse(null, {
     status: 204,
     headers: { "Set-Cookie": clearSessionCookieHeader(hoteSession) },

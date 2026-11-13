@@ -130,9 +130,9 @@ async function purgerPrefixeRacineUtilisateur(prefix: string): Promise<number> {
  * Les evenements d'audit (interet legitime securite) sont conserves mais
  * anonymises par la suppression du profil.
  */
-export async function DELETE(request?: NextRequest) {
+export async function DELETE(request?: Request | NextRequest) {
   try {
-    const user = await requireUser(request as NextRequest);
+    const user = await requireUser(request && "nextUrl" in request ? request : (request as unknown as NextRequest));
     const uid = user.uid;
 
     // 1. Donnees applicatives rattlees a l'utilisateur.
@@ -216,7 +216,7 @@ export async function DELETE(request?: NextRequest) {
           // Domaine inter-hôtes (fix 2026-11-13) : même attribut que la pose —
           // l'effacement atteint le cookie quelle que soit la variante posée.
           "Set-Cookie": clearSessionCookieHeader(
-            request?.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || request?.nextUrl?.hostname,
+            request?.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || (request && "nextUrl" in request ? request.nextUrl?.hostname : undefined),
           ),
         },
       },

@@ -60,34 +60,84 @@ def verif(label: str, ok: bool, detail: str = "") -> None:
 
 
 def inscrire_et_ouvrir_chat(page) -> None:
-    page.goto(f"{BASE}/register", wait_until="domcontentloaded")
-    time.sleep(2)
-    # Le formulaire d'inscription s'ouvre via « S'inscrire » (flux durci).
-    bouton = page.locator("text=S'inscrire").first
-    try:
-        bouton.wait_for(state="visible", timeout=8000)
-        bouton.click()
-        time.sleep(1)
-    except Exception:
-        pass
-    page.fill('input[type="email"]', EMAIL)
-    page.fill('input[type="password"]', PASSWORD)
-    # Toutes les cases "conditions" éventuelles
-    for case in page.locator('input[type="checkbox"]').all():
+    """Inscription réelle (prouvée par le POST réseau) puis /chat authentifié
+    — flux durci repris de scripts/verifie-voix-video-production.py (9/9 vert)."""
+    page.goto(BASE + "/signup", wait_until="domcontentloaded", timeout=60000)
+    inscrit = False
+    for tentative in range(4):
+        page.goto(BASE + "/signup", wait_until="domcontentloaded",
+                  timeout=60000)
+        # Hydratation complète AVANT toute interaction (le clic d'onglet
+        # avant re-render React est effacé — cause du premier échec).
+        time.sleep(6)
         try:
-            if not case.is_checked():
-                case.check(timeout=1500)
+            page.wait_for_selector('input[type="email"]', state="visible",
+                                   timeout=45000)
+            page.wait_for_selector("button:has-text(\"S'inscrire\")",
+                                   timeout=20000)
         except Exception:
-            pass
-    with page.expect_response(
-        lambda r: "/api/auth/r2/signup" in r.url, timeout=30000
-    ) as reponse_info:
-        page.locator('button[type="submit"]').first.click()
-    inscrit = 200 <= reponse_info.value.status < 300
-    verif("L1a. inscription RÉELLE (POST /api/auth/r2/signup 2xx)", inscrit,
-          f"status={reponse_info.value.status}")
-    page.goto(f"{BASE}/chat", wait_until="domcontentloaded")
-    time.sleep(3)
+            print(f"[réessayage {tentative + 1}] page non hydratée", flush=True)
+            time.sleep(3)
+            continue
+        page.click("button:has-text(\"S'inscrire\")", timeout=15000)
+        # Le formulaire d'inscription APPARAÎT après bascule d'onglet :
+        # attendre le premier champ Prénom (le clic peut être hydraté tard).
+        page.wait_for_selector('input[placeholder="Prénom"]',
+                               state="visible", timeout=20000)
+        time.sleep(1)
+        for sel, val in [
+            ('input[placeholder="Prénom"]', "Livraison"),
+            ('input[placeholder="Nom"]', "Video"),
+            ('input[placeholder="Nom d\'utilisateur"]', "lv" + STAMP[-8:]),
+            ('input[type="email"]', EMAIL),
+            ('input[type="password"] >> nth=0', PASSWORD),
+            ('input[type="password"] >> nth=1', PASSWORD),
+        ]:
+            page.fill(sel, val, timeout=15000)
+            time.sleep(0.3)
+            if page.locator(sel).first.input_value() != val:
+                page.fill(sel, val, timeout=15000)
+                time.sleep(0.5)
+        try:
+            with page.expect_response(
+                lambda r: "/api/auth/r2/signup" in r.url, timeout=20000
+            ) as reponse_info:
+                submitter = page.locator(
+                    'button:has-text("Créer mon compte")')
+                (submitter if submitter.count() else page.locator(
+                    'button[type="submit"]')).first.click(timeout=15000)
+            statut = reponse_info.value.status
+            print(f"[réseau] POST /api/auth/r2/signup → {statut}", flush=True)
+            if statut in (200, 201):
+                inscrit = True
+                break
+        except Exception:
+            alerte = ""
+            try:
+                alerte = page.locator('p[role="alert"]').first.inner_text()
+            except Exception:
+                pass
+            if "déjà utilisée" in alerte:
+                try:
+                    page.click("button:has-text(\"Se connecter\")",
+                               timeout=15000)
+                    time.sleep(1)
+                    page.fill('input[type="email"]', EMAIL)
+                    page.fill('input[type="password"] >> nth=0', PASSWORD)
+                    with page.expect_response(
+                        lambda r: "/api/auth/r2/login" in r.url,
+                        timeout=20000) as rep_login:
+                        page.click('button[type="submit"]', timeout=15000)
+                    print(f"[réseau] POST login → {rep_login.value.status}",
+                          flush=True)
+                    inscrit = True
+                    break
+                except Exception:
+                    pass
+            time.sleep(2)
+    verif("L1a. inscription RÉELLE (POST /api/auth/r2/signup 2xx)", inscrit)
+    page.goto(f"{BASE}/chat", wait_until="domcontentloaded", timeout=60000)
+    time.sleep(4)
     session_ok = False
     try:
         avec_page = page.evaluate(
