@@ -46,7 +46,7 @@ import { findLastConversationImage, runChatTurn } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import { IntentSchema, buildIntentSystemPrompt, detectExplicitToolIntent, extractApiUrlFromMessage, extractSearchQuery } from "./engine-intent";
 import type { ExplicitToolIntent, TurnIntent } from "./engine-intent";
-import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, runMusiqueTurn, looksLikeDemandeMusique, looksLikeVoixHumaineRequest, intentionMédiaÉtiquetée } from "./engine-media";
+import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, runMusiqueTurn, runSonTurn, looksLikeDemandeMusique, looksLikeDemandeSon, looksLikeVoixHumaineRequest, intentionMédiaÉtiquetée } from "./engine-media";
 import { runEvaluationTurn } from "./engine-evaluation";
 // ENTRAÎNEMENT DEPUIS LE CHAT — entrée UNIQUE (demande utilisateur) : les
 // messages « apprends que / retiens que / entraîne-toi » entraînent
@@ -421,6 +421,24 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   if (looksLikeDemandeMusique(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Composition de la musique en cours…" });
     const result = await runMusiqueTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
+    await onEvent({
+      type: "done",
+      assistantMessage: result.assistantMessage,
+      artifacts: result.artifacts,
+      approvals: result.approvals,
+    });
+    return result;
+  }
+
+  // 2 neuvièmes) DEMANDE DE SON (bruit / ambiance) : design sonore
+  // sémantique RÉEL du moteur scénique gen3 (couches pluie/vagues/orage/
+  // feu…) — JAMAIS le TTS (lire « le son de la pluie » à voix haute était
+  // une erreur de rendu constatée en production). APRÈS vidéo/voix/musique
+  // (leurs détecteurs priment) : « une vidéo avec le son de la pluie »
+  // reste une vidéo ; « raconte le son du vent » reste de la voix.
+  if (looksLikeDemandeSon(input.message)) {
+    await onEvent({ type: "status", phase: "execution", label: "Création du son en cours…" });
+    const result = await runSonTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,

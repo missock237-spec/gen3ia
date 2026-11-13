@@ -15,6 +15,7 @@ import type { TurnBase } from "./engine-chat";
 import type { ConversationTurnResult } from "./engine-turn";
 import { randomUUID } from "node:crypto";
 import { professeurImageDisponibleAsync, choisirVoixSelonPersonnage } from "@/lib/neural/professeur-media";
+import { analyserIntentionAudio } from "@/lib/neural/audio-intention";
 
 /**
  * VIDÉO COURTE RÉALISTE (loi CONTRAINTE-ONDES) : une demande de vidéo
@@ -320,6 +321,129 @@ export async function runMusiqueTurn(ctx: TurnBase): Promise<ConversationTurnRes
       intent: { mode: "chat", understanding: "Composition musicale en échec honnête (cause nommée)." },
     };
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* SONS RÉELS — « crée le son de la pluie » : design sonore sémantique  */
+/* du moteur scénique gen3 (couches réelles pluie/vagues/orage/feu…)   */
+/* archivé en stockage permanent et livré DANS LE FIL (lecteur audio   */
+/* durable). JAMAIS le TTS : lire un bruit à voix haute est une erreur  */
+/* de rendu — le routage est AUTOMATIQUE (audio-intention), l'utilisateur */
+/* n'a jamais besoin de le préciser.                                    */
+/* ------------------------------------------------------------------ */
+
+/** DEMANDE DE SON : verbe de création + objet sonore reconnu par le
+ * lexique d'intention audio (lib/neural/audio-intention — gardes anti
+ * faux amis incluses). Exclusions strictes : VIDÉO (son pipeline propre),
+ * VOIX parlée, MUSIQUE (lit musical dédié), questions méta. */
+export function looksLikeDemandeSon(message: string): boolean {
+  const verbe =
+    /\b(cr[ée]{1,3}\b|cr[ée]e|cr[ée]er|g[ée]n[èe]re[szr]?|g[ée]n[ée]rer|fais|fait|fabrique[szr]?|produis|joue[szr]?|improvise|montre)\b/iu.test(message);
+  if (!verbe) return false;
+  if (looksLikeVideoRequest(message)) return false;
+  if (looksLikeVoixHumaineRequest(message)) return false;
+  if (looksLikeDemandeMusique(message)) return false;
+  if (/^\s*(c[''’]est quoi|qu['''’]est[- ]ce que|comment (?:ça|c[a])?\s*marche)\b/i.test(message.trim())) return false;
+  // Objet sonore : le lexique SFX testé (pluie, orage, vagues, vent, feu,
+  // train, cloche… FR+EN) décide — nature « son » exigée.
+  return analyserIntentionAudio(message).nature === "son";
+}
+
+/** Durée d'un son : explicite (« 15 secondes ») sinon 10 s (ambiance). */
+function dureeSonDemandée(message: string): number {
+  const explicite = /\b(\d{1,3})\s*(s|sec|secondes?)\b/iu.exec(message);
+  if (explicite) {
+    const valeur = Number.parseInt(explicite[1] ?? "", 10);
+    if (Number.isFinite(valeur)) return Math.min(30, Math.max(4, valeur));
+  }
+  return 10;
+}
+
+export async function runSonTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
+  const onEvent = safeEmitter(ctx.onEvent);
+  await onEvent({ type: "status", phase: "execution", label: "Création du son en cours…" });
+  try {
+    // MÊME moteur que le chat (voice.speak) : le routage d'intention y est
+    // AUTOMATIQUE — nature « son » → design sonore sémantique, JAMAIS le
+    // TTS. La demande ENTIERE sert de prompt scénique (couches reconnues).
+    const { voiceSpeakTool } = await import("@/lib/tools/media/voice-speak");
+    const sortie = await voiceSpeakTool.execute(
+      { text: ctx.message.trim().slice(0, 4000), dureeSecondes: dureeSonDemandée(ctx.message) },
+      { userId: ctx.userId },
+    );
+    if (sortie.note.includes("pas une parole humaine naturelle") && !sortie.note.includes("Design sonore")) {
+      // Défense en profondeur : si le rendu n'est PAS un design sonore
+      // (nappe générique), le tour n'est pas le bon — on laisse le moteur
+      // conversationnel historique répondre (compartiments, vocation…).
+      throw new Error("ROUTAGE_SON_NON_RESOLU");
+    }
+    const { urlDurableAbsolue, urlDurableRelative } = await import("@/lib/media/url-durable");
+    const cle = sortie.url && sortie.url.startsWith("users/") ? sortie.url : undefined;
+    const urlJouable = (cle ? urlDurableAbsolue(cle, ctx.origineClient) : null) ?? sortie.ecouterUrl;
+    const audioUrlDurable = cle ? urlDurableRelative(cle) : undefined;
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content:
+        `Voici votre son — VRAI design sonore sémantique du moteur gen3 (couches réelles, rendu ${sortie.dureeSecondes} s). ` +
+        `${sortie.note} Écoutez ici : ${urlJouable}`,
+      // Champ STRUCTURÉ lu par le fil : lecteur <audio> embarqué durable.
+      ...(audioUrlDurable ? { audioUrl: audioUrlDurable } : {}),
+      provider: "gen3-snn-audio",
+      model: String(sortie.moteur ?? "gen3-snn-audio-v2-scene"),
+      generationStatus: "complete",
+    });
+    const artifact = await createArtifact({
+      userId: ctx.userId,
+      conversationId: ctx.conversationId,
+      projectId: ctx.projectId,
+      type: "audio",
+      title: ctx.message.slice(0, 80),
+      url: sortie.ecouterUrl,
+      storagePath: cle,
+      note: `Son réel — design sonore sémantique (${sortie.dureeSecondes} s), jamais lu à voix haute`,
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    await onEvent({ type: "artifact_created", artifact });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [artifact],
+      approvals: [],
+      intent: { mode: "chat", understanding: `Son réellement rendu (${sortie.dureeSecondes} s, design sonore sémantique, aucune lecture vocale) et archivé en permanent.` },
+    };
+  } catch (error) {
+    // ÉCHEC HONNÊTE : la cause réelle est nommée à l'utilisateur — jamais
+    // de message d'audio fictif ni de lien mort.
+    const cause = error instanceof Error ? error.message : "erreur inconnue";
+    const assistantMessage = await appendMessage({
+      conversationId: ctx.conversationId,
+      userId: ctx.userId,
+      role: "assistant",
+      content:
+        "Je n'ai pas réussi à créer ce son — cause réelle : " + cause.slice(0, 300) +
+        ". Réessayez (par ex. « crée le son de la pluie sur les vitres ») ou demandez-moi un message vocal.",
+      provider: "gen3-snn-audio",
+      model: String(sortie_moteur_secours()),
+      generationStatus: "failed",
+    });
+    await onEvent({ type: "message_complete", message: assistantMessage });
+    return {
+      conversationId: ctx.conversationId,
+      userMessage: ctx.userMessage,
+      assistantMessage,
+      artifacts: [],
+      approvals: [],
+      intent: { mode: "chat", understanding: "Création de son en échec honnête (cause nommée)." },
+    };
+  }
+}
+
+/** Libellé moteur de secours pour l'échec honnête (aucune promesse). */
+function sortie_moteur_secours(): string {
+  return "gen3-snn-audio";
 }
 
 export async function runVoixTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
