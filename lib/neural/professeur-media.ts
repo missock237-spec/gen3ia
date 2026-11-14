@@ -678,11 +678,39 @@ async function professeurImageEspace(
  *  connaît pas ces voix. Une voix du roster passerelle retombée en échec
  *  est MAPPEE sur son équivalent de genre côté espace (jamais de voix
  *  masculine servie pour un personnage féminin). */
+/**
+ * VOIX DU PROFESSEUR — cascade complète AVEC RÉALISME AUTOMATIQUE.
+ *
+ * Demande propriétaire (2026-11-14) : la voix générée doit être réaliste
+ * SANS que l'utilisateur ne le demande — exactement comme durcirPromptImage
+ * rend les images photoréalistes automatiquement. Le wrapper applique
+ * donc polirVoixRealiste (EQ + compression douce + salle discrète +
+ * loudnorm) sur TOUTE sortie des moteurs ci-dessous ; un incident de
+ * polissage rend la voix brute (jamais d'échec de plus).
+ */
 export async function professeurVoix(params: {
   texte: string;
   vitesse?: number;
   voix?: string;
   /** Prosodie Edge-TTS : ajustement de hauteur en Hz (−50..+50, défaut 0). */
+  pitch?: number;
+}): Promise<ŒuvreProfesseur> {
+  const brute = await professeurVoixBrute(params);
+  const { polirVoixRealiste } = await import("@/lib/neural/voix-realiste");
+  const polie = await polirVoixRealiste({ buffer: brute.buffer, mime: brute.mime });
+  if (!polie.poli) {
+    // Honnêteté : le polissage raté est tracé dans les métadonnées de
+    // l'œuvre (aucun échec ajouté — la voix brute reste livrable).
+    return { ...brute, buffer: polie.buffer, mime: polie.mime, meta: { ...brute.meta, note: `${brute.meta?.note ?? ""} — voix brute (polissage indisponible : ${polie.detail ?? "cause inconnue"})`.trim() } };
+  }
+  return { ...brute, buffer: polie.buffer, mime: polie.mime, meta: { ...brute.meta, note: `${brute.meta?.note ?? ""} — voix réaliste (EQ, compression douce, salle discrète, loudnorm)`.trim() } };
+}
+
+/** Corps historique de la cascade voix (passerelle → espace public). */
+async function professeurVoixBrute(params: {
+  texte: string;
+  vitesse?: number;
+  voix?: string;
   pitch?: number;
 }): Promise<ŒuvreProfesseur> {
   const config = await configurationProfesseurAsync();

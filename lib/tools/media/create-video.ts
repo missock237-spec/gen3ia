@@ -81,7 +81,12 @@ const CreateVideoInput = z.object({
   musicMood: z.string().max(40).optional(),
   /** Générer la narration vocale (voix IA). Défaut pipeline : tentative avec voix. */
   voiceEnabled: z.boolean().optional(),
-  /** Incruster les sous-titres. */
+  /**
+   * Incruster les sous-titres — UNIQUEMENT si l'utilisateur les demande
+   * explicitement (demande propriétaire 2026-11-14). Ne jamais positionner
+   * true par initiative du modèle : le pipeline déduit déjà la volonté de
+   * l'utilisateur depuis son brief quand cette option est absente.
+   */
   subtitlesEnabled: z.boolean().optional(),
   /**
    * Task 134 — style de sous-titres à la création (karaoké, jaune cinéma,

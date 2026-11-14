@@ -46,6 +46,17 @@ function keyframesFor(preset: MotionPreset, _durationSec: number): MotionKeyfram
     case "parallax":
       // Zoom + dérive diagonale lente : sensation de profondeur.
       return [kf(0, 1.05, -0.04, 0.02), kf(0.55, 1.1, 0.02, -0.02), kf(1, 1.16, 0.05, -0.04)];
+    case "orbit_drift":
+      // Demande propriétaire 2026-11-14 — dérive ORBITALE : la caméra
+      // parcourt une trajectoire fermée (quatre points de boucle) tout en
+      // zoomant lentement — le cadre « tourne autour » du sujet, mouvement
+      // plus organique qu'un pan linéaire (aucun aller-retour mécanique).
+      return [
+        kf(0, 1.02, -0.05, 0.02),
+        kf(0.35, 1.08, 0.03, -0.05),
+        kf(0.7, 1.14, 0.05, 0.03),
+        kf(1, 1.18, -0.04, 0.01),
+      ];
     case "dramatic_push":
       return [kf(0, 1.0, 0, 0, -0.4), kf(0.6, 1.1, 0.01, -0.01, 0.2), kf(1, 1.22, 0, 0, 0)];
     default: {

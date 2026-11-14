@@ -52,7 +52,10 @@ const SCENE_SCHEMA = z.object({
   transitionOut: z.enum(TRANSITION_NAMES).default("cut"),
   musicMood: z.string().max(120).optional().nullable(),
   soundEffects: z.array(z.enum(SFX_NAMES)).max(6).default([]),
-  captions: z.boolean().default(true),
+  // Demande propriétaire 2026-11-14 : les sous-titres ne sont générés QUE
+  // si l'utilisateur les demande explicitement (détection demandeSousTitres
+  // sur le brief) — plus JAMAIS d'activation par défaut.
+  captions: z.boolean().default(false),
 });
 
 const SCRIPT_SCHEMA = z.object({
@@ -86,7 +89,7 @@ Tu réponds STRICTEMENT en JSON :
     "visualPrompt": string (description visuelle précise, EN ANGLAIS pour le modèle d'images),
     "visualType": "image"|"video"|"screen_recording",
     "subject": "person"|"place"|"object"|"abstract"|null,
-    "cameraMotion": "static"|"slow_zoom"|"zoom_out"|"ken_burns"|"pan_left_right"|"pan_right_left"|"tilt_up"|"tilt_down"|"parallax"|"dramatic_push",
+    "cameraMotion": "static"|"slow_zoom"|"zoom_out"|"ken_burns"|"pan_left_right"|"pan_right_left"|"tilt_up"|"tilt_down"|"parallax"|"dramatic_push"|"orbit_drift",
     "transitionIn": "cut"|"fade"|"dissolve"|"wipe_left"|"wipe_right"|"slide_left"|"slide_right"|"zoom"|"blur"|"flash"|"glitch"|"circle"|"match"|"smooth_left"|"circle_close"|"sweep"|"whip"|"blur_dissolve"|"radial_wipe",
     "transitionOut": idem, "musicMood": string|null,
     "soundEffects": ["whoosh"|"impact"|"click"|"ambient"|"cinematic_hit"|"riser"|"sub_bass"],
@@ -100,7 +103,8 @@ Règles :
 - La narration est en ${"langue demandée"}.
 - Chaque visualPrompt est EN ANGLAIS et suit la STRUCTURE PROFESSIONNELLE d'un prompt cinéma (recherche industrie 2026, guides Veo/Kling) : (1) SUJET et décor précis avec détails concrets et reconnaissables, (2) ACTION visible du sujet (mouvement lisible, pas d'abstraction), (3) CADRAGE explicite — shot size (extreme close-up, close-up, medium shot, wide establishing shot, aerial), (4) LENTILLE et profondeur (ex. 35mm wide, 85mm portrait, shallow depth of field), (5) LUMIÈRE cinématographique motivée (ex. golden hour backlight, soft window light, neon practicals, overcast diffusion), (6) ATMOSPHÈRE et textures réalistes (brume, poussière en suspension, imperfections de matière, micro-détails). Langage visuel CONCRET, ancré photoréalisme documentaire — jamais de mots vagues sans ancrage visuel.
 - "subject" décrit le sujet PRINCIPAL du cadrage : "person" si une personne occupe l'image (orateur, personnage, portrait) — cela active les animations synchronisées à la voix ; "place" pour un lieu, "object" pour un objet, "abstract" sinon. null si indécis.
-- "captions" vaut true par défaut dès que la scène est narrée (false seulement pour une demande explicite sans sous-titres).
+- "cameraMotion" : JAMAIS "static" — chaque plan est animé (zoom, pan, orbite…) sauf si l'utilisateur demande explicitement un plan fixe. Chaque scène porte un mouvement de caméra visible.
+- "captions" vaut false PAR DÉFAUT : les sous-titres ne sont activés que si l'utilisateur demande explicitement des sous-titres / légendes / texte à l'écran (détection en amont — ne les invente jamais).
 - Transition d'entrée du premier plan = "fade", sortie du dernier = "fade".
 - Rythme : ${"rythme des scènes"}.`;
 
@@ -134,7 +138,7 @@ export function fallbackScript(project: VideoProject): z.infer<typeof SCRIPT_SCH
     transitionOut: i === sceneCount - 1 ? ("fade" as const) : ("cut" as const),
     musicMood: project.musicMood ?? null,
     soundEffects: [] as Array<(typeof SFX_NAMES)[number]>,
-    captions: true,
+    captions: false,
   }));
   return {
     hook: project.title.slice(0, 600),

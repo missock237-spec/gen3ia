@@ -46,6 +46,7 @@ import { enqueueVideoProductionTick, type TickPublishResult } from "@/lib/queue/
 import { createProject, logSystem } from "@/lib/video/project-service";
 import { VideoProjectCreateSchema, DirectorBriefSchema, RenderRequestSchema, VIDEO_LIMITS } from "@/lib/video/security";
 import { parseEffectPreset } from "@/lib/video/effect-presets";
+import { demandeSousTitres } from "@/lib/video/intention-media";
 import { publishTickAndLog, tickUrl, leaseActive, sweepStaleJobs, advancePendingJob, claimNextQueuedJobDoc, nowIso } from "@/lib/video/queue-core";
 import {
   classifyTickError,
@@ -226,9 +227,17 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
   } else if (options.effectPreset !== undefined) {
     delete options.effectPreset;
   }
-  // Task 154 — levier clips vidéo IA : booléen strict (toute autre valeur
-  // est écartée silencieusement — le défaut reste « activé si configuré »).
+  // Demande propriétaire 2026-11-14 — AMBIANCE D'ANIMATION AUTOMATIQUE :
+  // chaque vidéo produite est vivante (grain temporel + vignettage animés)
+  // SANS que l'utilisateur ait à demander quoi que ce soit — comme les
+  // autres IA grand public. Une valeur explicite de l'utilisateur GAGNE
+  // toujours (y compris « none » honni ci-dessus : elle survit intacte).
+  if (options.effectPreset === undefined) {
+    options.effectPreset = "subtle";
+  }
   if (options.videoClips !== undefined) {
+    // Task 154 — levier clips vidéo IA : booléen strict (toute autre valeur
+    // est écartée silencieusement — le défaut reste « activé si configuré »).
     if (typeof options.videoClips === "boolean") {
       options.videoClips = options.videoClips as boolean;
     } else {
@@ -243,6 +252,13 @@ export async function createVideoProductionJob(params: CreateVideoProductionJobP
   const brief = DirectorBriefSchema.parse({
     brief: (briefSource.length >= 10 ? briefSource : `Production vidéo : ${briefSource || "demande utilisateur"}`).slice(0, 4000),
   }).brief;
+  // Demande propriétaire 2026-11-14 — SOUS-TITRES SUR DEMANDE EXPLICITE :
+  // l'option n'est plus jamais activée par un défaut interne. Absente →
+  // détection déterministe sur le brief (source unique intention-media) ;
+  // une valeur explicite du LLM/outil reste un contrat (vrai OU faux).
+  if (options.subtitlesEnabled === undefined) {
+    options.subtitlesEnabled = demandeSousTitres(brief);
+  }
   const title = (params.title?.trim().length ?? 0) >= 3 ? params.title!.trim().slice(0, 200) : deriveTitle(brief);
 
   // Même validation que POST /api/video/projects (les clés inconnues comme

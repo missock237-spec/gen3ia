@@ -337,6 +337,10 @@ export const MOTION_PRESETS = [
   "tilt_down",
   "parallax",
   "dramatic_push",
+  // Demande propriétaire 2026-11-14 (animations garanties) : dérive
+  // orbitale — zoom lent + trajectoire en boucle fermée (le cadre « tourne
+  // autour » du sujet au lieu d'un simple aller-retour linéaire).
+  "orbit_drift",
 ] as const;
 export type MotionPreset = (typeof MOTION_PRESETS)[number];
 

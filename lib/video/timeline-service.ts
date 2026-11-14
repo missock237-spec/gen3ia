@@ -99,7 +99,12 @@ export function buildTimelineFromScript(project: VideoProject, options: BuildTim
     fps: project.fps,
     tracks: [imageTrack, textTrack, voiceTrack, musicTrack, sfxTrack],
     captions: {
-      enabled: project.script?.scenes.every((s) => s.captions) ?? options.shortForm,
+      // Demande propriétaire 2026-11-14 : les sous-titres ne sont activés
+      // que si le scénario en porte (scènes explicitement captionnées —
+      // l'utilisateur les a demandés). Le repli historique « shortForm »
+      // activait les sous-titres pour tout format vertical SANS demande :
+      // supprimé. Un projet sans scénario → pas de sous-titres.
+      enabled: project.script ? project.script.scenes.some((s) => s.captions) : false,
       style: options.shortForm ? "shorts_bold" : options.captionsStyle,
       position: options.shortForm ? "center" : "bottom",
     },

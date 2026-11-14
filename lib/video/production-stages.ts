@@ -33,6 +33,7 @@ import { isOwnedVideoKey } from "@/lib/video/storage";
 import { startRenderJob, getJob } from "@/lib/video/render-queue";
 import type { RenderJob, VideoProject, ScriptScene, VoiceProfile, VideoTimeline } from "@/lib/video/types";
 import { mergePresetEffects, PRESET_MOTION, parseEffectPreset } from "@/lib/video/effect-presets";
+import { demandePlanFixe } from "@/lib/video/intention-media";
 import { buildMotion } from "@/lib/video/motion-service";
 import { mapWithConcurrency } from "@/lib/video/concurrency";
 import { classifyTickError } from "@/lib/video/queue-resume";
@@ -948,16 +949,19 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
   // un projet jamais ouvert dans l'atelier ne recevrait jamais les choix
   // exprimés dans la demande (le bootstrap du rendu repart du scénario).
   const wantsSubtitleTuning = Boolean(
-    job.options?.subtitleStyle || job.options?.subtitlePosition || job.options?.subtitlesEnabled === false,
+    job.options?.subtitleStyle || job.options?.subtitlePosition || job.options?.subtitlesEnabled !== undefined,
   );
   const wantsEffectPreset = Boolean(job.options?.effectPreset && job.options.effectPreset !== "none");
   if (wantsSubtitleTuning || wantsEffectPreset) {
     const { ensureProjectTimeline } = await import("@/lib/video/timeline-bootstrap");
     const ensured = await ensureProjectTimeline(job.userId, job.projectId);
     let timeline = ensured.timeline;
-    // 1) Sous-titres : coupure ET style/position demandés à la création.
+    // 1) Sous-titres : volonté utilisateur = contrat dans les DEUX sens —
+    // activés UNIQUEMENT si demandés (true), coupés si refus explicite
+    // (false) ; style/position demandés à la création s'appliquent.
     const captionsPatch: Partial<VideoTimeline["captions"]> = {};
     if (job.options?.subtitlesEnabled === false) captionsPatch.enabled = false;
+    if (job.options?.subtitlesEnabled === true) captionsPatch.enabled = true;
     if (job.options?.subtitleStyle) captionsPatch.style = job.options.subtitleStyle;
     if (job.options?.subtitlePosition) captionsPatch.position = job.options.subtitlePosition;
     if (Object.keys(captionsPatch).length > 0) {
@@ -985,6 +989,28 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
         ),
       };
     }
+    // Demande propriétaire 2026-11-14 — ANIMATION GARANTIE : un plan reste
+    // immobile SEULEMENT si l'utilisateur demande explicitement un plan fixe
+    // (« plan fixe », « trépied », « sans zoom »… — détection déterministe).
+    // Sinon tout clip statique reçoit un Ken Burns réel (la vidéo générée
+    // est TOUJOURS animée, comme chez les autres IA).
+    if (!demandePlanFixe(job.prompt)) {
+      timeline = {
+        ...timeline,
+        tracks: timeline.tracks.map((track) =>
+          track.kind !== "image"
+            ? track
+            : {
+                ...track,
+                clips: track.clips.map((clip) =>
+                  clip.motion?.preset === "static"
+                    ? { ...clip, motion: buildMotion("ken_burns", clip.durationSec) }
+                    : clip,
+                ),
+              },
+        ),
+      };
+    }
     await patchProject(job.userId, job.projectId, { timeline });
   }
   // Option subtitlesEnabled:false → sous-titres coupés sur la timeline.
@@ -1008,7 +1034,10 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
     contract: {
       targetDurationSec: project.targetDurationSec,
       narrationRequired: job.options?.voiceEnabled !== false,
-      captionsRequired: job.options?.subtitlesEnabled !== false && Boolean(project.timeline?.captions?.enabled),
+      // Demande propriétaire 2026-11-14 : le contrat QC n'exige des
+      // sous-titres QUE si l'utilisateur les a demandés — une vidéo sans
+      // sous-titres n'est plus un échec QC mais le comportement voulu.
+      captionsRequired: job.options?.subtitlesEnabled === true && Boolean(project.timeline?.captions?.enabled),
     },
   });
   // Rattaché AVANT le passage à l'étape done (visible même si le tick meurt ici).

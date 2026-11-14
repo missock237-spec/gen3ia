@@ -18,6 +18,7 @@ import { extractJsonObject } from "@/lib/agents/planner/normalize";
 import type { ProductionPlan, VideoProject } from "@/lib/video/types";
 import { assertDurationAllowed, assertResolutionAllowed, VIDEO_LIMITS } from "@/lib/video/security";
 import { patchProject, snapshotVersion, appendProductionLog } from "@/lib/video/project-service";
+import { demandeSousTitres } from "@/lib/video/intention-media";
 import { z } from "zod";
 
 const PLAN_SCHEMA = z.object({
@@ -60,7 +61,7 @@ Tu réponds STRICTEMENT en JSON (aucun texte hors JSON) selon ce schéma :
 Règles :
 - La durée totale et le nombre de scènes doivent être cohérents (une scène dure 5 à 12 s).
 - Un documentaire YouTube de long format a 5 à 8 chapitres ; un Short a 1 chapitre.
-- "captions" vaut true DÈS QUE la vidéo comporte une narration (voix off), en particulier pour TikTok/Shorts/Reels et tout format vertical (9:16, 4:5). false UNIQUEMENT si l'utilisateur demande explicitement une vidéo sans sous-titres.
+- "captions" vaut false PAR DÉFAUT : true UNIQUEMENT si l'utilisateur demande explicitement des sous-titres / légendes / texte à l'écran (détection déterministe demandeSousTitres appliquée sur le brief — jamais une initiative du modèle).
 - "needsVoiceRecording" vaut true seulement si l'utilisateur dit utiliser SA voix.
 - L'estimation de durée (targetDurationSec) doit respecter la demande explicite de l'utilisateur.`;
 
@@ -152,11 +153,10 @@ function normalizePlan(plan: ProductionPlan): ProductionPlan {
 export function fallbackPlan(brief: string, project: VideoProject): ProductionPlan {
   const lower = brief.toLowerCase();
   const isShort = /\b(short|tiktok|reels|60 secondes|1 minute)\b/.test(lower);
-  // Task 119 — sous-titres VRAI PAR DÉFAUT dès qu'il y a narration : seul un
-  // refus explicite (« sans sous-titres », « pas de texte à l'écran ») les
-  // coupe. La production autopilote narrée est sous-titrée par défaut,
-  // notamment sur les formats verticaux (shorts/Reels/TikTok).
-  const captionsOff = /\bsans (?:voix|narration|sous[- ]titres?)\b|\bpas de (?:voix|sous[- ]titres?|texte (?:à|a) l'\u00e9cran)\b/i.test(lower);
+  // Demande propriétaire 2026-11-14 — SOUS-TITRES SUR DEMANDE EXPLICITE
+  // SEULEMENT (source unique demandeSousTitres) : ni la narration ni le
+  // format vertical ne les activent plus. Un refus explicite reste un
+  // refus (la fonction honore « sans sous-titres »).
   const durationSec = project.targetDurationSec;
   const sceneCount = Math.max(3, Math.min(60, Math.round(durationSec / 9)));
   const chapters = Math.max(1, Math.min(8, Math.round(sceneCount / 5)));
@@ -180,9 +180,8 @@ export function fallbackPlan(brief: string, project: VideoProject): ProductionPl
     visualStyle: project.style,
     musicMood: isShort ? "énergique" : "cinématographique discret",
     needsVoiceRecording: /ma voix|my voice/i.test(brief),
-    // Volonté utilisateur = contrat : un refus explicite gagne contre tout
-    // défaut ; à défaut de refus, la narration impose les sous-titres.
-    captions: !captionsOff,
+    // Volontaire utilisateur = contrat : sous-titres UNIQUEMENT si demandés.
+    captions: demandeSousTitres(brief),
     rationale: "Plan de repli déterministe : durée et structure dérivées du projet.",
   };
 }

@@ -449,13 +449,20 @@ export async function genererVoixHumaineProfesseurEtPersister(params: {
 
   // 2) ESPACE PUBLIC ANONYME (production, aucune configuration requise) :
   // voix neuronale Edge réelle — féminine/masculine selon le personnage.
+  // Réalisme automatique (2026-11-14) : même polissage que la voie
+  // configurée (professeurVoix) — la voix Edge brute est polie ici.
   try {
-    const œuvre = await professeurVoixEspace({
+    const œuvreBrute = await professeurVoixEspace({
       texte: params.texte,
       ...(params.voix !== undefined ? { voix: params.voix } : {}),
       ...(params.vitesse !== undefined ? { vitesse: params.vitesse } : {}),
       ...(params.pitch !== undefined ? { pitch: params.pitch } : {}),
     });
+    const { polirVoixRealiste } = await import("@/lib/neural/voix-realiste");
+    const polie = await polirVoixRealiste({ buffer: œuvreBrute.buffer, mime: œuvreBrute.mime });
+    const œuvre = polie.poli
+      ? { ...œuvreBrute, buffer: polie.buffer, mime: polie.mime, meta: { ...œuvreBrute.meta, note: `${œuvreBrute.meta?.note ?? ""} — voix réaliste (EQ, compression douce, salle discrète, loudnorm)`.trim() } }
+      : œuvreBrute;
     return await persister(œuvre);
   } catch (erreur) {
     console.warn("[media-neural] voix humaine indisponible (cascade complète) :", erreur instanceof Error ? erreur.message : String(erreur));

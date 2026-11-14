@@ -107,6 +107,7 @@ const CAMERA_LANGUAGE: Record<ScriptScene["cameraMotion"], string> = {
   tilt_down: "slow tilt-down reveal moving from the top of the frame to the bottom, controlled crane-like motion",
   parallax: "subtle parallax camera drift conveying depth between foreground and background, slow dolly on a camera slider",
   dramatic_push: "dramatic dolly push-in with slight acceleration building tension, deliberate cinematic urgency",
+  orbit_drift: "slow orbital camera drift circling around the subject on a closed arc, gentle continuous zoom, smooth gimbal motion",
 };
 
 const PROFESSIONAL_STYLE_BLOCK = [

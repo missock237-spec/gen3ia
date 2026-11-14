@@ -808,6 +808,32 @@ async function stageFinalize(job: RenderJob, io: EngineIo): Promise<StageOutcome
     },
     job.userId,
   );
+  // Demande propriétaire 2026-11-14 — MANIFESTE DES ARTEFACTS R2 : le rendu
+  // d'une vidéo gen3 est ENTIÈREMENT géré via les artefacts R2 du projet.
+  // Ce manifeste (renders/{jobId}/artefacts.json, même préfixe que le
+  // master) énumère CHAQUE clé R2 produite par le rendu — master, images/
+  // clips de scènes, narrations, sous-titres, exports dérivés — une seule
+  // source de vérité pour l'audit, la reprise et la livraison. NON
+  // BLOQUANT : un échec d'écriture du manifeste n'annule jamais un rendu
+  // dont le master est déjà livré (le journal porte l'incident).
+  const manifesteArtefacts = {
+    jobId: job.id,
+    projectId: job.projectId,
+    genereLe: nowIso(),
+    master: { key: uploaded.r2Key, octets: uploaded.sizeBytes, dureeSec: Number(uploaded.durationSec.toFixed(2)) },
+    ...(plan.subtitles?.assR2Key ? { sousTitres: { key: plan.subtitles.assR2Key } } : {}),
+    sourcesParSegment: plan.segments.map((s) => ({
+      sceneId: s.sceneId,
+      images: s.imageR2Keys ?? [],
+      ...(s.videoR2Keys?.length ? { clips: s.videoR2Keys } : {}),
+      ...(s.narrationR2Key ? { narration: s.narrationR2Key } : {}),
+    })),
+    exports: job.exports.filter((e) => e.status === "done").map((e) => ({ cible: e.target, key: e.r2Key, octets: e.sizeBytes })),
+  };
+  await io
+    .uploadRender(`renders/${job.id}/artefacts.json`, Buffer.from(JSON.stringify(manifesteArtefacts, null, 2), "utf8"), "renders")
+    .then((cleManifeste) => io.log(`Artefacts R2 consignés : renders/${job.id.slice(0, 8)}/artefacts.json (${cleManifeste.slice(0, 80)}…).`))
+    .catch(() => io.log("Manifeste d'artefacts non écrit (R2 incident) — livraison du master inchangée."));
   // MIROIR TERMINAL AVEC CLÉ MASTER (fix 2026-11-14) — voir branche
   // « déjà livré » : la complétion prouvée localement reste livrable sous
   // quota Firestore (stageDone + statut de production lisent l'instantané).
