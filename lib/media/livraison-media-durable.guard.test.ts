@@ -220,7 +220,10 @@ describe("chemin VOIX — URL durable dans le texte + champ structuré", () => {
 describe("chemin VIDÉO — livraison durable + carte dans le fil", () => {
   it("runVideoTurn : le message de LANCEMENT porte videoProjectId (carte immédiate)", () => {
     const source = lire("lib/domain/conversations/engine-media.ts");
-    expect(source).toContain("videoProjectId: job.projectId,\n      generationStatus: \"complete\"");
+    // Garde insensible à l'indentation (fix capture 08:54 : le bloc
+    // d'affichage est désormais dans un try imbriqué — le contrat reste
+    // « le message de lancement porte l'id projet structuré »).
+    expect(source).toMatch(/videoProjectId: job\.projectId,\s*\n\s*generationStatus: "complete"/);
   });
 
   it("production-delivery : master média propriétaire → URL durable (jamais 900 s)", () => {

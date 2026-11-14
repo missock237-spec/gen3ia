@@ -349,6 +349,18 @@ export function looksLikeDemandeSon(message: string): boolean {
   return analyserIntentionAudio(message).nature === "son";
 }
 
+/**
+ * Classification d'une erreur de LANCEMENT : TRUE si l'incident est
+ * PASSAGER (saturation du stockage — disjoncteur anti-tempête, quota
+ * Firestore gRPC « Resource has been exhausted », réseau datacenter
+ * ETIMEDOUT/ECONNRESET/fetch failed, réponses 429/503). Dans ce cas la
+ * plateforme PROMET une relance automatique post-cooldown — le message
+ * utilisateur et le comportement doivent tenir cette promesse.
+ */
+export function estErreurTransitoireStockage(detailErreur: string): boolean {
+  return /disjoncteur|quota|exhausted|stall|aucune réponse en|UNAVAILABLE|indisponible \(stockage|ETIMEDOUT|ECONNRESET|ECONNREFUSED|fetch failed|Deadline|429|503/i.test(detailErreur ?? "");
+}
+
 /** Durée d'un son : explicite (« 15 secondes ») sinon 10 s (ambiance). */
 function dureeSonDemandée(message: string): number {
   const explicite = /\b(\d{1,3})\s*(s|sec|secondes?)\b/iu.exec(message);
@@ -826,59 +838,104 @@ export async function runVideoTurn(
       params.subtitlePosition ? `sous-titres positionnés ${params.subtitlePosition === "top" ? "en haut" : params.subtitlePosition === "center" ? "au centre" : "en bas"}` : null,
       params.effectPreset ? ({ none: "sans effets", subtle: "effets discrets", dynamic: "effets dynamiques", cinematic: "style cinématique", capcut: "studio CapCut" } as Record<string, string>)[params.effectPreset] ?? null : null,
     ].filter(Boolean).join(" · ");
-    const assistantMessage = await appendMessage({
-      conversationId: ctx.conversationId,
-      userId: ctx.userId,
-      role: "assistant",
-      content: [
-        "Votre production vidéo est lancée" + (paramsSummary ? ` — ${paramsSummary}.` : "."),
-        "Voici ce qui se passe maintenant, étape par étape :",
-        "1. Plan du réalisateur et scénario complet (hook, chapitres, scènes, CTA) ;",
-        "2. Génération des visuels de chaque scène avec un style cohérent ;",
-        "3. Narration vocale, musique (ambiance adaptée) et montage multicam ;",
-        "4. Rendu final avec contrôle qualité automatique (durée, audio, sous-titres)",
-        params.derivedTargets?.length ? "5. Formats dérivés pour vos plateformes (TikTok/Shorts/Reels…)." : "",
-        "",
-        "Demandez-moi « où en est ma vidéo ? » à tout moment. La vidéo terminée sera livrée DIRECTEMENT dans ce fil (message + lien de lecture + artefact), même si vous fermez la page.",
-      ].filter(Boolean).join("\n"),
-      // CARTE VIDÉO DANS LE FIL (2026-11-12) : l'id projet structuré permet
-      // au chat de rendre la carte de progression/lecteur immédiatement —
-      // sans dépendre d'un artifact_created jamais rendu par l'UI épurée.
-      videoProjectId: job.projectId,
-      generationStatus: "complete",
-    });
-    const artifact = await createArtifact({
-      userId: ctx.userId,
-      conversationId: ctx.conversationId,
-      projectId: ctx.projectId,
-      type: "video",
-      title: extractVideoTitle(promptText),
-      note: "Production vidéo autonome — progression en temps réel",
-      videoProjectId: job.projectId,
-      videoJobId: job.jobId,
-    });
-    await onEvent({ type: "message_complete", message: assistantMessage });
-    await onEvent({ type: "artifact_created", artifact });
-    return {
-      conversationId: ctx.conversationId,
-      userMessage: ctx.userMessage,
-      assistantMessage,
-      artifacts: [artifact],
-      approvals: [],
-      intent: { mode: "chat", understanding: "Demande de production vidéo complète (autopilote lancé)." },
-    };
+    // AFFICHAGE HONNÊTE (fix capture 08:54) : à partir d'ici le job de
+    // production EXISTE — un incident d'affichage (appendMessage/createArtifact
+    // sous quota) ne doit JAMAIS produire « lancement échoué » alors que la
+    // production tourne réellement. L'échec d'affichage reçoit son propre
+    // message de secours, jamais le message d'échec de lancement.
+    try {
+      const assistantMessage = await appendMessage({
+        conversationId: ctx.conversationId,
+        userId: ctx.userId,
+        role: "assistant",
+        content: [
+          "Votre production vidéo est lancée" + (paramsSummary ? ` — ${paramsSummary}.` : "."),
+          "Voici ce qui se passe maintenant, étape par étape :",
+          "1. Plan du réalisateur et scénario complet (hook, chapitres, scènes, CTA) ;",
+          "2. Génération des visuels de chaque scène avec un style cohérent ;",
+          "3. Narration vocale, musique (ambiance adaptée) et montage multicam ;",
+          "4. Rendu final avec contrôle qualité automatique (durée, audio, sous-titres)",
+          params.derivedTargets?.length ? "5. Formats dérivés pour vos plateformes (TikTok/Shorts/Reels…)." : "",
+          "",
+          "Demandez-moi « où en est ma vidéo ? » à tout moment. La vidéo terminée sera livrée DIRECTEMENT dans ce fil (message + lien de lecture + artefact), même si vous fermez la page.",
+        ].filter(Boolean).join("\n"),
+        // CARTE VIDÉO DANS LE FIL (2026-11-12) : l'id projet structuré permet
+        // au chat de rendre la carte de progression/lecteur immédiatement —
+        // sans dépendre d'un artifact_created jamais rendu par l'UI épurée.
+        videoProjectId: job.projectId,
+        generationStatus: "complete",
+      });
+      const artifact = await createArtifact({
+        userId: ctx.userId,
+        conversationId: ctx.conversationId,
+        projectId: ctx.projectId,
+        type: "video",
+        title: extractVideoTitle(promptText),
+        note: "Production vidéo autonome — progression en temps réel",
+        videoProjectId: job.projectId,
+        videoJobId: job.jobId,
+      });
+      await onEvent({ type: "message_complete", message: assistantMessage });
+      await onEvent({ type: "artifact_created", artifact });
+      return {
+        conversationId: ctx.conversationId,
+        userMessage: ctx.userMessage,
+        assistantMessage,
+        artifacts: [artifact],
+        approvals: [],
+        intent: { mode: "chat", understanding: "Demande de production vidéo complète (autopilote lancé)." },
+      };
+    } catch (erreurAffichage) {
+      const detailAffichage = erreurAffichage instanceof Error ? `${erreurAffichage.name}: ${erreurAffichage.message}` : String(erreurAffichage);
+      console.error(`[vidéo] job ${job.projectId.slice(0, 8)} lancé mais affichage incident : ${detailAffichage.slice(0, 300)}`);
+      const contenuSecours = `Votre production vidéo est bien LANCÉE — l'affichage du fil a rencontré un incident passager. La progression reste visible dans l'atelier : /studio/video/${job.projectId}. La vidéo terminée sera livrée dans ce fil dès que possible.`;
+      const secours = await appendMessage({
+        conversationId: ctx.conversationId,
+        userId: ctx.userId,
+        role: "assistant",
+        content: contenuSecours,
+        videoProjectId: job.projectId,
+        generationStatus: "complete",
+      }).catch(() => null);
+      // Persistance impossible (incident R2) : message SYNTHÉTIQUE rendu au
+      // tour uniquement (jamais de mensonge « lancement échoué » — le job
+      // tourne réellement).
+      const messageAffiché = secours ?? {
+        id: randomUUID(),
+        conversationId: ctx.conversationId,
+        userId: ctx.userId,
+        role: "assistant" as const,
+        content: contenuSecours,
+        videoProjectId: job.projectId,
+        generationStatus: "complete" as const,
+        createdAt: new Date().toISOString(),
+      };
+      await onEvent({ type: "message_complete", message: messageAffiché });
+      return {
+        conversationId: ctx.conversationId,
+        userMessage: ctx.userMessage,
+        assistantMessage: messageAffiché,
+        artifacts: [],
+        approvals: [],
+        intent: { mode: "chat", understanding: "Production lancée ; affichage du fil en incident (job sain)." },
+      };
+    }
   } catch (error) {
+    // FIN DU DIAGNOSTIC À L'AVEUGLE (capture 08:54) : l'erreur réelle est
+    // journalisée (console PM2) — le message utilisateur ne suffit plus à
+    // comprendre un incident de lancement.
+    const detailErreur = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    console.error(`[vidéo] lancement échoué (${ctx.conversationId.slice(0, 8)}) : ${detailErreur.slice(0, 400)}`);
     const unavailable = error instanceof Error && /n.est pas disponible/.test(error.message);
-    // HONNÊTETÉ (2026-11-13) : un incident passager du stockage (stall →
-    // disjoncteur anti-tempête) est différent d'un moteur non configuré —
-    // l'utilisateur doit savoir QUE faire (réessayer dans quelques minutes)
-    // et pourquoi (protection de la plateforme, pas sa faute).
-    const saturation = error instanceof Error &&
-      /disjoncteur|quota|stall|aucune réponse en|UNAVAILABLE|indisponible \(stockage/i.test(error.message);
+    // HONNÊTETÉ (2026-11-13, élargie capture 08:54) : un incident passager
+    // du stockage (disjoncteur anti-tempête, quota Firestore gRPC, réseau
+    // du datacenter) est différent d'un moteur non configuré — l'utilisateur
+    // doit savoir QUE faire et pourquoi.
+    const saturation = estErreurTransitoireStockage(detailErreur);
     const message = unavailable
       ? "La production vidéo n'est pas disponible sur cette plateforme actuellement (moteur de production non configuré). Votre demande est conservée : réessayez plus tard ou depuis l'atelier vidéo."
       : saturation
-        ? "Le lancement de votre vidéo a buté sur une saturation MOMENTANÉE du stockage de la plateforme (protection anti-tempête — reprise automatique dans quelques minutes). Rien n'est perdu : renvoyez simplement votre demande dans un instant, ou dites-moi « relance ma vidéo »."
+        ? "Le lancement de votre vidéo a buté sur une saturation MOMENTANÉE du stockage de la plateforme (protection anti-tempête). Rien n'est perdu : je relance automatiquement votre production dans ~2 minutes — vous n'avez rien à faire. Vous pouvez aussi la relancer vous-même en renvoyant votre demande."
         : "Le lancement de la production vidéo a échoué. Votre demande est conservée — réessayez dans un instant.";
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
@@ -888,6 +945,64 @@ export async function runVideoTurn(
       generationStatus: "failed",
     });
     await onEvent({ type: "message_complete", message: assistantMessage });
+    // RELANCE AUTOMATIQUE POST-COOLDOWN (capture 08:54) : le disjoncteur
+    // quota se referme après 90 s (quota logiciel ; 10 min pour le quota
+    // quotidien) — les 3 tentatives internes (5 s/12 s) s'épuisent AVANT.
+    // Le process PM2 est persistant : after() programme la relance APRÈS la
+    // réponse, au-delà du cooldown. UNE seule relance ; anti-doublon par
+    // LECTURE du fil (R2, indépendant de Firestore) : si l'utilisateur a
+    // déjà relancé lui-même, la relance s'abstient.
+    if (saturation) {
+      const relanceProgrammée = async () => {
+        try {
+          await new Promise((resolu) => setTimeout(resolu, 95_000));
+          const { listMessages } = await import("@/lib/chat/repository");
+          const fil = await listMessages(ctx.userId, ctx.conversationId, 20, { order: "recent" }).catch(() => []);
+          const déjàLancé = (fil ?? []).some((m) => m.role === "assistant" && typeof m.videoProjectId === "string" && m.videoProjectId.length > 0 && m.createdAt > assistantMessage.createdAt);
+          if (déjàLancé) return;
+          const { createVideoProductionJob } = await import("@/lib/video/production-queue");
+          // Recalcul déterministe (hors portée du try : params relancés à
+          // l'identique depuis le même prompt — zéro LLM, zéro dérive).
+          const paramsRelance = extractVideoParams(promptText);
+          if (paramsRelance.targetDurationSec === undefined) {
+            paramsRelance.targetDurationSec = dureeAutomatiqueSelonBesoin(promptText);
+          }
+          const jobRelancé = await createVideoProductionJob({
+            userId: ctx.userId,
+            prompt: promptText.trim().slice(0, 4000),
+            title: extractVideoTitle(promptText),
+            conversationId: ctx.conversationId,
+            ...(ctx.origineClient ? { origineClient: ctx.origineClient } : {}),
+            ...(Object.keys(paramsRelance).length > 0 ? { options: paramsRelance } : {}),
+          });
+          await appendMessage({
+            conversationId: ctx.conversationId,
+            userId: ctx.userId,
+            role: "assistant",
+            content: `Votre vidéo a été relancée automatiquement après la saturation momentanée — la production est en cours. Suivez la progression ici ou dans l'atelier : /studio/video/${jobRelancé.projectId}.`,
+            videoProjectId: jobRelancé.projectId,
+            generationStatus: "complete",
+          });
+        } catch (erreurRelance) {
+          const detailRelance = erreurRelance instanceof Error ? erreurRelance.message : String(erreurRelance);
+          console.error(`[vidéo] relance automatique échouée : ${detailRelance.slice(0, 300)}`);
+          await appendMessage({
+            conversationId: ctx.conversationId,
+            userId: ctx.userId,
+            role: "assistant",
+            content: "La relance automatique de votre vidéo a buté sur une saturation persistante du stockage. Votre demande reste conservée — réessayez dans quelques minutes ou dites-moi « relance ma vidéo ».",
+            generationStatus: "failed",
+          }).catch(() => undefined);
+        }
+      };
+      try {
+        const { after } = await import("next/server");
+        after(() => relanceProgrammée());
+      } catch {
+        // Hors scope requête (test) : pas de relance programmée — le message
+        // reste honnête et la demande conservée.
+      }
+    }
     return {
       conversationId: ctx.conversationId,
       userMessage: ctx.userMessage,
