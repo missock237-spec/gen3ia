@@ -140,12 +140,18 @@ def derniers_messages(page, base: int = 0) -> list:
 
 def attendre_reponse_musicale(page, cle: str, budget_s: int, base: int = 0) -> dict | None:
     """Attend une bulle assistant FINALE contenant la clé (lien écoute/clip).
-    Journalise la DERNIÈRE bulle même sans clé (visibilité des échecs)."""
+    Journalise la DERNIÈRE bulle même sans clé (visibilité des échecs).
+    DIAGNOSTIC : trace le nombre de bulles vues à chaque sondage."""
     debut = time.time()
     dernier = ""
+    sondage = 0
     while time.time() - debut < budget_s:
+        sondage += 1
         try:
-            bulles = derniers_messages(page)
+            bulles = derniers_messages(page, base)
+            if sondage in (1, 5, 15, 30, 50) or (bulles and sondage % 10 == 0):
+                print(f"[fil] sondage {sondage} : {len(bulles)} bulle(s) post-base={base} — "
+                      + " | ".join((b.get("contenu") or "")[:60].replace("\n", " ") for b in bulles[-2:]), flush=True)
             if bulles:
                 dernier = (bulles[-1].get("contenu") or "")[:160].replace("\n", " ")
             for m in reversed(bulles):
