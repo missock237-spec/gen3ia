@@ -256,24 +256,77 @@ export function looksLikeDemandeMusique(message: string): boolean {
 export async function runMusiqueTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   await onEvent({ type: "status", phase: "execution", label: "Composition de la musique en cours…" });
+  // EXIGENCE UTILISATEUR (2026-11-14) : une génération de musique est une
+  // CHANSON — le titre cité est respecté, sinon gen3 en invente un ; les
+  // PAROLES sont écrites sur ce titre ; l'AUDIO est produit avec voix
+  // humaine réelle. L'instrumental pur reste le chemin HISTORIQUE, choisi
+  // seulement sur demande explicite ; le CLIP musical part seulement sur
+  // demande (« clip », « vidéo musicale ») — par défaut : AUDIO.
+  const instrumentaleDemandée = /\b(instrumentale?|instrumental|sans\s+(?:paroles|voix|chant))\b/i.test(ctx.message);
   try {
-    const { musiqueCreerTool } = await import("@/lib/tools/media/musique");
-    const sortie = await musiqueCreerTool.execute({ demande: ctx.message }, { userId: ctx.userId });
     const { urlDurableAbsolue, urlDurableRelative } = await import("@/lib/media/url-durable");
+    if (instrumentaleDemandée) {
+      const { musiqueCreerTool } = await import("@/lib/tools/media/musique");
+      const sortie = await musiqueCreerTool.execute({ demande: ctx.message }, { userId: ctx.userId });
+      const cle = sortie.url && sortie.url.startsWith("users/") ? sortie.url : undefined;
+      const urlJouable = (cle ? urlDurableAbsolue(cle, ctx.origineClient) : null) ?? sortie.ecouterUrl;
+      const audioUrlDurable = cle ? urlDurableRelative(cle) : undefined;
+      const assistantMessage = await appendMessage({
+        conversationId: ctx.conversationId,
+        userId: ctx.userId,
+        role: "assistant",
+        content:
+          `Votre musique instrumentale est prête (${sortie.dureeReelle ?? "?"} s, style ${sortie.styleLabel ?? sortie.style ?? "génératif"}). ` +
+          `Composition algorithmique du moteur gen3 — ${sortie.note ?? ""} Écoutez ici : ${urlJouable}`,
+        // Champ STRUCTURÉ lu par le fil : lecteur <audio> embarqué durable.
+        ...(audioUrlDurable ? { audioUrl: audioUrlDurable } : {}),
+        provider: "musique-gen3",
+        model: "composition-algorithmique",
+        generationStatus: "complete",
+      });
+      const artifact = await createArtifact({
+        userId: ctx.userId,
+        conversationId: ctx.conversationId,
+        projectId: ctx.projectId,
+        type: "audio",
+        title: ctx.message.slice(0, 80),
+        url: sortie.ecouterUrl,
+        storagePath: cle,
+        note: `Musique instrumentale réelle — ${sortie.styleLabel ?? sortie.style ?? "génératif"}, ${sortie.dureeReelle ?? "?"} s`,
+      });
+      await onEvent({ type: "message_complete", message: assistantMessage });
+      await onEvent({ type: "artifact_created", artifact });
+      return {
+        conversationId: ctx.conversationId,
+        userMessage: ctx.userMessage,
+        assistantMessage,
+        artifacts: [artifact],
+        approvals: [],
+        intent: { mode: "chat", understanding: `Musique instrumentale composée (${sortie.dureeReelle ?? "?"} s) et archivée en permanent.` },
+      };
+    }
+
+    // CHEMIN PAR DÉFAUT : CHANSON (titre → paroles → voix humaine réelle).
+    const { musiqueChansonTool } = await import("@/lib/tools/media/musique-chanson");
+    const sortie = await musiqueChansonTool.execute({ demande: ctx.message }, { userId: ctx.userId });
     const cle = sortie.url && sortie.url.startsWith("users/") ? sortie.url : undefined;
     const urlJouable = (cle ? urlDurableAbsolue(cle, ctx.origineClient) : null) ?? sortie.ecouterUrl;
     const audioUrlDurable = cle ? urlDurableRelative(cle) : undefined;
+    const blocRefrain = sortie.paroles.refrain.slice(0, 2).join(" / ");
+    const clipLien = sortie.clip ? `\nClip musical : ${sortie.clip.ecouterUrl}` : "";
     const assistantMessage = await appendMessage({
       conversationId: ctx.conversationId,
       userId: ctx.userId,
       role: "assistant",
       content:
-        `Votre musique est prête (${sortie.dureeReelle ?? "?"} s, style ${sortie.styleLabel ?? sortie.style ?? "génératif"}). ` +
-        `VRAIE composition algorithmique du moteur gen3 — ${sortie.note ?? ""} Écoutez ici : ${urlJouable}`,
+        `Votre chanson « ${sortie.titre} » est prête (${sortie.dureeReelle} s, ${sortie.styleLabel}, voix humaine réelle).\n` +
+        `Titre : ${sortie.titreDetecte ? "celui que vous avez donné" : "inventé par moi (aucun titre cité)"}. ` +
+        `Paroles (${sortie.paroles.source === "moteur-gen3" ? "écrites pour votre titre" : "repli déterministe"}) — refrain : « ${blocRefrain} ».\n` +
+        `${sortie.note}\nÉcoutez ici : ${urlJouable}${clipLien}`,
       // Champ STRUCTURÉ lu par le fil : lecteur <audio> embarqué durable.
       ...(audioUrlDurable ? { audioUrl: audioUrlDurable } : {}),
       provider: "musique-gen3",
-      model: "composition-algorithmique",
+      model: "chanson-paroles-voix",
       generationStatus: "complete",
     });
     const artifact = await createArtifact({
@@ -281,20 +334,38 @@ export async function runMusiqueTurn(ctx: TurnBase): Promise<ConversationTurnRes
       conversationId: ctx.conversationId,
       projectId: ctx.projectId,
       type: "audio",
-      title: ctx.message.slice(0, 80),
+      title: `Chanson — ${sortie.titre}`,
       url: sortie.ecouterUrl,
       storagePath: cle,
-      note: `Musique réelle — ${sortie.styleLabel ?? sortie.style ?? "génératif"}, ${sortie.dureeReelle ?? "?"} s`,
+      note: `Chanson « ${sortie.titre} » — paroles + voix humaine, ${sortie.styleLabel}, ${sortie.dureeReelle} s`,
     });
+    const artifacts = [artifact];
+    if (sortie.clip?.url) {
+      const artefactClip = await createArtifact({
+        userId: ctx.userId,
+        conversationId: ctx.conversationId,
+        projectId: ctx.projectId,
+        type: "video",
+        title: `Clip musical — ${sortie.titre}`,
+        url: sortie.clip.ecouterUrl,
+        storagePath: sortie.clip.url,
+        note: `Clip musical de la chanson « ${sortie.titre} » — ${sortie.clip.plans} plans, MP4 muxé avec le son`,
+      });
+      artifacts.push(artefactClip);
+      await onEvent({ type: "artifact_created", artifact: artefactClip });
+    }
     await onEvent({ type: "message_complete", message: assistantMessage });
     await onEvent({ type: "artifact_created", artifact });
     return {
       conversationId: ctx.conversationId,
       userMessage: ctx.userMessage,
       assistantMessage,
-      artifacts: [artifact],
+      artifacts,
       approvals: [],
-      intent: { mode: "chat", understanding: `Musique réellement composée (${sortie.dureeReelle ?? "?"} s, ${sortie.styleLabel ?? "génératif"}) et archivée en permanent.` },
+      intent: {
+        mode: "chat",
+        understanding: `Chanson « ${sortie.titre} » (${sortie.titreDetecte ? "titre cité" : "titre inventé"}, paroles + voix humaine réelle, ${sortie.dureeReelle} s)${sortie.clip ? " + clip musical" : ""} archivée en permanent.`,
+      },
     };
   } catch (error) {
     // ÉCHEC HONNÊTE : la cause réelle est nommée à l'utilisateur — jamais
