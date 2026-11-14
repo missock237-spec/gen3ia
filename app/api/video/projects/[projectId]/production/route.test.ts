@@ -27,6 +27,11 @@ const nudgePumpMock = vi.fn();
 const writeCheckpointMock = vi.fn();
 const cacheGetMock = vi.fn();
 const cacheSetMock = vi.fn();
+const getJobProgressMock = vi.fn();
+
+vi.mock("@/lib/video/progress-store", () => ({
+  getJobProgress: (...args: unknown[]) => getJobProgressMock(...args),
+}));
 
 vi.mock("@/lib/security/route-guard", () => ({
   protectRoute: (...args: unknown[]) => protectMock(...args),
@@ -117,6 +122,7 @@ beforeEach(() => {
   maybeAdvanceProductionMock.mockResolvedValue(null);
   cacheGetMock.mockResolvedValue(undefined);
   cacheSetMock.mockResolvedValue(undefined);
+  getJobProgressMock.mockResolvedValue(null);
   getRenderJobMock.mockResolvedValue(RENDER_JOB);
   listProductionJobsMock.mockResolvedValue([JOB_COMPLETED]);
 });
@@ -171,6 +177,69 @@ describe("GET .../production — lecteur durable du master (un seul saut)", () =
     const body = (await response.json()) as { status: string; masterUrl: string | null };
     expect(body.status).toBe("processing");
     expect(body.masterUrl).toBeNull();
+    expect(getRenderJobMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET .../production — SOBRISTÉ QUOTA (sondes 2026-11-14, rendus figés 81 %)", () => {
+  const maintenant = new Date().toISOString();
+
+  it("job en cours fraîchement touché (< 60 s) + file configurée → AUCUN tick par sondage", async () => {
+    const jobVif = { ...JOB_COMPLETED, id: "prod-vif", status: "processing" as const, stage: "done" as const, progress: 0.81, updatedAt: maintenant };
+    listProductionJobsMock.mockResolvedValue([jobVif]);
+    tickQueueConfiguredMock.mockReturnValue(true);
+
+    await GET(request(), ROUTE_CONTEXT);
+    expect(maybeAdvanceProductionMock).not.toHaveBeenCalled();
+  });
+
+  it("job orphelin (> 60 s sans touche) → le tick par sondage de SECOURS s'exécute", async () => {
+    // stage « assets » (pas « done ») : le chemin sticky ne s'applique pas —
+    // le job attend un tick, la file est configurée mais le job est orphelin.
+    const jobOrphelin = { ...JOB_COMPLETED, id: "prod-orphelin", status: "processing" as const, stage: "assets" as const, progress: 0.45, updatedAt: "2026-11-13T09:00:00.000Z", renderJobId: null };
+    listProductionJobsMock.mockResolvedValue([jobOrphelin]);
+    tickQueueConfiguredMock.mockReturnValue(true);
+    maybeAdvanceProductionMock.mockResolvedValue({ id: jobOrphelin.id });
+
+    await GET(request(), ROUTE_CONTEXT);
+    expect(maybeAdvanceProductionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("file NON configurée → le secours par sondage s'applique même sur un job frais", async () => {
+    const jobVif = { ...JOB_COMPLETED, id: "prod-vif2", status: "processing" as const, stage: "assets" as const, progress: 0.45, updatedAt: maintenant, renderJobId: null };
+    listProductionJobsMock.mockResolvedValue([jobVif]);
+    tickQueueConfiguredMock.mockReturnValue(false);
+    maybeAdvanceProductionMock.mockResolvedValue(null);
+
+    await GET(request(), ROUTE_CONTEXT);
+    expect(maybeAdvanceProductionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("instantané local FRAIS en cours de rendu → zéro relecture Firestore du job de rendu", async () => {
+    const jobRendu = { ...JOB_COMPLETED, id: "prod-rendu", status: "processing" as const, stage: "done" as const, progress: 0.81, updatedAt: maintenant };
+    listProductionJobsMock.mockResolvedValue([jobRendu]);
+    getJobProgressMock.mockResolvedValue({ progress: 0.05, status: "processing", updatedAt: Date.now() });
+
+    const response = await GET(request(), ROUTE_CONTEXT);
+    const body = (await response.json()) as { status: string; masterUrl: string | null };
+    expect(response.status).toBe(200);
+    expect(body.status).toBe("processing");
+    // Preuve de vie suffisante : la relecture Firestore coûteuse est évitée.
+    expect(getRenderJobMock).not.toHaveBeenCalled();
+  });
+
+  it("instantané local TERMINAL (completed) → livraison sticky SANS relecture Firestore", async () => {
+    // masterR2Key PERSISTÉ sur le job (post-fix 2026-11-14) : ni le chemin
+    // sticky ni la construction de réponse n'ont besoin de relire le rendu.
+    const jobRendu = { ...JOB_COMPLETED, id: "prod-rendu2", status: "processing" as const, stage: "done" as const, progress: 0.81, updatedAt: maintenant, masterR2Key: "users/u1/video/p1/renders/master.mp4" };
+    listProductionJobsMock.mockResolvedValue([jobRendu]);
+    getJobProgressMock.mockResolvedValue({ progress: 1, status: "completed", r2Key: "users/u1/video/p1/renders/master.mp4", updatedAt: Date.now() });
+
+    const response = await GET(request(), ROUTE_CONTEXT);
+    const body = (await response.json()) as { status: string; masterUrl: string | null };
+    expect(body.status).toBe("completed");
+    expect(body.masterUrl).toContain("/api/media/durable?path=");
+    expect(deliverMock).toHaveBeenCalledTimes(1);
     expect(getRenderJobMock).not.toHaveBeenCalled();
   });
 });

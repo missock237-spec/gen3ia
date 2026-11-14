@@ -124,21 +124,34 @@ export async function GET(request: NextRequest, { params }: Params) {
     // mais chaque appel coûte une lecture du fil (sobriété Firestore).
     let livreeIci = false;
     if (job && job.status === "processing" && job.stage === "done" && job.renderJobId) {
+      // SOBRISTÉ QUOTA (sondes 2026-11-14 : deux rendus figés 10+ min à
+      // « processing/done 81 % » — le disjoncteur Firestore mange le quota
+      // de la plateforme elle-même à force de relectures par sondage) :
+      // l'instantané processus-local est lu D'ABORD (gratuit) — la
+      // relecture Firestore du job de rendu ne part que si l'instantané
+      // est ABSENT ou PÉRIMÉ (> 20 s : worker mort ou autre instance).
+      // Le worker de rendu publie sa progression à chaud dans le MÊME
+      // process PM2 : un instantané frais est une preuve de vie suffisante.
       try {
+        const { getJobProgress } = await import("@/lib/video/progress-store");
+        const instantane = await getJobProgress<{ status?: string; r2Key?: string; updatedAt?: number }>(job.renderJobId).catch(() => null);
+        const frais = typeof instantane?.updatedAt === "number" && Date.now() - instantane.updatedAt < 20_000;
         let renderJob: Awaited<ReturnType<typeof getRenderJob>> = null;
-        try {
-          renderJob = await getRenderJob(job.renderJobId);
-        } catch {
-          // QUOTA (sonde production 2026-11-14 : job figé « processing/done »
-          // alors que le master était livré) : repli INSTANTANÉ sur
-          // l'instantané processus-local de progression — le miroir TERMINAL
-          // du tick de rendu y écrit `completed` + r2Key dès que le master
-          // existe. La complétion prouvée localement ne doit JAMAIS attendre
-          // le retour du quota : la livraison chat (R2) en est indépendante.
-          const { getJobProgress } = await import("@/lib/video/progress-store");
-          const instantane = await getJobProgress<{ status?: string; r2Key?: string }>(job.renderJobId).catch(() => null);
-          if (instantane?.status === "completed") {
-            renderJob = { status: "completed", output: { r2Key: instantane.r2Key ?? "" } } as never;
+        if (instantane?.status === "completed") {
+          // Complétion prouvée localement : zéro relecture Firestore —
+          // la livraison ne doit JAMAIS attendre le retour du quota.
+          renderJob = { status: "completed", output: { r2Key: instantane.r2Key ?? "" } } as never;
+        } else if (!frais) {
+          try {
+            renderJob = await getRenderJob(job.renderJobId);
+          } catch {
+            renderJob = null;
+          }
+          if (!renderJob) {
+            // Repli historique : instantané (même périmé) plutôt que rien.
+            if (instantane?.status === "completed") {
+              renderJob = { status: "completed", output: { r2Key: instantane.r2Key ?? "" } } as never;
+            }
           }
         }
         if (renderJob?.status === "completed") {
@@ -162,9 +175,19 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     let pendingTicked = false;
     if (job && (job.status === "queued" || job.status === "processing")) {
-      // UN tick borné par poll (~55 s max, checkpoint entre scènes).
-      const ticked = await maybeAdvancePendingProductionJob(job.id, { timeBudgetMs: PRODUCTION_POLL_ADVANCE_BUDGET_MS }).catch(() => null);
-      pendingTicked = ticked !== null;
+      // UN tick borné par poll SEULEMENT EN SECOURS (sobriété quota) : quand
+      // la file de ticks R2 est configurée ET que le job a été touché
+      // récemment (< 60 s — preuve que les ticks rythmés avancent), le
+      // sondage du client n'exécute PAS de tick — chaque sondage sous
+      // `maybeAdvancePendingProductionJob` lisait/écrivait Firestore 2-5
+      // fois et étranglait la plateforme sous quota. File absente OU job
+      // orphelin (> 60 s sans touche) → le secours par sondage s'applique.
+      const { tickQueueConfigured } = await import("@/lib/queue/tick-queue");
+      const auToucheRécent = typeof job.updatedAt === "string" && Date.now() - new Date(job.updatedAt).getTime() < 60_000;
+      if (!tickQueueConfigured() || !auToucheRécent) {
+        const ticked = await maybeAdvancePendingProductionJob(job.id, { timeBudgetMs: PRODUCTION_POLL_ADVANCE_BUDGET_MS }).catch(() => null);
+        pendingTicked = ticked !== null;
+      }
     }
 
     // Relecture post-tick (le tick a pu avancer l'étape ou terminer le job).

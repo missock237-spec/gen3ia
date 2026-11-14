@@ -134,11 +134,21 @@ export async function GET(request: NextRequest, { params }: Params) {
     });
     if (pending) {
       // UN job par poll, budget borné — le poll reste responsive.
+      // SOBRISTÉ QUOTA (sondes 2026-11-14 : deux rendus figés 10+ min — le
+      // sondage du client exécutait un tick PAR requête, lisant/écrivant
+      // Firestore et ouvrant le disjoncteur contre la plateforme elle-même).
+      // Quand la file de ticks R2 est configurée ET que le job a été touché
+      // récemment (< 60 s — les ticks rythmés avancent), le sondage ne
+      // ré-exécute PAS de tick : la file et le worker font leur travail.
+      // File absente OU job orphelin (> 60 s sans touche) → secours.
       // Lot C4b : la relecture post-tick n'arrive QUE si le tick a réellement
       // avancé (résultat non nul) — un job détenu par un worker vivant (bail
       // actif, cas nominal QStash) ne déclenche plus un second listJobs.
-      const ticked = await maybeAdvancePendingJob(pending.id, { timeBudgetMs: POLL_ADVANCE_BUDGET_MS }).catch(() => null);
-      if (ticked) jobs = await listJobs(guard.context.userId, projectId);
+      const auToucheRécent = typeof pending.updatedAt === "string" && Date.now() - new Date(pending.updatedAt).getTime() < 60_000;
+      if (!tickQueueConfigured() || !auToucheRécent) {
+        const ticked = await maybeAdvancePendingJob(pending.id, { timeBudgetMs: POLL_ADVANCE_BUDGET_MS }).catch(() => null);
+        if (ticked) jobs = await listJobs(guard.context.userId, projectId);
+      }
     }
 
     // URLs de lecture présignées pour les rendus terminés (master + exports).
