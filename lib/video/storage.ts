@@ -48,8 +48,16 @@ export function videoObjectKey(params: {
 }): string {
   const { userId, projectId, domain } = params;
   const fileName = params.fileName ?? `${randomUUID()}`;
-  if (!/^[A-Za-z0-9._-]+$/.test(fileName)) {
-    throw new Error("Nom de fichier vidéo invalide (caractères autorisés : A-Z a-z 0-9 . _ -).");
+  // FIX sonde production (rendus concurrents s'écrasant mutuellement) :
+  // un NOM DE FICHIER peut porter des SOUS-DOSSIERS sûrs —
+  // « <jobId>/master.mp4 » → users/<uid>/video/<projectId>/renders/<jobId>/….
+  // Chaque segment doit être alphanumérique + . _ - et JAMAIS « . » ou
+  // « .. » (anti-traversée), jamais de slash de début/fin ni de double slash.
+  if (
+    !/^(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/.test(fileName) ||
+    fileName.split("/").some((seg) => seg === "." || seg === "..")
+  ) {
+    throw new Error("Nom de fichier vidéo invalide (segments autorisés : A-Z a-z 0-9 . _ - ; sous-dossiers sûrs acceptés).");
   }
   return `${videoProjectPrefix(userId, projectId)}${domain}/${fileName}`;
 }

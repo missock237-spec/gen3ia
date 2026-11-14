@@ -661,9 +661,16 @@ export function buildVideoSegmentFfmpegArgs(params: {
 }
 
 function escapeDrawtext(text: string): string {
+  // Test réel 2026-11-14 : la convention « section quotée + \' »
+  // DÉSTABILISE l'état de parsing du filtergraph (le quote d'échappement
+  // rouvre une section qui déborde sur les filtres SUIVANTS — zoompan
+  // cassé : « No such filter: '1.12):d=50…' ») dès qu'un texte contient
+  // une apostrophe. L'apostrophe ASCII devient l'apostrophe TYPOGRAPHIQUE
+  // ’ (correct en français, zéro échappement) — le clip musical (chanson.ts)
+  // applique la même convention.
   return text
     .replace(/\\/g, "\\\\")
-    .replace(/'/g, "\\'")
+    .replace(/'/g, "’")
     .replace(/:/g, "\\:")
     .replace(/%/g, "\\%")
     .replace(/\n/g, " ");

@@ -581,7 +581,10 @@ describe("Task 127 — persistance R2 des artefacts de rendu", () => {
       return [];
     });
     vi.mocked(uploadVideoAsset).mockImplementation(async (params) => ({
-      r2Key: `renders/job-1/segments/${params.fileName}`,
+      // Contrat FIX rendus concurrents : uploadRender préserve le SOUS-CHEMIN
+      // (fileName = « job-1/segments/segment_0000.mp4 ») — la clé réelle est
+      // users/<uid>/video/<projectId>/renders/<fileName>.
+      r2Key: `renders/${params.fileName}`,
       sizeBytes: 12,
     }));
     setDoc(baseJob({ status: "processing", stage: "segments" }));
@@ -622,7 +625,8 @@ describe("Task 127 — persistance R2 des artefacts de rendu", () => {
       return { file: `${params.io.tmpDir}/xf.mp4`, durationSec: 60 };
     });
     vi.mocked(uploadVideoAsset).mockImplementation(async (params) => ({
-      r2Key: `renders/job-1/${params.fileName}`,
+      // Contrat FIX rendus concurrents : le sous-chemin jobId est PRÉSERVÉ.
+      r2Key: `renders/${params.fileName}`,
       sizeBytes: 20,
     }));
     const job = baseJob({

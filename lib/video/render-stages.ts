@@ -882,13 +882,20 @@ function buildEngineIo(job: RenderJob, tmpDir: string): EngineIo {
       return target;
     },
     uploadRender: async (fileName, body) => {
+      // FIX sonde production (rendus concurrents s'écrasant mutuellement) :
+      // le chemin demandé « renders/<jobId>/<fichier> » doit PRÉSERVER son
+      // sous-dossier (le domaine R2 fournit déjà « renders/ ») —
+      // l'aplatissement split("/").pop() faisait s'écrire tous les jobs du
+      // projet dans le même dossier plat (master.mp4, artefacts.json et
+      // segments/segment_NNNN.mp4 partagés → rendus corrompus).
+      const sousChemin = fileName.startsWith("renders/") ? fileName.slice("renders/".length) : fileName;
       const upload = await uploadVideoAsset({
         userId: job.userId,
         projectId: job.projectId,
         domain: "renders",
         body,
         contentType: "video/mp4",
-        fileName: fileName.split("/").pop(),
+        fileName: sousChemin,
       });
       return upload.r2Key;
     },

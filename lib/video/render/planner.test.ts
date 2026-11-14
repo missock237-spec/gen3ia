@@ -26,9 +26,13 @@ describe("Stockage vidéo — clés cloisonnées (spec §25)", () => {
     expect(videoProjectPrefix("u1", "p1")).toBe("users/u1/video/p1/");
   });
 
-  it("nom de fichier invalide refusé (injection/traversée)", () => {
+  it("nom de fichier invalide refusé (injection/traversée) — sous-dossiers SÛRS acceptés (fix rendus concurrents)", () => {
     expect(() => videoObjectKey({ userId: "u1", projectId: "p1", domain: "images", fileName: "../escape.png" })).toThrow();
-    expect(() => videoObjectKey({ userId: "u1", projectId: "p1", domain: "images", fileName: "a/b.png" })).toThrow();
+    expect(() => videoObjectKey({ userId: "u1", projectId: "p1", domain: "images", fileName: "a/../b.png" })).toThrow();
+    expect(() => videoObjectKey({ userId: "u1", projectId: "p1", domain: "images", fileName: "a//b.png" })).toThrow();
+    // Nouveau contrat : un sous-dossier sûr est désormais VALIDE
+    // (renders/<jobId>/master.mp4 — isolation des rendus concurrents).
+    expect(videoObjectKey({ userId: "u1", projectId: "p1", domain: "renders", fileName: "jobABC/segments/seg_000.mp4" })).toBe("users/u1/video/p1/renders/jobABC/segments/seg_000.mp4");
   });
 
   it("isOwnedVideoKey : propriétaire OK, traversée et autres users refusés", () => {

@@ -151,6 +151,40 @@ const RAMP_SEC = 0.3;
 /** Palette de plans du clip (hex FFmpeg valides, sombres et contrastés). */
 const PALETTE_PLANS = ["0x1a1333", "0x33224d", "0x1d3a4d", "0x4d2a1d", "0x23402e", "0x40233a", "0x2d2d1a", "0x1a2d2d", "0x3d1a1a", "0x2d1a3d"];
 
+/* Sondage drawtext (UNE fois par processus) : le build ffmpeg-static
+ * (binaire standard) n'a PAS le filtre drawtext — on cherche un binaire
+ * capable (standard, puis ffmpeg système) pour les plans du clip. */
+let binaireDrawtextCache: Promise<string | null> | null = null;
+
+async function sondeFiltre(binaire: string, filtre: string): Promise<boolean> {
+  try {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)(binaire, ["-hide_banner", "-filters"], {
+      timeout: 15_000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    return new RegExp(`\\b${filtre}\\b`).test(stdout);
+  } catch {
+    return false;
+  }
+}
+
+async function resoudreFfmpegAvecDrawtext(): Promise<string | null> {
+  binaireDrawtextCache ??= (async () => {
+    try {
+      const { resolveFfmpegBinary } = await import("@/lib/video/security");
+      const standard = await resolveFfmpegBinary();
+      if (standard?.path && (await sondeFiltre(standard.path, "drawtext"))) return standard.path;
+    } catch {
+      // Binaire standard indisponible → essai système ci-dessous.
+    }
+    if (await sondeFiltre("ffmpeg", "drawtext")) return "ffmpeg";
+    return null;
+  })();
+  return binaireDrawtextCache;
+}
+
 /**
  * Pose les segments de voix sur l'accompagnement stéréo Float32 et abaisse
  * la musique sous chaque fenêtre de voix (ducking à ramps). La voix est
@@ -305,6 +339,28 @@ export async function produireClipMusical(params: {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "clip-musical-"));
   const nbPlans = Math.max(3, Math.min(10, params.plans ?? Math.ceil(params.dureeSec / 18)));
   const dureePlan = params.dureeSec / nbPlans;
+  // SONDE PRODUCTION M4b — deux dépendances réelles du drawtext :
+  // (1) le binaire : le build ffmpeg-static (binaire résolu standard) N'A
+  //     PAS le filtre drawtext (pas de libfreetype) — on sonde un binaire
+  //     capable (binaire standard, puis ffmpeg système) et on le passe à
+  //     runFfmpeg ; sans aucun → plans visuels SANS texte (honnête) ;
+  // (2) la police : le bac à sable de runFfmpeg interdit les chemins
+  //     ABSOLUS dans les arguments — la police est COPIÉE dans le tmpdir
+  //     du job et référencée EN RELATIF (fontfile=police.ttf).
+  const binaireDrawtext = await resoudreFfmpegAvecDrawtext();
+  let policeRelative: string | null = null;
+  if (binaireDrawtext) {
+    const { resolveFontFile } = await import("@/lib/video/render/fonts");
+    const policeAbsolue = await resolveFontFile();
+    if (policeAbsolue) {
+      try {
+        await fs.copyFile(policeAbsolue, path.join(dir, "police.ttf"));
+        policeRelative = "police.ttf";
+      } catch {
+        policeRelative = null;
+      }
+    }
+  }
   try {
     const audio = path.join(dir, "chanson.mp3");
     await fs.writeFile(audio, params.audioMp3);
@@ -320,9 +376,28 @@ export async function produireClipMusical(params: {
       // Palette hex VALIDE (test réel : un hex à 7 chiffres « 0x1182633 »
       // est refusé par FFmpeg — exit 234) : couleurs sombres alternées.
       const couleur = PALETTE_PLANS[p % PALETTE_PLANS.length];
+      // Échappement drawtext (test réel 2026-11-14 : la convention
+      // « section quotée + \' » DÉSTABILISE l'état de parsing du filtergraph
+      // et casse le zoompan en aval — « No such filter: '1.12):d=50…' » ;
+      // l'apostrophe ASCII devient l'apostrophe TYPOGRAPHIQUE ’ (correct en
+      // français, zéro échappement), les autres caractères spéciaux (\, :, %)
+      // restant échappés dans la section quotée) — mêmes règles que le
+      // planner vidéo (escapeDrawtext, corrigé dans le même commit).
+      const echappe = (texte: string) =>
+        texte
+          .replace(/\\/g, "\\\\")
+          .replace(/'/g, "’")
+          .replace(/:/g, "\\:")
+          .replace(/%/g, "\\%")
+          .replace(/\n/g, " ");
+      const drawtexts = policeRelative
+        ? [
+            `drawtext=fontfile=${policeRelative}:text='${echappe(lignes[0].replace("title=", ""))}':fontcolor=white@0.92:fontsize=${p === 0 ? 72 : 56}:x=(w-text_w)/2:y=(h-text_h)/2`,
+            ...(lignes[1] ? [`drawtext=fontfile=${policeRelative}:text='${echappe(lignes[1].replace("text=", ""))}':fontcolor=white@0.6:fontsize=36:x=(w-text_w)/2:y=h*0.68`] : []),
+          ]
+        : [];
       const filtre = [
-        `drawtext=text='${lignes[0].replace("title=", "")}':fontcolor=white@0.92:fontsize=${p === 0 ? 72 : 56}:x=(w-text_w)/2:y=(h-text_h)/2`,
-        ...(lignes[1] ? [`drawtext=text='${lignes[1].replace("text=", "")}':fontcolor=white@0.6:fontsize=36:x=(w-text_w)/2:y=h*0.68`] : []),
+        ...drawtexts,
         "zoompan=z='min(zoom+0.0008,1.12)':d=" + Math.max(1, Math.round(dureePlan * 25)) + ":s=1280x720:fps=25",
       ].join(",");
       await runFfmpeg({
@@ -330,6 +405,7 @@ export async function produireClipMusical(params: {
         cwd: dir,
         outputDurationSec: 1,
         outputPaths: [planPng],
+        ...(binaireDrawtext ? { binary: binaireDrawtext } : {}),
       });
       entrees.push(planPng);
     }

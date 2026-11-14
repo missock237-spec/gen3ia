@@ -113,6 +113,11 @@ export async function runFfmpeg(params: {
   outputDurationSec: number;
   outputPaths?: string[];
   onProgress?: (line: string) => void;
+  /** Binaire alternatif (sondé par l'appelant, ex. ffmpeg système AVEC
+   * drawtext — le build ffmpeg-static en est dépourvu) ; défaut : le
+   * binaire résolu standard. Les gardes-fous (bac à sable, chemins,
+   * plafond, timeout) s'appliquent IDENTIQUEMENT. */
+  binary?: string;
 }): Promise<RunResult> {
   const allArgs = [...FFMPEG_SANDBOX_ARGS, ...params.args];
   for (const arg of allArgs) {
@@ -120,8 +125,8 @@ export async function runFfmpeg(params: {
       assertInsideDir(params.cwd, arg);
     }
   }
-  const ffmpeg = await resolveFfmpegBinary();
-  const result = await runCommand(ffmpeg.path, allArgs, {
+  const ffmpeg = params.binary ?? (await resolveFfmpegBinary()).path;
+  const result = await runCommand(ffmpeg, allArgs, {
     cwd: params.cwd,
     timeoutSec: ffmpegTimeoutSec(params.outputDurationSec),
     onLine: params.onProgress,

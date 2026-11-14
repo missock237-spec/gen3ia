@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { voixChanson, decoderVoixPcm, mixerChanson, FREQUENCE_CHANSON } from "./chanson";
+import { voixChanson, decoderVoixPcm, mixerChanson, produireClipMusical, FREQUENCE_CHANSON } from "./chanson";
 import { synthetiserMusique } from "./synthese";
 
 /**
@@ -36,4 +36,35 @@ describe.runIf(RESEAU_DISPONIBLE)("chanson — chaîne audio réelle (TTS → FF
     expect(rendu.buffer.length).toBeGreaterThan(50_000);
     expect(["audio/mpeg", "audio/wav"]).toContain(rendu.mime);
   }, 120_000);
+
+  it("le CLIP MUSICAL est rendu réel (MP4 muxé avec l'audio, plans ≥ 3)", async () => {
+    // MP3 silencieux de 6 s (anullsrc) — la chaîne clip est visuelle.
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtemp } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const dir = await mkdtemp(join(tmpdir(), "clip-it-"));
+    const mp3 = join(dir, "audio.mp3");
+    execFileSync("ffmpeg", ["-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", "6", "-c:a", "libmp3lame", "-b:a", "128k", mp3], { timeout: 60_000 });
+    const { readFileSync, statSync } = await import("node:fs");
+    const audioMp3 = readFileSync(mp3);
+    expect(statSync(mp3).size).toBeGreaterThan(10_000);
+
+    let clip;
+    try {
+      clip = await produireClipMusical({ audioMp3, titre: "L'été des étoiles", dureeSec: 6, styleLabel: "pop acoustique", plans: 3 });
+    } catch (erreur: unknown) {
+      // Diagnostic permanent : stderr FFmpeg complet en cas d'échec.
+      const stderr = (erreur as { stderr?: string })?.stderr;
+      if (stderr) console.error("[clip stderr]", stderr.slice(-1500));
+      throw erreur;
+    }
+    expect(clip.plans).toBeGreaterThanOrEqual(3);
+    expect(clip.mime).toBe("video/mp4");
+    expect(clip.buffer.length).toBeGreaterThan(30_000);
+    // MP4 réel : magie ftyp + moov/mdat (mux FFmpeg authentique).
+    const tete = clip.buffer.subarray(0, 32).toString("latin1");
+    expect(tete).toContain("ftyp");
+    expect(clip.buffer.subarray(4, 4096).toString("latin1") + clip.buffer.subarray(4096, 8192).toString("latin1")).toContain("moov");
+  }, 180_000);
 });
