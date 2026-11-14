@@ -129,12 +129,16 @@ def derniers_messages(page) -> list:
 
 
 def attendre_reponse_musicale(page, cle: str, budget_s: int) -> dict | None:
-    """Attend une bulle assistant FINALE contenant la clé (lien écoute/clip)."""
+    """Attend une bulle assistant FINALE contenant la clé (lien écoute/clip).
+    Journalise la DERNIÈRE bulle même sans clé (visibilité des échecs)."""
     debut = time.time()
     dernier = ""
     while time.time() - debut < budget_s:
         try:
-            for m in reversed(derniers_messages(page)):
+            bulles = derniers_messages(page)
+            if bulles:
+                dernier = (bulles[-1].get("contenu") or "")[:160].replace("\n", " ")
+            for m in reversed(bulles):
                 contenu = m.get("contenu") or ""
                 if cle not in contenu:
                     continue
@@ -143,7 +147,6 @@ def attendre_reponse_musicale(page, cle: str, budget_s: int) -> dict | None:
                     return {"contenu": contenu, "status": "complete", "message": m}
                 if "pas réussi" in contenu:
                     return {"contenu": contenu, "status": "failed", "message": m}
-                dernier = contenu[:90]
         except Exception as e:
             dernier = f"erreur lecture fil : {type(e).__name__}"
         time.sleep(6)

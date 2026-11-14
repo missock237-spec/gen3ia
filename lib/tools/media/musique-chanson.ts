@@ -168,15 +168,25 @@ export const musiqueChansonTool: ToolDefinition<
     });
 
     // ── 5) VOIX HUMAINE RÉELLE : chaque bloc est DIT puis décodé PCM ──
+    // PARALLÈLE (sonde production 2026-11-14 : le tour chat est plafonné à
+    // 300 s — `maxDuration` de la route stream — et des TTS SÉQUENTIELS
+    // réseau le dépassaient) : tous les blocs partent EN MÊME TEMPS (le
+    // cache de contenu dédoublonne le refrain répété), l'ordre est
+    // restauré par indice — jamais de désordre dans le chant.
     const segments: SegmentVoix[] = [];
     const chant: MusiqueChansonOutput["chant"] = [];
     let moteurVoix = "aucune";
     if (!input.instrumentale && paroles.couplets.length > 0) {
       const blocs = planChant({ paroles, structure: composition.structure });
-      for (const bloc of blocs) {
-        const voix = await voixChanson(bloc.texte);
+      const rendus = await Promise.all(
+        blocs.map(async (bloc) => {
+          const voix = await voixChanson(bloc.texte);
+          const pcm = await decoderVoixPcm(voix.buffer, voix.mime);
+          return { bloc, voix, pcm };
+        }),
+      );
+      for (const { bloc, voix, pcm } of rendus) {
         moteurVoix = voix.moteur;
-        const pcm = await decoderVoixPcm(voix.buffer, voix.mime);
         segments.push({ debutSec: bloc.debutSec, pcm });
         chant.push({
           nom: bloc.nom,

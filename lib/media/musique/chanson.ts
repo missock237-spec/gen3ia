@@ -40,26 +40,61 @@ export const FREQUENCE_CHANSON = 44100;
  * d'abord (polissage réaliste inclus dans le wrapper), sinon espace public
  * Edge-TTS polie à la main (même chaîne que le chat). Échec = exception
  * nommée — la chanson n'est jamais livrée sans voix.
+ *
+ * CACHE DE CONTENU + BUDGET TEMPS (sonde production 2026-11-14 : le tour
+ * chat est plafonné à 300 s — `maxDuration` de la route stream — et 6 TTS
+ * SÉQUENTIELS réseau le dépassaient) :
+ *  - même texte → même rendu (Map processus-local, TTL 1 h) : le refrain
+ *     répété n'est synthétisé qu'UNE fois ;
+ *  - chaque tentative est bornée (60 s) — une voix qui traîne échoue vite
+ *     et honnêtement au lieu de faire exploser le tour.
  */
+const CACHE_VOIX = new Map<string, { buffer: Buffer; mime: string; moteur: string; expire: number }>();
+const TTL_CACHE_VOIX_MS = 60 * 60 * 1000;
+const BUDGET_VOIX_MS = 60_000;
+
+function borneTemps<T>(promesse: Promise<T>, ms: number, quoi: string): Promise<T> {
+  return new Promise<T>((resolu, rejette) => {
+    const minuteur = setTimeout(() => rejette(new Error(`${quoi} : budget de ${Math.round(ms / 1000)} s dépassé.`)), ms);
+    promesse.then(
+      (v) => {
+        clearTimeout(minuteur);
+        resolu(v);
+      },
+      (e) => {
+        clearTimeout(minuteur);
+        rejette(e);
+      },
+    );
+  });
+}
+
 export async function voixChanson(texte: string): Promise<{ buffer: Buffer; mime: string; moteur: string }> {
-  const essai = async (): Promise<{ buffer: Buffer; mime: string; moteur: string }> => {
-    const { professeurVoix } = await import("@/lib/neural/professeur-media");
-    const œuvre = await professeurVoix({ texte });
-    return { buffer: œuvre.buffer, mime: œuvre.mime, moteur: String(œuvre.meta?.moteur ?? "professeur-voix") };
-  };
-  try {
-    return await essai();
-  } catch {
-    // Espace public (production, aucune configuration) + polissage réaliste.
-    const brute = await professeurVoixEspace({ texte });
-    const { polirVoixRealiste } = await import("@/lib/neural/voix-realiste");
-    const polie = await polirVoixRealiste({ buffer: brute.buffer, mime: brute.mime });
-    return {
-      buffer: polie.buffer,
-      mime: polie.poli ? polie.mime : brute.mime,
-      moteur: "edge-tts-espace",
-    };
+  const cle = texte.trim().slice(0, 500);
+  const enCache = CACHE_VOIX.get(cle);
+  if (enCache && enCache.expire > Date.now()) {
+    return { buffer: enCache.buffer, mime: enCache.mime, moteur: enCache.moteur };
   }
+  const rendu = await borneTemps((async () => {
+    try {
+      const { professeurVoix } = await import("@/lib/neural/professeur-media");
+      const œuvre = await professeurVoix({ texte });
+      return { buffer: œuvre.buffer, mime: œuvre.mime, moteur: String(œuvre.meta?.moteur ?? "professeur-voix") };
+    } catch {
+      // Espace public (production, aucune configuration) + polissage réaliste.
+      const brute = await professeurVoixEspace({ texte });
+      const { polirVoixRealiste } = await import("@/lib/neural/voix-realiste");
+      const polie = await polirVoixRealiste({ buffer: brute.buffer, mime: brute.mime });
+      return {
+        buffer: polie.buffer,
+        mime: polie.poli ? polie.mime : brute.mime,
+        moteur: "edge-tts-espace",
+      };
+    }
+  })(), BUDGET_VOIX_MS, "Voix humaine (TTS)");
+  if (CACHE_VOIX.size > 200) CACHE_VOIX.clear();
+  CACHE_VOIX.set(cle, { ...rendu, expire: Date.now() + TTL_CACHE_VOIX_MS });
+  return rendu;
 }
 
 /* ------------------------------------------------------------------ */
