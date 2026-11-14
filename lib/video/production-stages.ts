@@ -64,7 +64,7 @@ import { nowIso } from "@/lib/video/queue-core";
 export type ProductionStageResult =
   | { action: "advance"; detail?: string }
   | { action: "stay"; detail?: string; delaySeconds?: number; mirrorProgress?: number }
-  | { action: "terminal-completed" }
+  | { action: "terminal-completed"; /** Clé R2 du master livré (persistée sur le job de production — le statut GET n'a plus JAMAIS besoin de relire le rendu pour le lecteur du fil). */ cleMaster?: string }
   | { action: "terminal-failed"; message: string };
 
 /** Marque le début de l'étape courante dans la timeline du job (idempotent). */
@@ -1035,7 +1035,7 @@ async function stageDone(job: VideoProductionJob): Promise<ProductionStageResult
     const { getJobProgress } = await import("@/lib/video/progress-store");
     const instantane = await getJobProgress(job.renderJobId).catch(() => null);
     if (instantane && instantane.status === "completed") {
-      return { action: "terminal-completed" } as const;
+      return { action: "terminal-completed", cleMaster: typeof instantane.r2Key === "string" ? instantane.r2Key : undefined } as const;
     }
     if (instantane && (instantane.status === "failed" || instantane.status === "cancelled")) {
       return { action: "terminal-failed", message: "Rendu terminé en échec (instantané local sous quota)." } as const;
@@ -1044,7 +1044,7 @@ async function stageDone(job: VideoProductionJob): Promise<ProductionStageResult
   }
   if (!renderJob) throw new Error(`Job de rendu ${job.renderJobId.slice(0, 8)} introuvable.`);
   if (renderJob.status === "completed") {
-    return { action: "terminal-completed" } as const;
+    return { action: "terminal-completed", cleMaster: renderJob.output?.r2Key } as const;
   }
   if (renderJob.status === "failed" || renderJob.status === "cancelled") {
     return { action: "terminal-failed", message: renderJob.errorMessage ?? "Rendu annulé." } as const;

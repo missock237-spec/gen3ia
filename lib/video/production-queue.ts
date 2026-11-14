@@ -613,6 +613,14 @@ async function concludeProductionTick(
     const timeline: ProductionStageTimelineEntry[] = job.timeline.map((e) =>
       e.stage === "done" && !e.finishedAt ? { ...e, finishedAt: nowIso(), detail: message } : e,
     );
+    // FIX « vidéo construite mais jamais reçue » (2026-11-14) : la clé R2 du
+    // master est PERSISTÉE sur le job de production au moment de la
+    // transition terminale — le statut GET expose alors masterUrl depuis le
+    // job LUI-MÊME (plus aucune relecture du rendu à chaque sondage : sous
+    // quota, cette relecture échouait et laissait le fil sans lecteur).
+    const cleMasterTerminal = !failed && stageResult.action === "terminal-completed"
+      ? (stageResult.cleMaster ?? undefined)
+      : undefined;
     // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
     await writeCheckpointSet(
       PRODUCTION_JOBS_COLLECTION,
@@ -621,6 +629,7 @@ async function concludeProductionTick(
         status: failed ? "failed" : "completed",
         ...(failed ? { error: message } : {}),
         progress: failed ? job.progress : 1,
+        ...(cleMasterTerminal ? { masterR2Key: cleMasterTerminal } : {}),
         timeline,
         leaseOwner: null,
         leaseExpiresAt: 0,

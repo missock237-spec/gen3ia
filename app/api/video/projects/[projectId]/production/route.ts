@@ -119,6 +119,10 @@ export async function GET(request: NextRequest, { params }: Params) {
     // IMMÉDIATEMENT, le client voit « completed », et l'écriture terminale
     // reste best-effort (le tick finalisera le statut stocké à la reprise ;
     // l'anti-doublon interne de la livraison empêche tout second message).
+    // Livraison déjà tentée DANS cette requête (chemin sticky) — le filet
+    // terminal ne re-tente pas : deliverJobToConversation est idempotent,
+    // mais chaque appel coûte une lecture du fil (sobriété Firestore).
+    let livreeIci = false;
     if (job && job.status === "processing" && job.stage === "done" && job.renderJobId) {
       try {
         let renderJob: Awaited<ReturnType<typeof getRenderJob>> = null;
@@ -140,6 +144,7 @@ export async function GET(request: NextRequest, { params }: Params) {
         if (renderJob?.status === "completed") {
           const effective: VideoProductionJob = { ...job, status: "completed", progress: 1 };
           await deliverJobToConversation(effective);
+          livreeIci = true;
           await writeCheckpointSet(
             PRODUCTION_JOBS_COLLECTION,
             job.id,
@@ -167,9 +172,22 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (!current) {
       return NextResponse.json({ job: null, queueMode: tickQueueConfigured() ? ("queue" as const) : ("poll" as const) });
     }
-    // Lecteur durable : job terminé (stocké OU effectif) + master connu.
-    if (!cleMaster && current.status === "completed") {
-      cleMaster = await resoudreCleMaster(current.renderJobId);
+    // Lecteur durable : clé master PERSISTÉE sur le job d'abord (fix
+    // 2026-11-14 — aucune dépendance temps réel au job de rendu), repli
+    // lecture rendu pour les jobs antérieurs au fix.
+    if (current.status === "completed") {
+      cleMaster = (typeof current.masterR2Key === "string" && current.masterR2Key ? current.masterR2Key : null)
+        ?? await resoudreCleMaster(current.renderJobId);
+    }
+
+    // FILET DE LIVRAISON (fix 2026-11-14) : un job TERMINAL dont la
+    // livraison chat a échoué pendant une fenêtre quota (marqueur absent)
+    // est re-livré ICI à chaque sondage — deliverJobToConversation est
+    // idempotent (anti-doublon par lecture du fil + marqueur). Le message
+    // « Votre vidéo est prête » ne peut plus rester coincé derrière un
+    // incident d'écriture : le sondage de l'utilisateur le débloque.
+    if (!livreeIci && (current.status === "completed" || current.status === "failed") && !current.chatDeliveredAt) {
+      await deliverJobToConversation(current);
     }
     return NextResponse.json({
       jobId: current.id,

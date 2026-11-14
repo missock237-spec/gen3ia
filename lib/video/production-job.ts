@@ -184,6 +184,14 @@ export interface VideoProductionJob {
    * (reprise au tick/sweep suivant).
    */
   chatDeliveredAt?: string;
+  /**
+   * FIX 2026-11-14 — clé R2 du master PERSISTÉE à la transition terminale :
+   * le statut GET expose masterUrl depuis le job lui-même (aucune relecture
+   * du job de rendu à chaque sondage — sous quota, cette relecture échouait
+   * et le fil restait sans lecteur pendant que le message annonçait la
+   * vidéo prête).
+   */
+  masterR2Key?: string;
   createdAt: string;
   updatedAt: string;
   timeline: ProductionStageTimelineEntry[];
@@ -391,6 +399,7 @@ export function normalizeJobDoc(stored: Partial<ProductionJobWithResume>, id: st
     ...(typeof stored.conversationId === "string" && stored.conversationId ? { conversationId: stored.conversationId } : {}),
     ...(typeof stored.origineClient === "string" && stored.origineClient.length <= 100 ? { origineClient: stored.origineClient } : {}),
     ...(typeof stored.chatDeliveredAt === "string" && stored.chatDeliveredAt ? { chatDeliveredAt: stored.chatDeliveredAt } : {}),
+    ...(typeof stored.masterR2Key === "string" && stored.masterR2Key ? { masterR2Key: stored.masterR2Key } : {}),
     createdAt: stored.createdAt ?? nowIso(),
     updatedAt: stored.updatedAt ?? nowIso(),
     timeline: Array.isArray(stored.timeline) ? stored.timeline : [],

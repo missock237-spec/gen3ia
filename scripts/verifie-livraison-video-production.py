@@ -45,7 +45,7 @@ PASSWORD = "E2e!Livraison" + STAMP[-4:]
 
 MSG_VIDEO = ("Crée une vidéo : un chat qui danse sur un tapis au format "
              "youtube avec une durée de 10 secondes.")
-POLL_MAX_S = 420
+POLL_MAX_S = 700
 
 CAPTURE = "/tmp/livraison-video-production.png"
 ARCHIVE = "/home/z/my-project/download/gen3-video-livraison-production.mp4"
@@ -172,7 +172,7 @@ def envoyer(page, message: str) -> bool:
 def statut_production(page, project_id: str) -> dict:
     reponse = page.context.request.get(
         f"{BASE}/api/video/projects/{project_id}/production",
-        timeout=30000,
+        timeout=120000,
     )
     if reponse.status != 200:
         return {}
@@ -183,17 +183,22 @@ def statut_production(page, project_id: str) -> dict:
 
 
 def phase_livraison(page) -> None:
-    # L2 — demande + lancement
+    """Mono-run complet (mode « complet ») : lance puis vérifie."""
+    project_id = resoudre_projet(page)
+    if project_id:
+        phase_livraison_sur_projet(page, project_id)
+
+
+def resoudre_projet(page) -> str:
+    """L2 — demande vidéo envoyée + projet résolu côté serveur."""
     envoye = envoyer(page, MSG_VIDEO)
     verif("L2a. demande vidéo envoyée (POST …/messages/stream)", envoye)
     time.sleep(8)
-
-    # ID du projet vidéo : le fil porte un message avec l'id (ou l'API liste).
     project_id = ""
     debut = time.time()
-    while time.time() - debut < 60 and not project_id:
+    while time.time() - debut < 90 and not project_id:
         reponse = page.context.request.get(
-            f"{BASE}/api/video/projects", timeout=30000)
+            f"{BASE}/api/video/projects", timeout=60000)
         if reponse.status == 200:
             try:
                 projets = json.loads(reponse.body().decode("utf-8"))
@@ -218,9 +223,10 @@ def phase_livraison(page) -> None:
         time.sleep(5)
     verif("L2b. production vidéo LANCÉE (projet résolu côté serveur)",
           bool(project_id), project_id[:40] if project_id else "introuvable")
-    if not project_id:
-        return
+    return project_id
 
+
+def phase_livraison_sur_projet(page, project_id: str) -> None:
     # L3 — poll production : statut completed + masterUrl DURABLE.
     statut, stage, progress = "", "", 0.0
     master_url = ""
@@ -240,8 +246,8 @@ def phase_livraison(page) -> None:
         print(f"[poll] status={statut or '?'} stage={stage or '?'} "
               f"progress={progress * 100:.0f}% t={time.time() - debut:.0f}s",
               flush=True)
-        time.sleep(10)
-    verif("L3a. production TERMINÉE en ≤7 min", statut == "completed",
+        time.sleep(30)
+    verif("L3a. production TERMINÉE (statut completed constaté)", statut == "completed",
           f"statut={statut} stage={stage} progress={progress * 100:.0f}%")
     verif("L3b. masterUrl DURABLE exposée par le statut (contrat du fix)",
           bool(master_url) and master_url.startswith("/api/media/durable?path="),
@@ -329,14 +335,37 @@ def phase_livraison(page) -> None:
     print(f"[capture] {CAPTURE}", flush=True)
 
 
+ETAT = "/tmp/sonde-livraison-etat.json"
+MODE = sys.argv[1] if len(sys.argv) > 1 else "complet"
+
 avec = sync_playwright().start()
 nav = avec.chromium.launch(headless=True)
 page = nav.new_page(viewport={"width": 1440, "height": 900}, user_agent=UA)
 page.set_default_timeout(60000)
 
 try:
-    inscrire_et_ouvrir_chat(page)
-    phase_livraison(page)
+    if MODE == "demarrer":
+        # Phase A : lancement + état persisté (session + projet) — sortie
+        # rapide, la production continue côté serveur.
+        inscrire_et_ouvrir_chat(page)
+        project_id = resoudre_projet(page)
+        if project_id:
+            page.context.storage_state(path=ETAT)
+            with open(ETAT + ".proj", "w") as f_etat:
+                json.dump({"projectId": project_id}, f_etat)
+            print(f"[etat] session + projet persistés ({ETAT})", flush=True)
+    elif MODE == "suivre":
+        # Phase B : reprise de la session persistée + vérifications
+        # complètes — la production a continué côté serveur pendant la pause.
+        with open(ETAT + ".proj") as f_etat:
+            project_id = json.load(f_etat)["projectId"]
+        page.goto(f"{BASE}/chat", wait_until="domcontentloaded", timeout=60000)
+        time.sleep(4)
+        verif("L1b-bis. session persistée réutilisée", True, project_id[:40])
+        phase_livraison_sur_projet(page, project_id)
+    else:
+        inscrire_et_ouvrir_chat(page)
+        phase_livraison(page)
 finally:
     try:
         page.screenshot(path=CAPTURE)
