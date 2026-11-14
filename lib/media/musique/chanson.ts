@@ -148,6 +148,9 @@ export interface SegmentVoix {
 const GAIN_MUSIQUE_SOUS_VOIX = 0.32;
 const RAMP_SEC = 0.3;
 
+/** Palette de plans du clip (hex FFmpeg valides, sombres et contrastés). */
+const PALETTE_PLANS = ["0x1a1333", "0x33224d", "0x1d3a4d", "0x4d2a1d", "0x23402e", "0x40233a", "0x2d2d1a", "0x1a2d2d", "0x3d1a1a", "0x2d1a3d"];
+
 /**
  * Pose les segments de voix sur l'accompagnement stéréo Float32 et abaisse
  * la musique sous chaque fenêtre de voix (ducking à ramps). La voix est
@@ -311,19 +314,19 @@ export async function produireClipMusical(params: {
     const filtres: string[] = [];
     for (let p = 0; p < nbPlans; p += 1) {
       const planPng = path.join(dir, `plan-${p}.png`);
-      const teinte = Math.round((280 + p * 40) % 360);
       const lignes = p === 0
         ? [`title=${params.titre}`, `text=${params.styleLabel}`]
         : [`title=${params.titre}`];
+      // Palette hex VALIDE (test réel : un hex à 7 chiffres « 0x1182633 »
+      // est refusé par FFmpeg — exit 234) : couleurs sombres alternées.
+      const couleur = PALETTE_PLANS[p % PALETTE_PLANS.length];
       const filtre = [
-        "color=c=hsv(" + teinte + ":0.45:0.16)",
-        "scale=1280:720",
-        `drawtext=text='${lignes[0].replace("title=", "")}':fontcolor=white@0.92:fontsize=${p === 0 ? 72 : 56}:x=(w-text_w)/2:y=(h-text_h)/2:font=Noto+Sans SC`,
-        ...(lignes[1] ? [`drawtext=text='${lignes[1].replace("text=", "")}':fontcolor=white@0.6:fontsize=36:x=(w-text_w)/2:y=h*0.68:font=Noto+Sans SC`] : []),
+        `drawtext=text='${lignes[0].replace("title=", "")}':fontcolor=white@0.92:fontsize=${p === 0 ? 72 : 56}:x=(w-text_w)/2:y=(h-text_h)/2`,
+        ...(lignes[1] ? [`drawtext=text='${lignes[1].replace("text=", "")}':fontcolor=white@0.6:fontsize=36:x=(w-text_w)/2:y=h*0.68`] : []),
         "zoompan=z='min(zoom+0.0008,1.12)':d=" + Math.max(1, Math.round(dureePlan * 25)) + ":s=1280x720:fps=25",
       ].join(",");
       await runFfmpeg({
-        args: ["-y", "-f", "lavfi", "-i", `nullsrc=s=1280x720:d=1`, "-vf", filtre, "-frames:v", "1", planPng],
+        args: ["-y", "-f", "lavfi", "-i", `color=c=${couleur}:s=1280x720:d=1`, "-vf", filtre, "-frames:v", "1", planPng],
         cwd: dir,
         outputDurationSec: 1,
         outputPaths: [planPng],
