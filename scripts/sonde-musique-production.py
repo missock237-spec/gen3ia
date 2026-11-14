@@ -111,16 +111,26 @@ def envoyer(page, message: str) -> None:
     print("[réseau] POST stream →", reponse_info.value.status, flush=True)
 
 
-def derniers_messages(page) -> list:
-    """Lit les bulles du fil via le DOM (même méthode que la sonde vidéo)."""
+def compteur_bulles(page) -> int:
+    """Nombre de bulles du fil au moment de l'appel (référence anti-course)."""
+    try:
+        page.wait_for_selector(".nova-fil .nova-bulle", state="visible", timeout=15000)
+    except Exception:
+        return 0
+    return page.locator(".nova-fil .nova-bulle").count()
+
+
+def derniers_messages(page, base: int = 0) -> list:
+    """Lit les bulles du fil via le DOM (même méthode que la sonde vidéo),
+    en ne considérant que les bulles APPARUES après `base` (anti-course)."""
     try:
         page.wait_for_selector(".nova-fil .nova-bulle", state="visible", timeout=15000)
     except Exception:
         return []
     bulles = page.locator(".nova-fil .nova-bulle")
-    n = min(bulles.count(), 12)
+    total = bulles.count()
     messages = []
-    for i in range(max(0, n - 12), n):
+    for i in range(max(base, 0), total):
         try:
             messages.append({"role": "assistant", "contenu": bulles.nth(i).inner_text()})
         except Exception:
@@ -128,7 +138,7 @@ def derniers_messages(page) -> list:
     return messages
 
 
-def attendre_reponse_musicale(page, cle: str, budget_s: int) -> dict | None:
+def attendre_reponse_musicale(page, cle: str, budget_s: int, base: int = 0) -> dict | None:
     """Attend une bulle assistant FINALE contenant la clé (lien écoute/clip).
     Journalise la DERNIÈRE bulle même sans clé (visibilité des échecs)."""
     debut = time.time()
@@ -179,8 +189,9 @@ try:
     inscrire(page)
 
     # ── Exigence 1 : titre CITÉ → respecté + paroles + voix + audio réel ──
+    base = compteur_bulles(page)
     envoyer(page, 'Crée une chanson titre : "Étoiles de minuit" style pop')
-    reponse = attendre_reponse_musicale(page, "/api/media/durable", 300)
+    reponse = attendre_reponse_musicale(page, "/api/media/durable", 300, base)
     verif("M2a. chanson livrée dans le fil (lien durable)", reponse is not None and reponse["status"] == "complete",
           f"status={reponse['status'] if reponse else '?'}")
     if reponse:
@@ -206,15 +217,20 @@ try:
                 verif("M2h. durée audio réelle ≥ 45 s (ffprobe)", duree >= 45.0, f"{duree:.1f} s")
 
     # ── Exigence 2 : SANS titre → gen3 en invente un ──
+    # ANTI-COURSE (constat M3b) : la lecture ne considère que les bulles
+    # APPARUES après l'envoi (compteur de référence) — sinon la bulle de
+    # la chanson précédente re-matche instantanément.
+    base = compteur_bulles(page)
     envoyer(page, "crée une chanson sur la mer et les vagues")
-    reponse2 = attendre_reponse_musicale(page, "/api/media/durable", 300)
+    reponse2 = attendre_reponse_musicale(page, "/api/media/durable", 300, base)
     verif("M3a. chanson sans titre livrée", reponse2 is not None and reponse2["status"] == "complete")
     if reponse2:
         verif("M3b. titre INVENTÉ annoncé (« inventé par moi »)", "inventé par moi" in reponse2["contenu"])
 
     # ── Exigence 3 : clip musical SEULEMENT si demandé ──
+    base = compteur_bulles(page)
     envoyer(page, "crée une chanson sur le désert avec un clip musical")
-    reponse3 = attendre_reponse_musicale(page, "Clip musical", 420)
+    reponse3 = attendre_reponse_musicale(page, "Clip musical", 420, base)
     verif("M4a. clip musical livré sur demande", reponse3 is not None and reponse3["status"] == "complete",
           f"status={reponse3['status'] if reponse3 else '?'}")
     if reponse3:
