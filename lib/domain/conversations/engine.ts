@@ -46,7 +46,7 @@ import { findLastConversationImage, runChatTurn } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import { IntentSchema, buildIntentSystemPrompt, detectExplicitToolIntent, extractApiUrlFromMessage, extractSearchQuery } from "./engine-intent";
 import type { ExplicitToolIntent, TurnIntent } from "./engine-intent";
-import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, runMusiqueTurn, runSonTurn, looksLikeDemandeMusique, looksLikeDemandeSon, looksLikeVoixHumaineRequest, intentionMédiaÉtiquetée } from "./engine-media";
+import { runImageEditTurn, runImageTurn, runVideoTurn, runVoixTurn, runMusiqueTurn, runSonTurn, looksLikeDemandeMusique, estDemandeMusiqueAvecClip, looksLikeDemandeSon, looksLikeVoixHumaineRequest, intentionMédiaÉtiquetée } from "./engine-media";
 import { runEvaluationTurn } from "./engine-evaluation";
 // ENTRAÎNEMENT DEPUIS LE CHAT — entrée UNIQUE (demande utilisateur) : les
 // messages « apprends que / retiens que / entraîne-toi » entraînent
@@ -401,7 +401,12 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     });
     return result;
   }
-  if (intentionMédiaÉtiquetée(input.message) === "video" || looksLikeVideoRequest(input.message)) {
+  // EXIGENCE MUSIQUE (2026-11-14) : « une chanson/musique AVEC un clip/une
+  // vidéo » est d'abord une MUSIQUE (le clip musical est produit par le
+  // chemin musique lui-même, audio par défaut) — JAMAIS la production
+  // vidéo générique (constat sonde production 11:13 : « chanson avec un
+  // clip musical » partait en production vidéo 15 s au lieu d'une chanson).
+  if ((intentionMédiaÉtiquetée(input.message) === "video" || looksLikeVideoRequest(input.message)) && !estDemandeMusiqueAvecClip(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Lancement de la production vidéo…" });
     const result = await runVideoTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({
@@ -417,8 +422,10 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   // moteur gen3 (musique.creer) — WAV/MP3 rendu via FFmpeg, archivage
   // permanent, lecteur audio durable dans le fil. APRÈS vidéo/voix (leurs
   // détecteurs priment : « une vidéo avec une musique énergique » reste
-  // une vidéo ; « un message vocal » reste de la voix).
-  if (looksLikeDemandeMusique(input.message)) {
+  // une vidéo ; « un message vocal » reste de la voix). Les demandes
+  // MUSIQUE+CLIP (estDemandeMusiqueAvecClip) arrivent ICI aussi — la
+  // chanson est la base, le clip musical son média optionnel.
+  if (looksLikeDemandeMusique(input.message) || estDemandeMusiqueAvecClip(input.message)) {
     await onEvent({ type: "status", phase: "execution", label: "Composition de la musique en cours…" });
     const result = await runMusiqueTurn({ ...input, conversation, project, projectId, userMessage, priorHistory });
     await onEvent({

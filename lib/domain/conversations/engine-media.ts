@@ -253,6 +253,31 @@ export function looksLikeDemandeMusique(message: string): boolean {
   return true;
 }
 
+/**
+ * EXIGENCE MUSIQUE (2026-11-14) : demande d'une CHANSON/MUSIQUE dont le
+ * média demandé est le CLIP DE LA MUSIQUE (« clip musical », « musique en
+ * vidéo », « vidéo musicale », « vidéo de cette chanson ») — le chemin
+ * musique produit la chanson (audio par défaut) ET son clip. Auto-suffisant
+ * (ne dépend PAS de looksLikeDemandeMusique, qui exclut les messages
+ * vidéo-ish) : c'est exactement le cas où le détecteur vidéo « gagne » à
+ * tort. Une vidéo dont la musique n'est que l'habillage (« une vidéo avec
+ * une musique énergique ») NE matche PAS — elle reste une vidéo.
+ */
+export function estDemandeMusiqueAvecClip(message: string): boolean {
+  const objetMusical =
+    /\b(musique|chanson|m[eé]lodie|beat|soundtrack|bande[- ]son)\b/iu.test(message);
+  if (!objetMusical) return false;
+  const verbe =
+    /\b(cr[ée]{1,3}\b|cr[ée]e|cr[ée]er|compose[szr]?|g[ée]n[èe]re[szr]?|g[ée]n[ée]rer|fais|fait|fabrique[szr]?|produis|improvise)\b/iu.test(message);
+  if (!verbe) return false;
+  return (
+    /\bclip\s+(?:musicale?|de\s+(?:cette\s+)?(?:chanson|musique))\b/iu.test(message) ||
+    /\b(?:vidéo|video)\s+(?:musicale?|de\s+(?:cette\s+)?(?:chanson|musique))\b/iu.test(message) ||
+    /\b(?:chanson|musique)\b[^.!?]{0,40}\b(?:avec|en|sous\s+forme\s+de)\b[^.!?]{0,20}\b(?:clip|vidéo|video)\b/iu.test(message) ||
+    /\b(?:clip|vidéo|video)\b[^.!?]{0,40}\b(?:de|pour)\s+(?:la|cette)\s+(?:chanson|musique)\b/iu.test(message)
+  );
+}
+
 export async function runMusiqueTurn(ctx: TurnBase): Promise<ConversationTurnResult> {
   const onEvent = safeEmitter(ctx.onEvent);
   await onEvent({ type: "status", phase: "execution", label: "Composition de la musique en cours…" });

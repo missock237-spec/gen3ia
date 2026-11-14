@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  estDemandeMusiqueAvecClip,
   estVideoCourteRéaliste,
   extrairePhraseÀDire,
   intentionMédiaÉtiquetée,
@@ -90,5 +91,24 @@ describe("looksLikeVoixHumaineRequest — « message vocal » (fix production 19
 
   it("conserve les détections historiques (« voix » + verbe)", () => {
     expect(looksLikeVoixHumaineRequest("génère une voix qui dit bonjour")).toBe(true);
+  });
+});
+
+describe("estDemandeMusiqueAvecClip — routage musique+clip (exigence 2026-11-14)", () => {
+  it("les demandes de chanson AVEC clip partent sur le chemin musique", () => {
+    expect(estDemandeMusiqueAvecClip("crée une chanson sur le désert avec un clip musical")).toBe(true);
+    expect(estDemandeMusiqueAvecClip("fais une musique en vidéo sur l'été")).toBe(true);
+    expect(estDemandeMusiqueAvecClip("compose une chanson et une vidéo musicale")).toBe(true);
+    expect(estDemandeMusiqueAvecClip("crée une musique avec un clip de la chanson")).toBe(true);
+  });
+
+  it("une vidéo dont la musique n'est que l'habillage reste une VIDÉO", () => {
+    expect(estDemandeMusiqueAvecClip("Crée une vidéo avec une musique énergique")).toBe(false);
+    expect(estDemandeMusiqueAvecClip("fais une vidéo de chat qui danse")).toBe(false);
+    expect(estDemandeMusiqueAvecClip("génère une vidéo de la tour Eiffel")).toBe(false);
+  });
+
+  it("une chanson SANS clip n'est pas concernée (audio par défaut)", () => {
+    expect(estDemandeMusiqueAvecClip("crée une chanson sur la mer")).toBe(false);
   });
 });

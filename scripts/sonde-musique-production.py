@@ -225,16 +225,23 @@ try:
     reponse2 = attendre_reponse_musicale(page, "/api/media/durable", 300, base)
     verif("M3a. chanson sans titre livrée", reponse2 is not None and reponse2["status"] == "complete")
     if reponse2:
-        verif("M3b. titre INVENTÉ annoncé (« inventé par moi »)", "inventé par moi" in reponse2["contenu"])
+        verif("M3b. titre INVENTÉ annoncé (« inventé par moi »)", "inventé par moi" in reponse2["contenu"],
+              reponse2["contenu"][:150].replace("\n", " "))
 
     # ── Exigence 3 : clip musical SEULEMENT si demandé ──
+    # ROUTAGE (exigence 2026-11-14) : « chanson avec un clip musical » doit
+    # partir sur le chemin MUSIQUE (constat 11:13 : il partait en production
+    # vidéo générique) — on attend la CHANSON (lien durable), puis le clip.
     base = compteur_bulles(page)
     envoyer(page, "crée une chanson sur le désert avec un clip musical")
-    reponse3 = attendre_reponse_musicale(page, "Clip musical", 420, base)
-    verif("M4a. clip musical livré sur demande", reponse3 is not None and reponse3["status"] == "complete",
+    reponse3 = attendre_reponse_musicale(page, "/api/media/durable", 420, base)
+    verif("M4a. chanson (demande AVEC clip) livrée — routage musique OK",
+          reponse3 is not None and reponse3["status"] == "complete",
           f"status={reponse3['status'] if reponse3 else '?'}")
     if reponse3:
-        verif("M4b. lien du clip présent", "api/media/durable" in reponse3["contenu"].split("Clip musical")[1][:200] if "Clip musical" in reponse3["contenu"] else False)
+        verif("M4b. message annonce le clip vidéo demandé (« Clip musical »)", "Clip musical" in reponse3["contenu"],
+              reponse3["contenu"][:150].replace("\n", " "))
+        verif("M4c. PAS de production vidéo générique lancée", "production vidéo est lancée" not in reponse3["contenu"])
 
 finally:
     try:
