@@ -34,6 +34,11 @@ import type { TrainingReport } from "./training/trainer";
 import { CortexLangagierGen3 } from "./generation/language";
 import type { EtatLangage } from "./generation/language";
 import { CORPUS_GEN3 } from "./generation/corpus";
+// GARANTIE DE RÉPONSE : l'injecteur réel de recherche web (outil web.search
+// de la plateforme — cascade provider cléé → DuckDuckGo → Wikipédia), câblé
+// au moteur pour la réponse automatique en cas de savoir insuffisant.
+import { searchWeb } from "@/lib/tools/web/search";
+import type { ResultatRechercheWeb } from "./recherche-web-pont";
 // ABRÉVIATIONS FR/EN : ingestion cortex one-shot au démarrage (demande
 // utilisateur « entraîne gen3 à comprendre les abréviations ») — idempotent
 // via marqueur var/neural, jamais bloquant.
@@ -147,6 +152,12 @@ const globalAvecNeural = globalThis as typeof globalThis & {
 
 /** Graine par défaut du runtime (reproductibilité). */
 export const SEED_RUNTIME = 42;
+
+/** Plafond de temps de la recherche web automatique (garantie de réponse) :
+ *  le tour de chat dispose d'un budget global (CHAT_BUDGET_MS = 35 s) — au-delà
+ *  de ce plafond, la recherche est abandonnée et le moteur répond avec son
+ *  repli honnête (jamais de silence, jamais de tour bloqué sur le réseau). */
+export const RECHERCHE_WEB_AUTO_TIMEOUT_MS = 9_000;
 
 /** Artefact PRÉ-ENTRAÎNÉ de la couche des 18 domaines (commité). */
 export const BRAIN_DOMAINES_PRETRAIN_PATH = join(
@@ -396,9 +407,36 @@ export function getNeuralRuntime(): NeuralRuntime {
   //    chaque échange réussi est observé, périodiquement consolidé en
   //    mémoire longue, puis le cerveau est sauvegardé (fire-and-forget).
   const evolution = new MoteurEvolutionGen3(cortex);
+
+  // GARANTIE DE RÉPONSE — injecteur réel de recherche web. Budget de temps
+  // borné (le tour de chat a un budget global de 35 s) : au-delà du plafond
+  // ou en cas d'échec réseau, null → le moteur passe au repli honnête.
+  // JAMAIS de silence : soit réponse fondée sur les sources citées, soit
+  // réponse honnête explicite.
+  const rechercheWebAuto = async (
+    requete: string,
+  ): Promise<ResultatRechercheWeb[] | null> => {
+    try {
+      const recherche = await Promise.race([
+        searchWeb(requete, 6),
+        new Promise<null>((resoudre) =>
+          setTimeout(() => resoudre(null), RECHERCHE_WEB_AUTO_TIMEOUT_MS),
+        ),
+      ]);
+      if (!recherche?.length) return null;
+      return recherche.map((resultat) => ({
+        titre: resultat.title,
+        url: resultat.url,
+        extrait: resultat.snippet,
+      }));
+    } catch {
+      return null;
+    }
+  };
+
   const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
     void sauvegarderCerveauRuntime().catch(() => undefined);
-  }, piloterPlateforme, coucheRPIA);
+  }, piloterPlateforme, coucheRPIA, rechercheWebAuto);
 
   const runtime: NeuralRuntime = {
     reseau,

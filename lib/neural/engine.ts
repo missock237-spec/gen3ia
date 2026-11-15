@@ -24,6 +24,12 @@ import { HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
+import {
+  composerDepuisRechercheWeb,
+  composerRepliHonnete,
+  savoirInsuffisant,
+  type ResultatRechercheWeb,
+} from "./recherche-web-pont";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 import type { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
@@ -39,7 +45,9 @@ export type SourceLangage =
   | "cortex_contexte"
   | "decoder_intention"
   | "pilotage"
-  | "connaissances_utilisateur";
+  | "connaissances_utilisateur"
+  | "recherche_web"
+  | "repli_honnete";
 
 /** Composition finale : texte émis + provenance (traçabilité). */
 export interface CompositionReponse {
@@ -210,6 +218,18 @@ export class NeuralEngine {
      * intégrations minimales) → le moteur tourne comme avant.
      */
     private readonly coucheRPIA?: CoucheOndesNeuronales,
+    /**
+     * GARANTIE DE RÉPONSE — RECHERCHE WEB AUTOMATIQUE : injecteur réel
+     * (câblé par le runtime avec l'outil web.search de la plateforme).
+     * Quand la matière interne est INSUFFISANTE (aucune paire cortex, aucun
+     * document, texte décodé générique), le moteur appelle cet injecteur
+     * AVANT de répondre : gen3 ne laisse JAMAIS un utilisateur sans réponse
+     * — soit une réponse fondée sur les sources web citées, soit un repli
+     * honnête explicite. Absent (tests sans filet) → comportement inchangé.
+     */
+    private readonly rechercheWebAuto?: (
+      requete: string,
+    ) => Promise<ResultatRechercheWeb[] | null>,
   ) {}
 
   /**
@@ -386,10 +406,12 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
-    const composition =
+    const compositionBrute =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+    // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
+    const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
     this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
 
@@ -472,10 +494,12 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
-    const composition =
+    const compositionBrute =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+    // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
+    const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
 
     // La réponse composée est émise par segments (phrases réelles). Les
     // télémétries de cycles restent disponibles dans raw (plus de bruit de
@@ -550,9 +574,11 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
-    const composition =
+    const compositionBrute =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+    // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
+    const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
 
     for (const segment of segmenterTexte(composition.texte)) {
       yield segment;
@@ -674,6 +700,38 @@ export class NeuralEngine {
       texte += ` ${phraseDomaine(domaine.nom, domaine.score)}`;
     }
     return { texte, source: "decoder_intention" };
+  }
+
+  /**
+   * GARANTIE DE RÉPONSE — le filet de sécurité du moteur (directive : gen3
+   * ne laisse JAMAIS un utilisateur sans réponse).
+   *
+   * Si la matière interne est suffisante (pilotage, connaissances, paire
+   * cortex bien appariée), la composition passe telle quelle. Sinon :
+   *  1. injecteur présent → RECHERCHE WEB AUTOMATIQUE réelle ; des résultats
+   *     pertinents deviennent une réponse fondée sur les sources citées ;
+   *  2. recherche échouée ou sans résultat exploitable → REPLI HONNÊTE :
+   *     réponse explicite, non vide, avec les voies concrètes pour l'utilisateur.
+   *
+   * Sans injecteur (intégrations minimales, tests) : comportement historique
+   * inchangé — le runtime de production câble toujours l'injecteur réel.
+   */
+  private async garantirReponse(
+    message: string,
+    composition: CompositionReponse,
+  ): Promise<CompositionReponse> {
+    if (!savoirInsuffisant(composition)) return composition;
+    if (!this.rechercheWebAuto) return composition;
+    let resultats: ResultatRechercheWeb[] | null = null;
+    try {
+      resultats = await this.rechercheWebAuto(message.slice(0, 300));
+    } catch {
+      // Recherche impossible (réseau, quota…) : le repli honnête prend le relais.
+    }
+    const fondée = resultats?.length
+      ? composerDepuisRechercheWeb(message, resultats)
+      : null;
+    return fondée ?? composerRepliHonnete(message, composition);
   }
 
   /**
