@@ -41,7 +41,9 @@ interface EntreeCache {
       | "compartiment_monde"
       | "compartiment_terminal"
       | "memoire_utilisateur"
-      | "memoire_dev_web";
+      | "memoire_dev_web"
+      | "recherche_web"
+      | "repli_honnete";
     theme?: string;
     scoreAppariement?: number;
     clePair?: string;

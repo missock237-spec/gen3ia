@@ -1,0 +1,461 @@
+# -*- coding: utf-8 -*-
+"""
+BANQUE COMBINATOIRE WEB-DEV — matière d'entraînement pour le domaine
+« développement web » de Gen3ia (SaaS, sites web, projets de développement).
+
+Chaque liste alimente un tirage seedé du générateur (generateur_webdev.py) :
+l'espace combinatoire dépasse largement plusieurs millions de combinaisons
+distinctes (niches × fonctionnalités × stacks × tâches × formulations ×
+contextes × variantes de gabarit), ce qui permet de générer DES MILLIONS de
+lignes dédupliquées sans dupliquer une seule paire (instruction → output).
+
+Tout le contenu est descriptif et réutilisable : les extraits de code sont
+des gabarits réels paramétrés par la stack et la niche métier.
+"""
+
+from __future__ import annotations
+
+from typing import Dict, List, Tuple
+
+# ---------------------------------------------------------------------------
+# NICHES MÉTIER — chaque niche définit l'entité métier centrale du SaaS
+# (modèle de données) et ses champs spécifiques (schéma Prisma paramétré).
+# ---------------------------------------------------------------------------
+
+# (id, label_fr, label_en, entite_fr, entite_en, champs: [(nom, type_prisma, fr, en)])
+NICHES: List[Dict] = [
+    {"id": "crm", "fr": "gestion de relation client (CRM)", "en": "customer relationship management (CRM)",
+     "entite": "Client", "entite_en": "Customer",
+     "champs": [("nom", "String", "nom complet", "full name"), ("email", "String", "adresse e-mail", "email address"),
+                ("telephone", "String?", "téléphone", "phone number"), ("statut", "StatutClient", "statut du prospect", "lead status")]},
+    {"id": "ecommerce", "fr": "boutique en ligne", "en": "online store",
+     "entite": "Produit", "entite_en": "Product",
+     "champs": [("titre", "String", "titre du produit", "product title"), ("prix", "Int", "prix en centimes", "price in cents"),
+                ("stock", "Int", "stock disponible", "available stock"), ("reference", "String", "référence SKU", "SKU reference")]},
+    {"id": "reservation", "fr": "réservation de rendez-vous", "en": "appointment booking",
+     "entite": "Creneau", "entite_en": "Slot",
+     "champs": [("debut", "DateTime", "début du créneau", "slot start"), ("dureeMinutes", "Int", "durée en minutes", "duration in minutes"),
+                ("prestataire", "String", "prestataire concerné", "assigned provider"), ("reserve", "Boolean", "créneau réservé", "slot booked")]},
+    {"id": "lms", "fr": "plateforme de cours en ligne", "en": "e-learning platform",
+     "entite": "Cours", "entite_en": "Course",
+     "champs": [("titre", "String", "titre du cours", "course title"), ("niveau", "String", "niveau requis", "required level"),
+                ("dureeHeures", "Int", "durée estimée", "estimated duration"), ("publie", "Boolean", "cours publié", "course published")]},
+    {"id": "gym", "fr": "salle de sport", "en": "gym",
+     "entite": "Abonnement", "entite_en": "Membership",
+     "champs": [("membre", "String", "nom du membre", "member name"), ("formule", "String", "formule choisie", "selected plan"),
+                ("expireLe", "DateTime", "date d'expiration", "expiry date"), ("actif", "Boolean", "abonnement actif", "membership active")]},
+    {"id": "restaurant", "fr": "restaurant", "en": "restaurant",
+     "entite": "Plat", "entite_en": "Dish",
+     "champs": [("nom", "String", "nom du plat", "dish name"), ("categorie", "String", "catégorie du menu", "menu category"),
+                ("prix", "Int", "prix en centimes", "price in cents"), ("disponible", "Boolean", "disponible ce jour", "available today")]},
+    {"id": "immobilier", "fr": "agence immobilière", "en": "real-estate agency",
+     "entite": "Bien", "entite_en": "Property",
+     "champs": [("titre", "String", "titre de l'annonce", "listing title"), ("ville", "String", "ville", "city"),
+                ("surface", "Int", "surface en m²", "area in m²"), ("loyerMensuel", "Int", "loyer mensuel", "monthly rent")]},
+    {"id": "helpdesk", "fr": "support client (helpdesk)", "en": "customer support (helpdesk)",
+     "entite": "Ticket", "entite_en": "Ticket",
+     "champs": [("sujet", "String", "sujet du ticket", "ticket subject"), ("priorite", "Priorite", "priorité", "priority"),
+                ("assigneA", "String?", "agent assigné", "assigned agent"), ("resolu", "Boolean", "ticket résolu", "ticket resolved")]},
+    {"id": "facturation", "fr": "facturation", "en": "invoicing",
+     "entite": "Facture", "entite_en": "Invoice",
+     "champs": [("numero", "String", "numéro de facture", "invoice number"), ("montantTotal", "Int", "montant total en centimes", "total amount in cents"),
+                ("echeance", "DateTime", "date d'échéance", "due date"), ("payee", "Boolean", "facture payée", "invoice paid")]},
+    {"id": "rh", "fr": "gestion des ressources humaines", "en": "human resources",
+     "entite": "Employe", "entite_en": "Employee",
+     "champs": [("nom", "String", "nom de l'employé", "employee name"), ("poste", "String", "poste occupé", "job title"),
+                ("dateEmbauche", "DateTime", "date d'embauche", "hire date"), ("congesRestants", "Int", "jours de congés restants", "remaining leave days")]},
+    {"id": "stock", "fr": "gestion de stock et inventaire", "en": "inventory management",
+     "entite": "Article", "entite_en": "Item",
+     "champs": [("reference", "String", "référence article", "item reference"), ("quantite", "Int", "quantité en stock", "stock quantity"),
+                ("seuilAlerte", "Int", "seuil d'alerte", "alert threshold"), ("emplacement", "String", "emplacement dépôt", "warehouse location")]},
+    {"id": "coaching", "fr": "coaching et accompagnement", "en": "coaching",
+     "entite": "Session", "entite_en": "Session",
+     "champs": [("client", "String", "nom du client", "client name"), ("objectif", "String", "objectif de la session", "session goal"),
+                ("date", "DateTime", "date de la session", "session date"), ("statut", "String", "statut de la session", "session status")]},
+    {"id": "veterinaire", "fr": "cabinet vétérinaire", "en": "veterinary clinic",
+     "entite": "Animal", "entite_en": "Animal",
+     "champs": [("nom", "String", "nom de l'animal", "animal name"), ("espece", "String", "espèce", "species"),
+                ("proprietaire", "String", "propriétaire", "owner"), ("derniereVisite", "DateTime?", "dernière visite", "last visit")]},
+    {"id": "salon", "fr": "salon de coiffure et beauté", "en": "hair and beauty salon",
+     "entite": "Prestation", "entite_en": "Service",
+     "champs": [("nom", "String", "nom de la prestation", "service name"), ("dureeMinutes", "Int", "durée en minutes", "duration in minutes"),
+                ("prix", "Int", "prix en centimes", "price in cents"), ("actif", "Boolean", "prestation active", "service active")]},
+    {"id": "garage", "fr": "garage automobile", "en": "auto repair shop",
+     "entite": "Intervention", "entite_en": "WorkOrder",
+     "champs": [("vehicule", "String", "véhicule concerné", "vehicle"), ("description", "String", "travaux demandés", "requested work"),
+                ("avancement", "String", "avancement", "progress"), ("terminee", "Boolean", "intervention terminée", "work completed")]},
+    {"id": "logistique", "fr": "logistique et livraisons", "en": "logistics and delivery",
+     "entite": "Colis", "entite_en": "Parcel",
+     "champs": [("destinataire", "String", "destinataire", "recipient"), ("adresse", "String", "adresse de livraison", "delivery address"),
+                ("statut", "StatutLivraison", "statut de livraison", "delivery status"), ("livreLe", "DateTime?", "date de livraison", "delivered at")]},
+    {"id": "evenements", "fr": "gestion d'événements", "en": "event management",
+     "entite": "Evenement", "entite_en": "Event",
+     "champs": [("titre", "String", "titre de l'événement", "event title"), ("dateDebut", "DateTime", "date de début", "start date"),
+                ("capacite", "Int", "capacité maximale", "max capacity"), ("inscrits", "Int", "inscrits", "registered count")]},
+    {"id": "marketplace", "fr": "place de marché multi-vendeurs", "en": "multi-vendor marketplace",
+     "entite": "Annonce", "entite_en": "Listing",
+     "champs": [("titre", "String", "titre de l'annonce", "listing title"), ("vendeur", "String", "vendeur", "vendor"),
+                ("prix", "Int", "prix en centimes", "price in cents"), ("validee", "Boolean", "annonce validée", "listing approved")]},
+    {"id": "coworking", "fr": "espace de coworking", "en": "coworking space",
+     "entite": "Poste", "entite_en": "Desk",
+     "champs": [("nom", "String", "nom du poste", "desk name"), ("zone", "String", "zone de l'espace", "space zone"),
+                ("reservePar", "String?", "réservé par", "reserved by"), ("disponible", "Boolean", "disponible", "available")]},
+    {"id": "immobilier_locatif", "fr": "location saisonnière", "en": "short-term rental",
+     "entite": "Logement", "entite_en": "Rental",
+     "champs": [("titre", "String", "titre du logement", "rental title"), ("nuitsMin", "Int", "séjour minimum", "minimum nights"),
+                ("prixNuit", "Int", "prix par nuit", "price per night"), ("calendrierBloque", "Boolean", "périodes bloquées", "calendar blocked")]},
+    {"id": "podcast", "fr": "studio de podcast", "en": "podcast studio",
+     "entite": "Episode", "entite_en": "Episode",
+     "champs": [("titre", "String", "titre de l'épisode", "episode title"), ("dureeSecondes", "Int", "durée en secondes", "duration in seconds"),
+                ("publieLe", "DateTime?", "date de publication", "published at"), ("notes", "String", "notes de production", "show notes")]},
+    {"id": "bibliotheque", "fr": "bibliothèque et médiathèque", "en": "library",
+     "entite": "Ouvrage", "entite_en": "Book",
+     "champs": [("titre", "String", "titre de l'ouvrage", "book title"), ("auteur", "String", "auteur", "author"),
+                ("isbn", "String", "ISBN", "ISBN"), ("emprunte", "Boolean", "emprunté", "borrowed")]},
+    {"id": "ecole", "fr": "établissement scolaire", "en": "school administration",
+     "entite": "Eleve", "entite_en": "Student",
+     "champs": [("nom", "String", "nom de l'élève", "student name"), ("classe", "String", "classe", "grade"),
+                ("tuteur", "String", "tuteur légal", "guardian"), ("absences", "Int", "absences cumulées", "absence count")]},
+    {"id": "clinique", "fr": "clinique et cabinet médical", "en": "medical clinic",
+     "entite": "Consultation", "entite_en": "Consultation",
+     "champs": [("patient", "String", "nom du patient", "patient name"), ("motif", "String", "motif de consultation", "visit reason"),
+                ("praticien", "String", "praticien", "practitioner"), ("date", "DateTime", "date de consultation", "appointment date")]},
+    {"id": "location_voitures", "fr": "location de véhicules", "en": "vehicle rental",
+     "entite": "Vehicule", "entite_en": "Vehicle",
+     "champs": [("immatriculation", "String", "immatriculation", "license plate"), ("modele", "String", "modèle", "model"),
+                ("prixJour", "Int", "prix par jour", "price per day"), ("disponible", "Boolean", "disponible", "available")]},
+    {"id": "recrutement", "fr": "recrutement et ATS", "en": "recruiting and ATS",
+     "entite": "Candidature", "entite_en": "Application",
+     "champs": [("candidat", "String", "nom du candidat", "candidate name"), ("poste", "String", "poste visé", "applied position"),
+                ("etape", "EtapeRecrutement", "étape du pipeline", "pipeline stage"), ("score", "Int", "score d'évaluation", "evaluation score")]},
+    {"id": "construction", "fr": "chantier et construction", "en": "construction site",
+     "entite": "Chantier", "entite_en": "Project",
+     "champs": [("nom", "String", "nom du chantier", "project name"), ("client", "String", "client", "client"),
+                ("avancementPct", "Int", "avancement en pour cent", "completion percent"), ("echeance", "DateTime", "échéance", "deadline")]},
+    {"id": "association", "fr": "association et bénévolat", "en": "nonprofit and volunteering",
+     "entite": "Adherent", "entite_en": "Member",
+     "champs": [("nom", "String", "nom de l'adhérent", "member name"), ("cotisationPayee", "Boolean", "cotisation à jour", "dues paid"),
+                ("benevolats", "Int", "heures de bénévolat", "volunteer hours"), ("commission", "String", "commission", "committee")]},
+    {"id": "budget_perso", "fr": "budget personnel", "en": "personal budgeting",
+     "entite": "Transaction", "entite_en": "Transaction",
+     "champs": [("libelle", "String", "libellé", "label"), ("montant", "Int", "montant en centimes", "amount in cents"),
+                ("categorie", "String", "catégorie", "category"), ("date", "DateTime", "date", "date")]},
+    {"id": "recettes", "fr": "livre de recettes", "en": "recipe book",
+     "entite": "Recette", "entite_en": "Recipe",
+     "champs": [("titre", "String", "titre de la recette", "recipe title"), ("minutes", "Int", "temps de préparation", "prep time"),
+                ("portions", "Int", "nombre de portions", "servings"), ("vegetarienne", "Boolean", "végétarienne", "vegetarian")]},
+    {"id": "habitudes", "fr": "suivi d'habitudes", "en": "habit tracking",
+     "entite": "Habitude", "entite_en": "Habit",
+     "champs": [("nom", "String", "nom de l'habitude", "habit name"), ("frequence", "String", "fréquence visée", "target frequency"),
+                ("serieJours", "Int", "série en cours", "current streak"), ("archivee", "Boolean", "archivée", "archived")]},
+    {"id": "wiki", "fr": "wiki interne", "en": "internal wiki",
+     "entite": "Page", "entite_en": "Page",
+     "champs": [("titre", "String", "titre de la page", "page title"), ("slug", "String", "slug d'URL", "url slug"),
+                ("contenu", "String", "contenu Markdown", "markdown content"), ("revision", "Int", "numéro de révision", "revision number")]},
+    {"id": "tickets_transport", "fr": "billetterie et transport", "en": "ticketing and transport",
+     "entite": "Billet", "entite_en": "Ticket",
+     "champs": [("trajet", "String", "trajet", "route"), ("classe", "String", "classe de billet", "ticket class"),
+                ("prix", "Int", "prix en centimes", "price in cents"), ("scanne", "Boolean", "billet scanné", "ticket scanned")]},
+    {"id": "agence_voyage", "fr": "agence de voyage", "en": "travel agency",
+     "entite": "Voyage", "entite_en": "Trip",
+     "champs": [("destination", "String", "destination", "destination"), ("dureeJours", "Int", "durée en jours", "duration in days"),
+                ("prixPersonne", "Int", "prix par personne", "price per person"), ("placesRestantes", "Int", "places restantes", "spots left")]},
+    {"id": "laverie", "fr": "laverie et pressing", "en": "laundry service",
+     "entite": "CommandeLavage", "entite_en": "LaundryOrder",
+     "champs": [("client", "String", "nom du client", "client name"), ("pieces", "Int", "nombre de pièces", "item count"),
+                ("formule", "String", "formule choisie", "selected plan"), ("pret", "Boolean", "commande prête", "order ready")]},
+    {"id": "camping", "fr": "camping et gîtes", "en": "campsite",
+     "entite": "Emplacement", "entite_en": "Pitch",
+     "champs": [("numero", "String", "numéro d'emplacement", "pitch number"), ("type", "String", "type d'emplacement", "pitch type"),
+                ("occupe", "Boolean", "occupé", "occupied"), ("tarifNuit", "Int", "tarif par nuit", "nightly rate")]},
+    {"id": "cantine", "fr": "cantine scolaire", "en": "school cafeteria",
+     "entite": "MenuJour", "entite_en": "DailyMenu",
+     "champs": [("date", "DateTime", "date du menu", "menu date"), ("platPrincipal", "String", "plat principal", "main dish"),
+                ("allergenes", "String", "allergènes", "allergens"), ("inscrits", "Int", "inscrits du jour", "daily signups")]},
+    {"id": "fitness_app", "fr": "application d'entraînement", "en": "workout app",
+     "entite": "Programme", "entite_en": "Program",
+     "champs": [("nom", "String", "nom du programme", "program name"), ("seancesSemaine", "Int", "séances par semaine", "sessions per week"),
+                ("niveau", "String", "niveau requis", "required level"), ("dureeSemaines", "Int", "durée en semaines", "duration in weeks")]},
+    {"id": "freelance", "fr": "gestion de missions freelance", "en": "freelance management",
+     "entite": "Mission", "entite_en": "Mission",
+     "champs": [("client", "String", "nom du client", "client name"), ("tauxJournalier", "Int", "taux journalier", "daily rate"),
+                ("debut", "DateTime", "date de début", "start date"), ("facturee", "Boolean", "mission facturée", "mission invoiced")]},
+    {"id": "proprietaire", "fr": "syndic et copropriété", "en": "property management",
+     "entite": "Lot", "entite_en": "Unit",
+     "champs": [("reference", "String", "référence du lot", "unit reference"), ("proprietaire", "String", "propriétaire", "owner"),
+                ("chargesAnnuelles", "Int", "charges annuelles", "annual charges"), ("impayes", "Int", "impayés en centimes", "arrears in cents")]},
+    {"id": "assurance", "fr": "courtage d'assurance", "en": "insurance brokerage",
+     "entite": "Contrat", "entite_en": "Policy",
+     "champs": [("assure", "String", "nom de l'assuré", "policyholder"), ("garantie", "String", "type de garantie", "coverage type"),
+                ("primeMensuelle", "Int", "prime mensuelle", "monthly premium"), ("resiliation", "DateTime?", "date de résiliation", "cancellation date")]},
+    {"id": "juridique", "fr": "cabinet juridique", "en": "law practice",
+     "entite": "Dossier", "entite_en": "Case",
+     "champs": [("reference", "String", "référence du dossier", "case reference"), ("client", "String", "client", "client"),
+                ("typeAffaire", "String", "type d'affaire", "case type"), ("cloture", "Boolean", "dossier clôturé", "case closed")]},
+    {"id": "agriculture", "fr": "exploitation agricole", "en": "farm management",
+     "entite": "Parcelle", "entite_en": "Field",
+     "champs": [("nom", "String", "nom de la parcelle", "field name"), ("culture", "String", "culture en cours", "current crop"),
+                ("surfaceHa", "Float", "surface en hectares", "area in hectares"), ("prochaineSemis", "DateTime?", "prochain semis", "next sowing")]},
+    {"id": "ideation", "fr": "boîte à idées collaborative", "en": "collaborative idea board",
+     "entite": "Idee", "entite_en": "Idea",
+     "champs": [("titre", "String", "titre de l'idée", "idea title"), ("description", "String", "description", "description"),
+                ("votes", "Int", "nombre de votes", "vote count"), ("statut", "StatutIdee", "statut d'avancement", "progress status")]},
+    {"id": "garderie", "fr": "crèche et garderie", "en": "daycare",
+     "entite": "Enfant", "entite_en": "Child",
+     "champs": [("nom", "String", "nom de l'enfant", "child name"), ("groupe", "String", "groupe d'âge", "age group"),
+                ("tuteur", "String", "tuteur", "guardian"), ("presentAujourdhui", "Boolean", "présent aujourd'hui", "present today")]},
+    {"id": "photographe", "fr": "studio de photographie", "en": "photography studio",
+     "entite": "SeancePhoto", "entite_en": "PhotoSession",
+     "champs": [("client", "String", "nom du client", "client name"), ("type", "String", "type de séance", "session type"),
+                ("date", "DateTime", "date de la séance", "session date"), ("livree", "Boolean", "photos livrées", "photos delivered")]},
+    {"id": "podologie", "fr": "cabinet de podologie", "en": "podiatry practice",
+     "entite": "PatientPodologie", "entite_en": "PodiatryPatient",
+     "champs": [("nom", "String", "nom du patient", "patient name"), ("motif", "String", "motif", "reason"),
+                ("orthese", "Boolean", "orthèse prescrite", "orthotic prescribed"), ("prochainRdv", "DateTime?", "prochain rendez-vous", "next appointment")]},
+    {"id": "auto_ecole", "fr": "auto-école", "en": "driving school",
+     "entite": "EleveConduite", "entite_en": "DrivingStudent",
+     "champs": [("nom", "String", "nom de l'élève", "student name"), ("heuresEffectuees", "Int", "heures effectuées", "completed hours"),
+                ("examenDate", "DateTime?", "date d'examen", "exam date"), ("codeObtenu", "Boolean", "code obtenu", "theory passed")]},
+    {"id": "menage", "fr": "service de ménage à domicile", "en": "home cleaning service",
+     "entite": "InterventionMenage", "entite_en": "CleaningVisit",
+     "champs": [("client", "String", "nom du client", "client name"), ("adresse", "String", "adresse", "address"),
+                ("frequence", "String", "fréquence", "frequency"), ("effectuee", "Boolean", "intervention effectuée", "visit completed")]},
+    {"id": "petit_dej", "fr": "café et petite restauration", "en": "café",
+     "entite": "CommandeCafe", "entite_en": "CafeOrder",
+     "champs": [("numero", "String", "numéro de commande", "order number"), ("articles", "String", "articles commandés", "ordered items"),
+                ("total", "Int", "total en centimes", "total in cents"), ("servie", "Boolean", "commande servie", "order served")]},
+    {"id": "veterinaire_equide", "fr": "centre équestre", "en": "riding school",
+     "entite": "Cavalier", "entite_en": "Rider",
+     "champs": [("nom", "String", "nom du cavalier", "rider name"), ("niveau", "String", "niveau équestre", "riding level"),
+                ("chevalAttitre", "String", "cheval attitré", "assigned horse"), ("abonnementActif", "Boolean", "abonnement actif", "subscription active")]},
+    {"id": "defense_client", "fr": "service après-vente itinérant", "en": "field service",
+     "entite": "VisiteTechnique", "entite_en": "FieldVisit",
+     "champs": [("technicien", "String", "technicien assigné", "assigned technician"), ("client", "String", "client", "client"),
+                ("planifieLe", "DateTime", "planifié le", "scheduled at"), ("terminee", "Boolean", "visite terminée", "visit completed")]},
+    {"id": "honoraires_medecin", "fr": "honoraires et consultations libérales", "en": "private practice billing",
+     "entite": "Acte", "entite_en": "Procedure",
+     "champs": [("code", "String", "code de l'acte", "procedure code"), ("patient", "String", "patient", "patient"),
+                ("montant", "Int", "montant en centimes", "amount in cents"), ("rembourse", "Boolean", "remboursé", "reimbursed")]},
+    {"id": "petites_annonces", "fr": "petites annonces locales", "en": "local classifieds",
+     "entite": "AnnonceLocale", "entite_en": "Classified",
+     "champs": [("titre", "String", "titre de l'annonce", "ad title"), ("categorie", "String", "catégorie", "category"),
+                ("prix", "Int?", "prix demandé", "asking price"), ("expireLe", "DateTime", "date d'expiration", "expiry date")]},
+    {"id": "covoiturage", "fr": "covoiturage d'entreprise", "en": "corporate carpooling",
+     "entite": "Trajet", "entite_en": "Ride",
+     "champs": [("conducteur", "String", "conducteur", "driver"), ("depart", "String", "point de départ", "departure point"),
+                ("arrivee", "String", "destination", "destination"), ("placesLibres", "Int", "places libres", "free seats")]},
+    {"id": "benne", "fr": "location de bennes et travaux", "en": "skip hire",
+     "entite": "Benne", "entite_en": "Skip",
+     "champs": [("reference", "String", "référence de la benne", "skip reference"), ("volumeM3", "Int", "volume en m³", "volume in m³"),
+                ("livreeLe", "DateTime?", "livrée le", "delivered at"), ("reprise", "Boolean", "reprise planifiée", "pickup scheduled")]},
+    {"id": "formation_interne", "fr": "formation interne d'entreprise", "en": "corporate training",
+     "entite": "Formation", "entite_en": "Training",
+     "champs": [("titre", "String", "titre de la formation", "training title"), ("formateur", "String", "formateur", "trainer"),
+                ("session", "DateTime", "date de session", "session date"), ("places", "Int", "places disponibles", "available seats")]},
+    {"id": "chantier_artisan", "fr": "artisan et devis", "en": "craftsman quotes",
+     "entite": "Devis", "entite_en": "Quote",
+     "champs": [("reference", "String", "référence du devis", "quote reference"), ("client", "String", "client", "client"),
+                ("total", "Int", "total en centimes", "total in cents"), ("accepte", "Boolean", "devis accepté", "quote accepted")]},
+    {"id": "petit_culte", "fr": "gestion de petit groupe communautaire", "en": "small community group",
+     "entite": "MembreCommunaute", "entite_en": "CommunityMember",
+     "champs": [("nom", "String", "nom du membre", "member name"), ("groupe", "String", "groupe", "group"),
+                ("presence", "Int", "présences cumulées", "attendance count"), ("contact", "String", "contact", "contact")]},
+    {"id": "studio_musique", "fr": "studio de répétition", "en": "rehearsal studio",
+     "entite": "ReservationStudio", "entite_en": "StudioBooking",
+     "champs": [("groupe", "String", "nom du groupe", "band name"), ("salle", "String", "salle réservée", "booked room"),
+                ("debut", "DateTime", "début de la réservation", "booking start"), ("payee", "Boolean", "réservation payée", "booking paid")]},
+    {"id": "conseil", "fr": "cabinet de conseil", "en": "consulting firm",
+     "entite": "Engagement", "entite_en": "Engagement",
+     "champs": [("client", "String", "client", "client"), ("perimetre", "String", "périmètre", "scope"),
+                ("joursVendus", "Int", "jours vendus", "sold days"), ("cloture", "Boolean", "mission clôturée", "engagement closed")]},
+    {"id": "vehicule_flotte", "fr": "gestion de flotte", "en": "fleet management",
+     "entite": "VehiculeFlotte", "entite_en": "FleetVehicle",
+     "champs": [("immatriculation", "String", "immatriculation", "license plate"), ("kmActuels", "Int", "kilométrage", "current mileage"),
+                ("prochainEntretien", "DateTime", "prochain entretien", "next service"), ("attribueA", "String?", "attribué à", "assigned to")]},
+]
+
+# ---------------------------------------------------------------------------
+# FONCTIONNALITÉS (FR/EN) — le cœur de la demande utilisateur.
+# ---------------------------------------------------------------------------
+
+FONCTIONNALITES: List[Tuple[str, str]] = [
+    ("l'authentification par e-mail et mot de passe", "email and password authentication"),
+    ("la gestion des rôles et permissions", "roles and permissions management"),
+    ("un tableau de bord avec indicateurs clés", "a dashboard with key metrics"),
+    ("la création et l'édition des fiches", "record creation and editing"),
+    ("les paiements par carte et abonnements récurrents", "card payments and recurring subscriptions"),
+    ("les webhooks de facturation sécurisés", "secure billing webhooks"),
+    ("l'envoi d'e-mails transactionnels", "transactional email sending"),
+    ("les notifications in-app et par e-mail", "in-app and email notifications"),
+    ("la recherche plein texte avec filtres", "full-text search with filters"),
+    ("l'export CSV et Excel", "CSV and Excel export"),
+    ("l'import de fichiers en masse", "bulk file import"),
+    ("le téléversement et le stockage de documents", "document upload and storage"),
+    ("une galerie de médias avec miniatures", "a media gallery with thumbnails"),
+    ("un calendrier de planification", "a scheduling calendar"),
+    ("un chat interne entre utilisateurs", "internal user chat"),
+    ("des commentaires et mentions", "comments and mentions"),
+    ("les avis et notations", "reviews and ratings"),
+    ("la géolocalisation des demandes", "request geolocation"),
+    ("le support multilingue (FR/EN)", "multilingual support (FR/EN)"),
+    ("le thème clair et sombre", "light and dark theme"),
+    ("le mode hors-ligne (PWA installable)", "offline mode (installable PWA)"),
+    ("des statistiques d'usage", "usage analytics"),
+    ("un journal d'audit des actions", "an action audit log"),
+    ("le multi-tenant avec cloisonnement strict", "strict multi-tenancy isolation"),
+    ("une API publique documentée", "a documented public API"),
+    ("la limitation de débit par utilisateur", "per-user rate limiting"),
+    ("le cache des pages fréquentes", "caching for frequent pages"),
+    ("l'optimisation SEO (sitemap, métadonnées)", "SEO optimization (sitemap, metadata)"),
+    ("les tests automatisés et l'intégration continue", "automated tests and continuous integration"),
+    ("le déploiement conteneurisé reproductible", "reproducible containerized deployment"),
+    ("la sauvegarde et restauration des données", "data backup and restore"),
+    ("l'accessibilité clavier et lecteur d'écran", "keyboard and screen-reader accessibility"),
+    ("la facturation en PDF téléchargeable", "downloadable PDF invoicing"),
+    ("des signatures électroniques", "electronic signatures"),
+    ("une file d'attente des traitements longs", "a queue for long-running jobs"),
+    ("des rapports périodiques automatiques", "automated periodic reports"),
+    ("le suivi des temps et activités", "time and activity tracking"),
+    ("l'assignation et les mentions aux équipes", "team assignment and mentions"),
+    ("un tableau kanban personnalisable", "a customizable kanban board"),
+    ("des modèles de documents réutilisables", "reusable document templates"),
+]
+
+# ---------------------------------------------------------------------------
+# STACKS — familles de snippets réels (route API, modèle de données,
+# composant d'interface, test, déploiement).
+# ---------------------------------------------------------------------------
+
+STACKS: List[Tuple[str, str, str]] = [
+    # (id, libellé FR, libellé EN)
+    ("next-prisma", "Next.js (App Router) + Prisma + PostgreSQL", "Next.js (App Router) + Prisma + PostgreSQL"),
+    ("next-r2", "Next.js + stockage R2 (documents JSON)", "Next.js + R2 storage (JSON documents)"),
+    ("react-express", "React + Vite + Express + PostgreSQL", "React + Vite + Express + PostgreSQL"),
+    ("vue-laravel", "Vue 3 + Laravel + MySQL", "Vue 3 + Laravel + MySQL"),
+    ("svelte-fastapi", "SvelteKit + FastAPI + SQLAlchemy", "SvelteKit + FastAPI + SQLAlchemy"),
+    ("django-htmx", "Django + HTMX + PostgreSQL", "Django + HTMX + PostgreSQL"),
+    ("remix-prisma", "Remix + Prisma + PostgreSQL", "Remix + Prisma + PostgreSQL"),
+    ("angular-nestjs", "Angular + NestJS + MongoDB", "Angular + NestJS + MongoDB"),
+    ("astro-tailwind", "Astro + Tailwind CSS", "Astro + Tailwind CSS"),
+    ("php-symfony", "PHP Symfony + Doctrine + MySQL", "PHP Symfony + Doctrine + MySQL"),
+    ("rails-postgres", "Ruby on Rails + PostgreSQL", "Ruby on Rails + PostgreSQL"),
+    ("go-react", "Go (Gin) + React + PostgreSQL", "Go (Gin) + React + PostgreSQL"),
+    ("flask-sqlalchemy", "Flask + SQLAlchemy + PostgreSQL", "Flask + SQLAlchemy + PostgreSQL"),
+    ("node-vanilla", "Node.js (sans framework) + PostgreSQL", "Node.js (no framework) + PostgreSQL"),
+]
+
+# ---------------------------------------------------------------------------
+# FORMULATIONS DE LA DEMANDE (motif utilisateur) — FR/EN.
+# {niche}, {feature}, {stack}, {echelle}, {delai}, {equipe} sont substitués.
+# ---------------------------------------------------------------------------
+
+FORMULATIONS_FR: List[str] = [
+    "Je veux créer un SaaS de {niche} avec {feature}. Quelle stack choisir et comment démarrer ?",
+    "Aide-moi à construire une application de {niche} qui intègre {feature}, pour une équipe de {equipe} en {delai}.",
+    "Quelle architecture me conseilles-tu pour un SaaS de {niche} à l'échelle {echelle}, avec {feature} ?",
+    "Donne-moi un plan de développement complet pour une plateforme de {niche} avec {feature}.",
+    "Je dois livrer un outil de {niche} avec {feature} : propose la stack, le schéma de données et les étapes.",
+    "Comment structurer un projet web de {niche} incluant {feature} sans dette technique ?",
+    "Conçois le squelette d'un SaaS de {niche} : modules, données, API et {feature}.",
+    "Je démarre une activité de {niche} : de quoi ai-je besoin côté application pour {feature} ?",
+    "Établis le plan technique d'une web app de {niche} — {feature} — adaptée à un budget {budget}.",
+    "Quels modules développer en priorité pour un SaaS de {niche} offrant {feature} ?",
+    "Propose une feuille de route de développement pour un service de {niche} avec {feature}.",
+    "Je veux lancer un produit web de {niche} ({feature}) : stack, données, sécurité, déploiement.",
+    "Fais-moi une proposition d'architecture pour {niche} en ligne avec {feature}.",
+    "Comment implémenter {feature} proprement dans une application de {niche} ?",
+    "Détaille la conception d'un MVP de {niche} avec {feature}, prête à évoluer.",
+    "Construis un plan de projet web : {niche} + {feature}, équipe de {equipe}, échéance {delai}.",
+]
+
+FORMULATIONS_EN: List[str] = [
+    "I want to build a {niche} SaaS with {feature}. Which stack should I pick and how do I start?",
+    "Help me build a {niche} application that includes {feature}, for a team of {equipe} within {delai}.",
+    "What architecture do you recommend for a {niche} SaaS at {echelle} scale, with {feature}?",
+    "Give me a full development plan for a {niche} platform featuring {feature}.",
+    "I need to ship a {niche} tool with {feature}: propose the stack, the data model and the steps.",
+    "How should I structure a {niche} web project that includes {feature} without technical debt?",
+    "Design the skeleton of a {niche} SaaS: modules, data, API and {feature}.",
+    "I'm launching a {niche} business: what does the application need for {feature}?",
+    "Write the technical plan for a {niche} web app — {feature} — within a {budget} budget.",
+    "Which modules should I build first for a {niche} SaaS that offers {feature}?",
+    "Propose a development roadmap for a {niche} service with {feature}.",
+    "I want to launch a {niche} web product ({feature}): stack, data, security, deployment.",
+    "Draft an architecture proposal for an online {niche} service with {feature}.",
+    "How do I implement {feature} cleanly inside a {niche} application?",
+    "Detail the design of a {niche} MVP with {feature}, ready to scale.",
+    "Build a web project plan: {niche} + {feature}, team of {equipe}, deadline {delai}.",
+]
+
+ECHELLES: List[Tuple[str, str]] = [
+    ("quelques centaines d'utilisateurs", "a few hundred users"),
+    ("plusieurs milliers d'utilisateurs", "several thousand users"),
+    ("dizaines de milliers d'utilisateurs", "tens of thousands of users"),
+    ("multi-pays avec pics de trafic", "multi-country with traffic spikes"),
+]
+
+DELais: List[Tuple[str, str]] = [
+    ("un mois", "one month"),
+    ("trois mois", "three months"),
+    ("six mois", "six months"),
+    ("un trimestre glissant", "a rolling quarter"),
+]
+
+EQUIPES: List[Tuple[str, str]] = [
+    ("un développeur solo", "a solo developer"),
+    ("deux développeurs", "two developers"),
+    ("une équipe de quatre personnes", "a four-person team"),
+    ("une équipe pluridisciplinaire", "a cross-functional team"),
+]
+
+BUDGETS: List[Tuple[str, str]] = [
+    ("serré (open source uniquement)", "tight (open source only)"),
+    ("modéré", "moderate"),
+    ("confortable", "comfortable"),
+    ("structure d'entreprise", "enterprise-grade"),
+]
+
+PUBLICS: List[Tuple[str, str]] = [
+    ("des PME", "small businesses"),
+    ("des indépendants", "freelancers"),
+    ("des grandes entreprises", "enterprise customers"),
+    ("des associations", "nonprofits"),
+    ("des particuliers", "individual users"),
+]
+
+MODELES_ECO: List[Tuple[str, str]] = [
+    ("abonnement mensuel par palier", "tiered monthly subscription"),
+    ("facturation à l'usage", "usage-based billing"),
+    ("gratuit avec options premium", "freemium with premium add-ons"),
+    ("licence annuelle", "annual license"),
+]
+
+# ---------------------------------------------------------------------------
+# TYPES DE TÂCHES (task_type) et poids — le cœur du corpus dev.
+# ---------------------------------------------------------------------------
+
+TACHES: List[Tuple[str, float]] = [
+    ("creation_saas", 0.20),
+    ("site_web_vitrine", 0.12),
+    ("webapp_metier", 0.13),
+    ("api_backend", 0.12),
+    ("donnees_modeles", 0.11),
+    ("auth_securite", 0.08),
+    ("ui_composants", 0.10),
+    ("deploiement_ops", 0.06),
+    ("tests_qualite", 0.05),
+    ("debug_correction", 0.03),
+]
+
+GABARITS_REPONSE: int = 4  # variantes d'ouverture/structure par tâche
+
+
+def niches_par_id() -> Dict[str, Dict]:
+    return {n["id"]: n for n in NICHES}
+
+
+def libelle_stack(stack_id: str, langue: str) -> str:
+    for sid, fr, en in STACKS:
+        if sid == stack_id:
+            return fr if langue == "fr" else en
+    raise KeyError(stack_id)
