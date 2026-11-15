@@ -25,6 +25,12 @@ import { HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
+import {
+  composerDepuisRechercheWeb,
+  composerRepliHonnete,
+  savoirInsuffisant,
+  type ResultatRechercheWeb,
+} from "./recherche-web-pont";
 import { composerDepuisVocation } from "./vocation-pont";
 import { detecterMethodeRaisonnement } from "../gen3/familles-methodes";
 // it.73 — SOBRIÉTÉ ÉNERGÉTIQUE : profils plein (historique exact) / eco /
@@ -66,7 +72,9 @@ export type SourceLangage =
   | "compartiment_monde"
   | "compartiment_terminal"
   | "memoire_utilisateur"
-  | "memoire_dev_web";
+  | "memoire_dev_web"
+  | "recherche_web"
+  | "repli_honnete";
 
 /** Résultat de consultation de la mémoire utilisateur (Studio) — le texte
  * servi et son score d'appariement réels. */
@@ -321,6 +329,19 @@ export class NeuralEngine {
      * (textes, datasets, URLs du Studio). Absent → chaîne historique.
      */
     private readonly memoireUtilisateur?: ConsultationMemoireUtilisateur,
+    /**
+     * GARANTIE DE RÉPONSE — RECHERCHE WEB AUTOMATIQUE : injecteur réel
+     * (câblé par le runtime avec l'outil web.search de la plateforme).
+     * Quand la matière interne est INSUFFISANTE (aucune source réelle —
+     * pilotage, connaissances, compartiments, mémoire utilisateur, corpus —
+     * ou repli décodeur générique), le moteur appelle cet injecteur AVANT de
+     * répondre : gen3 ne laisse JAMAIS un utilisateur sans réponse — soit une
+     * réponse fondée sur les sources web citées, soit un repli honnête
+     * explicite. Absent (tests sans filet) → comportement inchangé.
+     */
+    private readonly rechercheWebAuto?: (
+      requete: string,
+    ) => Promise<ResultatRechercheWeb[] | null>,
   ) {}
 
   /**
@@ -519,7 +540,7 @@ export class NeuralEngine {
     // PONT VOCATION (it.66) : une question qui tombe dans le cadre
     // d'apprentissage (19 domaines de la charte) reçoit une réponse
     // ancrée dans ce cadre — AVANT le repli cortex/décodeur.
-    const composition =
+    const compositionBrute =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
       // STUDIO D'ENTRAÎNEMENT — MÉMOIRE UTILISATEUR : l'IA entraînée répond
@@ -543,6 +564,8 @@ export class NeuralEngine {
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+    // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
+    const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
     this.memoriser(messageUtilisateur, composition.texte, memoire);
     this.evoluer(messageUtilisateur, composition);
 
@@ -653,7 +676,7 @@ export class NeuralEngine {
     const domaine = detecterDomaine(messageUtilisateur);
     // PONT VOCATION (it.66) : même chaîne que generate() — le chemin réel
     // du chat répond depuis le cadre d'apprentissage quand la question y tombe.
-    const composition =
+    const compositionBrute =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
       // STUDIO D'ENTRAÎNEMENT — MÉMOIRE UTILISATEUR (même règle que generate).
@@ -666,6 +689,9 @@ export class NeuralEngine {
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+
+    // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
+    const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
 
     // La réponse composée est émise par segments (phrases réelles). Les
     // télémétries de cycles restent disponibles dans raw (plus de bruit de
@@ -747,7 +773,7 @@ export class NeuralEngine {
     const domaine = detecterDomaine(messageUtilisateur);
     // PONT VOCATION (it.66) : variante générateur — même ancrage vocation
     // que les deux chemins principaux (génération et flux).
-    const composition =
+    const compositionBrute =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       // STUDIO D'ENTRAÎNEMENT — MÉMOIRE UTILISATEUR (même règle que generate).
       (await this.compositionMemoireUtilisateur(messageUtilisateur, options)) ??
@@ -759,6 +785,9 @@ export class NeuralEngine {
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+
+    // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
+    const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
 
     for (const segment of segmenterTexte(composition.texte)) {
       yield segment;
@@ -1014,6 +1043,39 @@ export class NeuralEngine {
   }
 
   /**
+   * GARANTIE DE RÉPONSE — le filet de sécurité du moteur (directive : gen3
+   * ne laisse JAMAIS un utilisateur sans réponse).
+   *
+   * Si la matière interne est suffisante (pilotage, connaissances, mémoire
+   * utilisateur, compartiments, corpus bien apparié…), la composition passe
+   * telle quelle. Sinon :
+   *  1. injecteur présent → RECHERCHE WEB AUTOMATIQUE réelle ; des résultats
+   *     pertinents deviennent une réponse fondée sur les sources citées ;
+   *  2. recherche échouée ou sans résultat exploitable → REPLI HONNÊTE :
+   *     réponse explicite, non vide, avec les voies concrètes pour l'utilisateur.
+   *
+   * Sans injecteur (intégrations minimales, tests) : comportement historique
+   * inchangé — le runtime de production câble toujours l'injecteur réel.
+   */
+  private async garantirReponse(
+    message: string,
+    composition: CompositionReponse,
+  ): Promise<CompositionReponse> {
+    if (!savoirInsuffisant(composition)) return composition;
+    if (!this.rechercheWebAuto) return composition;
+    let resultats: ResultatRechercheWeb[] | null = null;
+    try {
+      resultats = await this.rechercheWebAuto(message.slice(0, 300));
+    } catch {
+      // Recherche impossible (réseau, quota…) : le repli honnête prend le relais.
+    }
+    const fondée = resultats?.length
+      ? composerDepuisRechercheWeb(message, resultats)
+      : null;
+    return fondée ?? composerRepliHonnete(message, composition);
+  }
+
+  /**
    * Mémorise l'échange dans l'hippocampe (mémoire de travail) : le tour
    * suivant disposera du contexte de reprise. Échec silencieux (jamais de
    * panne de chat pour une mémoire).
@@ -1209,7 +1271,7 @@ export class NeuralEngine {
     prompt: string,
   ): Promise<NeuralAIResponse | null> {
     const knowledgeContext = options.knowledgeContext?.trim() ?? "";
-    const composition =
+    const compositionBrute =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext
         ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext)
@@ -1221,7 +1283,11 @@ export class NeuralEngine {
       // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel borné (voir compositionMemoireDevWeb).
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur);
-    if (!composition) return null;
+    if (!compositionBrute) return null;
+
+    // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli
+    // honnête (le court-circuit ne court-circuite PAS la garantie).
+    const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
 
     const memoire = this.memoirePour(options);
     const domaine = detecterDomaine(messageUtilisateur);
