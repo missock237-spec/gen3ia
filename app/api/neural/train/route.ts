@@ -7,6 +7,7 @@ import { errorStatus } from "@/lib/security/http-errors";
 
 import { getDernierJob, lancerEntrainement } from "@/lib/neural/training/job";
 import { getNeuralRuntime } from "@/lib/neural/runtime";
+import { TAILLE_ESPACE_ONDES_MULTIMODAL } from "@/lib/neural/generation/memoire-ondes-multimodales";
 
 /**
  * ENTRAÎNEMENT NEURONAL — lance (admin) ou observe (tous) l'entraînement réel
@@ -19,6 +20,10 @@ import { getNeuralRuntime } from "@/lib/neural/runtime";
  * it.57 : source « ondes » = entraînement PAR ONDES (analyse + traitement
  * d'ondes sur le cortex v1M, domaines choisis — cf.
  * docs/entrainement/methode-ondes.md).
+ * it.58 : option ondesMultimodales — échantillons SYNTHÉTIQUES adressables
+ * de la mémoire ondes multimodales injectés dans la session « ondes »
+ * (tracés séparément dans job.ondesMultimodales, jamais déguisés en
+ * données humaines).
  * GET : progression du job en cours / dernier rapport.
  */
 export const dynamic = "force-dynamic";
@@ -37,6 +42,16 @@ const TrainBodySchema = z.object({
   complet: z.boolean().optional(),
   // it.57 — domaines CHOISIS pour l'entraînement par ondes (vide = les 18).
   domainesOndes: z.array(z.string().trim().min(1).max(80)).max(24).optional(),
+  // it.58 — mémoire ondes multimodales : échantillons SYNTHÉTIQUES
+  // adressables (grammaires métier) injectés dans la session « ondes ».
+  // debut ∈ [0, TAILLE_ESPACE_ONDES_MULTIMODAL), quantite ≤ 50 000 —
+  // la session EOD applique ensuite son propre cap par domaine.
+  ondesMultimodales: z
+    .object({
+      debut: z.number().int().min(0).max(TAILLE_ESPACE_ONDES_MULTIMODAL - 1),
+      quantite: z.number().int().min(1).max(50_000),
+    })
+    .optional(),
 });
 
 export async function POST(request: NextRequest) {

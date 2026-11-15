@@ -7,3 +7,4 @@ export * from "./audio";
 export * from "./visual";
 export * from "./video";
 export * from "./voice-phone";
+export * from "./media-bridge";
