@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { MoteurRenduSpatiotemporel, MAX_TRAMES } from "@/lib/ondes/rendu-spatiotemporel";
+import {
+  MoteurRenduSpatiotemporel,
+  MAX_TRAMES,
+  rasteriserTrame,
+} from "@/lib/ondes/rendu-spatiotemporel";
 import { BORNES_RPIA } from "@/lib/ondes/types-entrainement";
 
 describe("rendu spatiotemporel par ondes (miroir node.amplitude 3D)", () => {
@@ -55,6 +59,34 @@ describe("rendu spatiotemporel par ondes (miroir node.amplitude 3D)", () => {
     }
   });
 
+  it("rapport vidéo : mesure le vrai état initial puis l'erreur après chaque mise à jour", () => {
+    const moteur = new MoteurRenduSpatiotemporel(32, 24, 32, { graine: 19 });
+    const cible = new Float32Array(32).fill(0.4);
+    const erreurAvant = moteur.erreurCourante(cible, 0);
+
+    const rapport = moteur.entrainerVers(cible, 7, 0.5);
+
+    expect(rapport.erreurInitiale).toBeCloseTo(erreurAvant, 10);
+    expect(rapport.historiqueErreur).toHaveLength(7);
+    expect(rapport.erreurFinale).toBeCloseTo(rapport.historiqueErreur[6]!, 10);
+    expect(rapport.erreurFinale).toBeCloseTo(moteur.erreurCourante(cible, 0.6), 10);
+  });
+
+  it("refuse les paramètres invalides sans corrompre l'état du champ", () => {
+    const moteur = new MoteurRenduSpatiotemporel(32, 24, 32);
+    const cible = new Float32Array(32).fill(0.25);
+    const avant = moteur.etat();
+
+    expect(() => moteur.pasGuidage(cible, Number.NaN, 0)).toThrow(/Guidage invalide/);
+    expect(() => moteur.pasGuidage(cible, 0.5, Number.NaN)).toThrow(/Temps vidéo invalide/);
+    expect(() =>
+      moteur.entrainerVers(cible, 4, 0.5, { tauxApprentissage: 0.01, pasDeTemps: Number.NaN }),
+    ).toThrow(/Configuration vidéo invalide/);
+    expect(() => moteur.genererSequence(Number.NaN, 24, cible)).toThrow(/Durée vidéo invalide/);
+
+    expect(moteur.etat()).toEqual(avant);
+  });
+
   it("séquence : la boucle d'enregistrement produit le bon nombre de trames (garde MAX_TRAMES)", () => {
     const moteur = new MoteurRenduSpatiotemporel(64, 48, 256);
     const cible = new Float32Array(256).fill(0.5);
@@ -70,6 +102,23 @@ describe("rendu spatiotemporel par ondes (miroir node.amplitude 3D)", () => {
     // Garde-fou : une demande absurde est plafonnée, jamais explosée.
     const garde = moteur.genererSequence(3600, 60, cible);
     expect(garde.totalTrames).toBe(MAX_TRAMES);
+  });
+
+  it("rasteriseur exporté : refuse un temps invalide, aucun nœud ou des paramètres non finis", () => {
+    expect(() => rasteriserTrame([], 16, 16, 0)).toThrow(/au moins un nœud/);
+    const noeud = {
+      amplitude: 1,
+      frequence: 1,
+      phase: 0,
+      amortissement: 0.01,
+      posX: 8,
+      posY: 8,
+    };
+    expect(() => rasteriserTrame([noeud], 16, 16, Number.NaN)).toThrow(/Temps de rendu invalide/);
+    expect(() => rasteriserTrame([{ ...noeud, phase: Number.NaN }], 16, 16, 0)).toThrow(
+      /Nœud vidéo invalide/,
+    );
+    expect(() => rasteriserTrame([noeud], 0, 16, 0)).toThrow(/Dimensions de trame invalides/);
   });
 
   it("entrées invalides refusées (dimensions, nœuds, fps, cible)", () => {

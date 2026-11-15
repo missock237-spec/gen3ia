@@ -16,6 +16,49 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     expect(reseau.neurones.size).toBe(couche.taille);
   });
 
+  it("les énergies d'injection reflètent la phase de l'onde, pas seulement son amplitude", () => {
+    const coucheA = new CoucheOndesNeuronales(100, { graine: 42 });
+    const etatB = coucheA.exporterEtat();
+    for (let i = 0; i < etatB.taille; i++) {
+      etatB.poids[i * 4 + 2] += Math.PI;
+    }
+    const coucheB = new CoucheOndesNeuronales(100, { graine: 42 });
+    coucheB.importerEtat(etatB);
+
+    const energiesA = coucheA.energiesResonance();
+    const energiesB = coucheB.energiesResonance();
+    let distance = 0;
+    for (let i = 0; i < 100; i++) {
+      distance += Math.abs((energiesA[i] ?? 0) - (energiesB[i] ?? 0));
+    }
+
+    expect(distance).toBeGreaterThan(1);
+    for (const energie of [...Object.values(energiesA), ...Object.values(energiesB)]) {
+      expect(energie).toBeGreaterThan(0);
+      expect(energie).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  it("préserve le pas de temps demandé dans l'état exporté et restauré", () => {
+    const config = { tauxApprentissage: 0.01, pasDeTemps: 0.25 };
+    const source = new CoucheOndesNeuronales(32, { graine: 43 });
+    source.entrainerVersTexte("checkpoint avec horloge personnalisée", 15, config);
+    const etat = source.exporterEtat();
+
+    expect(etat.pasDeTemps).toBe(0.25);
+
+    const copie = new CoucheOndesNeuronales(32, { graine: 43 });
+    copie.importerEtat(JSON.parse(JSON.stringify(etat)));
+    expect(copie.exporterEtat().pasDeTemps).toBe(0.25);
+    expect(copie.pasTotaux).toBe(source.pasTotaux);
+    const energiesSource = source.energiesResonance();
+    const energiesCopie = copie.energiesResonance();
+    expect(Object.keys(energiesCopie)).toEqual(Object.keys(energiesSource));
+    for (const [id, energieSource] of Object.entries(energiesSource)) {
+      expect(energiesCopie[Number(id)]).toBeCloseTo(energieSource, 6);
+    }
+  });
+
   it("l'entraînement RPIA converge réellement vers l'onde cible du texte", () => {
     const couche = new CoucheOndesNeuronales(256);
     const rapport = couche.entrainerVersTexte("rédiger un rapport d'analyse de données", 200);
@@ -82,8 +125,8 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     couche.entrainerVersTexte("contrôle de cohérence de données", 50);
     const etat = couche.exporterEtat();
 
-    // JSON-safe : sérialisation/désérialisation réelle (poids arrondis
-    // 1e-6 → reprise quasi identique, précision 1e-3 vérifiée honnêtement).
+    // JSON-safe : sérialisation/désérialisation réelle ; l'état est restauré
+    // sans ré-entraînement et l'erreur est vérifiée à une tolérance numérique explicite.
     const copie = new CoucheOndesNeuronales(64);
     copie.importerEtat(JSON.parse(JSON.stringify(etat)));
 
@@ -91,6 +134,63 @@ describe("couche d'ondes neuronales RPIA (pont résonance → cerveau)", () => {
     const erreurSource = couche.entraineurErreurCourante(cible);
     const erreurCopie = copie.entraineurErreurCourante(cible);
     expect(erreurCopie).toBeCloseTo(erreurSource, 3);
+  });
+
+  it("étend un ancien état RPIA en préservant les poids appris et les nouveaux nœuds", () => {
+    const source = new CoucheOndesNeuronales(8, { graine: 45 });
+    source.resonnerVersTexte("mémoire ondulatoire à préserver", 20);
+    const etatSource = source.exporterEtat();
+
+    const cible = new CoucheOndesNeuronales(12, { graine: 45 });
+    const nouveauxNoeudsAvant = cible.noeuds().slice(8);
+    cible.importerEtatEtendu(etatSource);
+
+    const noeudsSource = source.noeuds();
+    const noeudsCible = cible.noeuds();
+    for (let i = 0; i < 8; i++) {
+      expect(noeudsCible[i].amplitude).toBeCloseTo(noeudsSource[i].amplitude, 5);
+      expect(noeudsCible[i].frequence).toBeCloseTo(noeudsSource[i].frequence, 5);
+      expect(noeudsCible[i].phase).toBeCloseTo(noeudsSource[i].phase, 5);
+      expect(noeudsCible[i].amortissement).toBeCloseTo(noeudsSource[i].amortissement, 5);
+    }
+    const nouveauxNoeudsApres = noeudsCible.slice(8);
+    for (let i = 0; i < nouveauxNoeudsAvant.length; i++) {
+      expect(nouveauxNoeudsApres[i].amplitude).toBeCloseTo(nouveauxNoeudsAvant[i].amplitude, 5);
+      expect(nouveauxNoeudsApres[i].frequence).toBeCloseTo(nouveauxNoeudsAvant[i].frequence, 5);
+      expect(nouveauxNoeudsApres[i].phase).toBeCloseTo(nouveauxNoeudsAvant[i].phase, 5);
+      expect(nouveauxNoeudsApres[i].amortissement).toBeCloseTo(nouveauxNoeudsAvant[i].amortissement, 5);
+    }
+    expect(cible.pasTotaux).toBe(etatSource.pasTotaux);
+  });
+
+  it("refuse une extension impossible sans modifier la couche cible", () => {
+    const cible = new CoucheOndesNeuronales(8, { graine: 12 });
+    const avant = cible.exporterEtat();
+    expect(() => cible.importerEtatEtendu({ taille: 9, pasTotaux: 1, poids: new Array(36).fill(0.1) })).toThrow(
+      /Extension impossible/,
+    );
+    expect(cible.exporterEtat()).toEqual(avant);
+  });
+
+  it("refuse un checkpoint ondulatoire corrompu sans altérer l'état courant", () => {
+    const couche = new CoucheOndesNeuronales(8);
+    couche.resonnerVersTexte("checkpoint valide", 4);
+    const avant = couche.exporterEtat();
+
+    const poidsNan = avant.poids.slice();
+    poidsNan[2] = Number.NaN;
+    expect(() => couche.importerEtat({ ...avant, poids: poidsNan })).toThrow(/État RPIA invalide/);
+    expect(couche.exporterEtat()).toEqual(avant);
+
+    const poidsNull = avant.poids.slice();
+    (poidsNull as unknown[])[3] = null;
+    expect(() => couche.importerEtat({ ...avant, poids: poidsNull })).toThrow(/État RPIA invalide/);
+    expect(couche.exporterEtat()).toEqual(avant);
+
+    expect(() => couche.importerEtat({ ...avant, pasTotaux: Number.NaN })).toThrow(
+      /Compteur de pas invalide/,
+    );
+    expect(couche.exporterEtat()).toEqual(avant);
   });
 
   it("entrées invalides refusées (taille, texte vide, état incompatible)", () => {
