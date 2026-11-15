@@ -97,6 +97,17 @@ export const POLL_ADVANCE_BUDGET_MS = 55_000;
 /** Échéance d'un tick au-delà de laquelle on re-file le job (continuation). */
 const TICK_DEADLINE_MS = 230_000;
 
+/**
+ * Demande propriétaire 2026-11-15 (« gen3 doit pouvoir librement créer des
+ * vidéos ») : un rendu BLOQUÉ (bail expiré — worker tué, tick perdu ; ou
+ * `queued` dont le tick n'a jamais été délivré — publication de file en
+ * échec, studio fermé) ne doit JAMAIS consommer un slot de concurrence ni
+ * occuper la file éternellement. Au-delà de ce seuil d'immobilité, le job
+ * est récolté : bail expiré → régime de reprise (failJob) ; queued muet →
+ * republication du tick (il avance au prochain slot libre).
+ */
+const SEUIL_RENDU_BLOQUE_MS = 10 * 60_000;
+
 // ────────────────────────────────────────────────────────────────────────────
 // Démarrage d'un rendu
 // ────────────────────────────────────────────────────────────────────────────
@@ -122,10 +133,25 @@ export async function startRenderJob(params: {
     throw new Error("Aucune image de scène — générez d'abord les visuels (generate-assets).");
   }
 
-  // Limite de rendus concurrents.
-  const running = await countRunningRenders(params.userId);
-  if (running >= VIDEO_LIMITS.maxConcurrentRenders) {
-    throw new VideoQuotaError(`Vous avez déjà ${running} rendu(s) en cours (limite ${VIDEO_LIMITS.maxConcurrentRenders}). Pausez-en un ou attendez la fin.`);
+  // DEMANDE PROPRIÉTAIRE 2026-11-15 — « gen3 doit pouvoir librement créer
+  // des vidéos ». L'ancien comportement refusait le lancement dès que 2 jobs
+  // `processing` OU `queued` existaient — or un job bloqué (bail expiré sans
+  // worker, tick jamais délivré) restait compté POUR TOUJOURS (le sweep
+  // global ne récolte que les `processing`, et seulement si le studio ou le
+  // cron tourne) : 2 rendus coincés = production vidéo morte pour
+  // l'utilisateur. Désormais :
+  //  1. récolte AVANT comptage — un job bloqué est repris/re-file ici même ;
+  //  2. les `queued` sont une FILE D'ATTENTE (ils attendent un slot libre au
+  //     claim, voir advanceJob) et ne comptent PAS dans la concurrence ;
+  //  3. seule la FILE est plafonnée (maxQueuedRenders) — jamais un refus
+  //     tant qu'il reste de la place d'attente.
+  await recolterRendusBloques(params.userId).catch(() => undefined);
+  const file = await etatFileRendus(params.userId);
+  const occupes = file.processingActifs + file.queued;
+  if (occupes >= VIDEO_LIMITS.maxQueuedRenders) {
+    throw new VideoQuotaError(
+      `Votre file de rendu est pleine (${occupes}/${VIDEO_LIMITS.maxQueuedRenders} — rendus en cours et en attente). Attendez la fin d'une vidéo ou annulez-en une : chaque nouvelle vidéo prend un slot dès qu'elle se libère.`,
+    );
   }
 
   const expectedSec = project.script.estimatedDurationSec || project.targetDurationSec;
@@ -193,12 +219,81 @@ export async function startRenderJob(params: {
   return { jobId, queued: true, estimate };
 }
 
-async function countRunningRenders(userId: string): Promise<number> {
+/**
+ * État RÉEL de la file de rendus d'un utilisateur : les `processing` avec un
+ * bail ACTIF consomment un slot de concurrence — un `processing` à bail
+ * expiré ne compte pas (il est récolté par recolterRendusBloques) et les
+ * `queued` sont une file d'attente, pas de la concurrence.
+ */
+export interface EtatFileRendus {
+  processingActifs: number;
+  queued: number;
+}
+
+async function etatFileRendus(userId: string): Promise<EtatFileRendus> {
   const snap = await adminDb.collection(JOBS_COLLECTION).where("userId", "==", userId).get();
-  return snap.docs.filter((d) => {
+  const now = Date.now();
+  let processingActifs = 0;
+  let queued = 0;
+  for (const d of snap.docs) {
     const s = d.data()?.status;
-    return s === "processing" || s === "queued";
-  }).length;
+    if (s === "processing") {
+      const job = d.data() as RenderJob;
+      if (leaseActive(job, now)) processingActifs += 1;
+    } else if (s === "queued") {
+      queued += 1;
+    }
+  }
+  return { processingActifs, queued };
+}
+
+/**
+ * RÉCOLTE DES RENDUS BLOQUÉS d'un utilisateur (appelée avant tout comptage
+ * de quota — un job coincé ne doit jamais bloquer de nouvelles vidéos) :
+ *  - `processing` avec bail expiré : régime de reprise failJob (checkpoints
+ *    conservés, relance automatique ou échec propre après budget) ;
+ *  - `queued` immobile depuis SEUIL_RENDU_BLOQUE_MS (tick jamais délivré —
+ *    publication en échec, studio fermé, cron absent) : republication du
+ *    tick — le job avance au prochain slot libre.
+ * Idempotent et tolérant aux erreurs unitaires (un job illisible ne bloque
+ * pas la récolte des autres).
+ */
+export async function recolterRendusBloques(userId: string): Promise<{ recoltes: number; refiles: number }> {
+  const snap = await adminDb.collection(JOBS_COLLECTION).where("userId", "==", userId).get();
+  const now = Date.now();
+  let recoltes = 0;
+  let refiles = 0;
+  for (const d of snap.docs) {
+    const brut = d.data() as RenderJob;
+    if (brut.status === "processing" && !leaseActive(brut, now)) {
+      try {
+        const job = { ...brut, progress: normalizeStoredProgress(brut.progress) };
+        const resultat = await failJob(job, new Error("Bail de rendu expiré sans worker vivant — récupéré automatiquement au lancement d'un nouveau rendu."));
+        if (resultat.status === "queued") recoltes += 1;
+      } catch {
+        // Récolte impossible pour ce job (quota Firestore…) : les suivants
+        // continuent — le compteur de file ne sera pas faussé (processing à
+        // bail expiré n'est PAS compté par etatFileRendus).
+      }
+    } else if (brut.status === "queued") {
+      const essai = brut.nextAttemptAt ? Date.parse(brut.nextAttemptAt) : Number.NaN;
+      const maj = Date.parse(brut.updatedAt || brut.createdAt);
+      const attente = now - (Number.isFinite(essai) ? Math.min(essai, maj) : maj);
+      if (Number.isFinite(attente) && attente > SEUIL_RENDU_BLOQUE_MS) {
+        try {
+          const enfile = await publishTickAndLogRender(brut, 0);
+          if (enfile) {
+            refiles += 1;
+            await adminDb.collection(JOBS_COLLECTION).doc(brut.id).set({ updatedAt: nowIso() }, { merge: true }).catch(() => undefined);
+          }
+        } catch {
+          // Publication impossible : le job reste en file (les sondages du
+          // studio et le cron sweep restent ses relais).
+        }
+      }
+    }
+  }
+  return { recoltes, refiles };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -429,6 +524,39 @@ export async function advanceJob(jobId: string, options: { timeBudgetMs?: number
   }
 
   const job = outcome.job;
+  // FILE D'ATTENTE DE SLOTS (demande propriétaire 2026-11-15) : le claim a
+  // pris le job — si tous les slots de concurrence sont occupés par des
+  // rendus VIVANTS (bail actif), on ne consomme PAS le slot : bail relâché,
+  // job re-programmé dans 30 s (nextAttemptAt + republication). Le job
+  // `queued` patiente proprement au lieu de saturer la mémoire (chaque
+  // rendu supplémentaire = FFmpeg + tmpdir), et les jobs bloqués ne comptent
+  // pas (bail expiré = pas un rendu vivant).
+  if (job.status === "processing") {
+    const { processingActifs } = await etatFileRendus(job.userId).catch(() => ({ processingActifs: 0, queued: 0 }) as EtatFileRendus);
+    // processingActifs inclut CE job (bail posé par le claim) : libre ⇔ les
+    // AUTRES rendus vivants sont sous la limite.
+    if (processingActifs > VIDEO_LIMITS.maxConcurrentRenders) {
+      await releaseLease(jobId);
+      await adminDb.collection(JOBS_COLLECTION).doc(jobId).set(
+        {
+          status: "queued",
+          nextAttemptAt: new Date(Date.now() + 30_000).toISOString(),
+          updatedAt: nowIso(),
+        },
+        { merge: true },
+      ).catch(() => undefined);
+      const enfile = await publishTickAndLogRender(job, 30);
+      await mirrorRenderProgress({ ...job, status: "queued" }, { projectId: job.projectId }).catch(() => undefined);
+      return {
+        jobId,
+        status: "queued",
+        stage: job.stage,
+        done: false,
+        continued: enfile,
+        message: `En attente d'un slot de rendu libre (${VIDEO_LIMITS.maxConcurrentRenders} max) — reprise automatique dans 30 s.`,
+      };
+    }
+  }
   // Jobs d'EXPORT SEUL : sautent la production, démarrent à l'étape exports.
   if (job.mode === "exports_only" && STAGE_ORDER.indexOf(job.stage) < STAGE_ORDER.indexOf("exports")) {
     await adminDb.collection(JOBS_COLLECTION).doc(jobId).set({ stage: "exports", updatedAt: nowIso() }, { merge: true });

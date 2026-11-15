@@ -678,6 +678,8 @@ export interface RenderJob {
   tmpDir?: string;
   /** Échéance au-delà de laquelle le tick demande une continuation arrière-plan. */
   deadlineAt?: string;
+  /** Prochaine tentative programmée (backoff après incident — re-file différée). */
+  nextAttemptAt?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -1678,10 +1678,20 @@ html[data-theme="light"] .nova-telemetrie .ligne code { color: #1e2430; }
   .nova-msg.utilisateur .nova-colonne { max-width: 90%; }
   .nova-modele-chip { padding: 6px 11px; font-size: 12.5px; }
   .nova-topbar .nova-statut { display: none; }
-  /* Punaise moteur : le détail « temps annoncé » disparaît sur écran
-     étroit (place), le point + libellé restent — l'état mesuré est
-     justement le plus précieux sur mobile. */
-  .nova-moteur-punaise .nova-moteur-temps { display: none; }
+  /* FIX NAVIGATION BLOQUÉE (production 2026-11-15, capture mobile) : la
+     topbar empilait burger 34 px + chip « Gen3 · Expert » ~160 px + punaise
+     « Moteur Gen3 opérationnel » ~170 px (white-space:nowrap) + actions
+     ~124 px ≈ 525 px sur ~358 px disponibles — flex comprimait le SEUL item
+     compressible (le burger, sans flex-shrink:0) à ~18 px : le point
+     d'entrée de TOUTE la navigation devenait quasi intappable. Désormais :
+     la punaise ne garde que son POINT d'état (l'info complète reste au
+     survol/title), la chip devient compressible avec troncature, et les
+     boutons icônes sont incompressibles. */
+  .nova-moteur-punaise .nova-moteur-temps,
+  .nova-moteur-punaise .nova-moteur-libelle { display: none; }
+  .nova-bouton-ico { flex-shrink: 0; min-width: 34px; }
+  .nova-modele-zone { flex: 1 1 auto; min-width: 0; }
+  .nova-modele-zone .nova-modele-chip { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 /* ---- AGENT LIVE SOUS LE CHAT (commande 6) ----

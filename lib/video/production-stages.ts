@@ -1027,24 +1027,39 @@ async function stageRender(job: VideoProductionJob): Promise<ProductionStageResu
   // vérifiée par la QC sur le master réellement livré (±10 %, flux voix,
   // sous-titres brûlés). Un rendu lancé hors production autopilote ne porte
   // AUCUN contrat (startRenderJob appelé sans ce champ).
-  const render = await startRenderJob({
-    userId: job.userId,
-    projectId: job.projectId,
-    derivedTargets,
-    contract: {
-      targetDurationSec: project.targetDurationSec,
-      narrationRequired: job.options?.voiceEnabled !== false,
-      // Demande propriétaire 2026-11-14 : le contrat QC n'exige des
-      // sous-titres QUE si l'utilisateur les a demandés — une vidéo sans
-      // sous-titres n'est plus un échec QC mais le comportement voulu.
-      captionsRequired: job.options?.subtitlesEnabled === true && Boolean(project.timeline?.captions?.enabled),
-    },
-  });
-  // Rattaché AVANT le passage à l'étape done (visible même si le tick meurt ici).
-  // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
-  await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { renderJobId: render.jobId, updatedAt: nowIso() }, job.userId);
-  job.renderJobId = render.jobId;
-  return { action: "advance", detail: `Rendu ${render.jobId.slice(0, 8)} en file.` };
+  // Demande propriétaire 2026-11-15 — la file de rendus PLEINE n'est plus un
+  // échec de production : le stage ATTEND (re-tick dans 2 min) qu'un slot se
+  // libère — la vidéo part dès que possible, le fil n'affiche plus «
+  // Production interrompue » pour une simple file d'attente.
+  try {
+    const render = await startRenderJob({
+      userId: job.userId,
+      projectId: job.projectId,
+      derivedTargets,
+      contract: {
+        targetDurationSec: project.targetDurationSec,
+        narrationRequired: job.options?.voiceEnabled !== false,
+        // Demande propriétaire 2026-11-14 : le contrat QC n'exige des
+        // sous-titres QUE si l'utilisateur les a demandés — une vidéo sans
+        // sous-titres n'est plus un échec QC mais le comportement voulu.
+        captionsRequired: job.options?.subtitlesEnabled === true && Boolean(project.timeline?.captions?.enabled),
+      },
+    });
+    // Rattaché AVANT le passage à l'étape done (visible même si le tick meurt ici).
+    // Task 95-d — écriture via la couche résiliente (Firestore unique moteur, Task 108).
+    await writeCheckpointSet(PRODUCTION_JOBS_COLLECTION, job.id, { renderJobId: render.jobId, updatedAt: nowIso() }, job.userId);
+    job.renderJobId = render.jobId;
+    return { action: "advance", detail: `Rendu ${render.jobId.slice(0, 8)} en file.` };
+  } catch (error) {
+    if (error instanceof VideoQuotaError) {
+      return {
+        action: "stay",
+        delaySeconds: 120,
+        detail: `File de rendus pleine — nouvelle tentative automatique dans 2 min (${error.message.slice(0, 140)})`,
+      };
+    }
+    throw error;
+  }
 }
 
 /** DONE : miroir du job de rendu — la production ne termine qu'avec lui. */

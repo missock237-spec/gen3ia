@@ -72,6 +72,7 @@ import { estimateExecutionCost } from "@/lib/billing/cost-engine";
 import { reserveFunds, settleReservation, releaseReservation } from "@/lib/billing/wallet";
 import { mapWithConcurrency } from "@/lib/video/concurrency";
 import { composeScenePrompt } from "@/lib/video/consistency-engine";
+import { blocNegatifVeo3 } from "@/lib/video/veo3-realisme";
 
 /** Rôle d'un clip vidéo de scène dans la Media Library. */
 export function sceneVideoRole(sceneId: string): string {
@@ -179,6 +180,11 @@ export function buildSceneMotionPrompt(project: VideoProject, scene: ScriptScene
   const sound = scene.soundEffects.length > 0
     ? `subtle, realistic ambient sound matching: ${scene.soundEffects.join(", ")}`
     : "subtle, realistic ambient sound of the environment";
+  // Réalisme Veo 3 (demande propriétaire 2026-11-15) : le prompt négatif de
+  // la bible visuelle atteint enfin le prompt du clip (il était composé puis
+  // IGNORÉ — les artefacts « fausse vidéo » n'étaient jamais interdits
+  // explicitement) via le socle non négociable du planneur Veo 3.
+  const negatif = blocNegatifVeo3(composed.negativePrompt);
 
   const fixedBlocks = [
     narrationHint ? `On-screen moment: ${narrationHint}` : "",
@@ -187,6 +193,7 @@ export function buildSceneMotionPrompt(project: VideoProject, scene: ScriptScene
     `Visual style: ${PROFESSIONAL_STYLE_BLOCK}${project.style ? `, overall tone: ${project.style}` : ""}`,
     `Sound: ${sound}`,
     `Consistency: ${CONSISTENCY_BLOCK}`,
+    `Negative (strict): ${negatif}`,
   ].filter(Boolean);
   const fixedText = fixedBlocks.join(". ");
 

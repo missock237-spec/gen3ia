@@ -28,8 +28,17 @@ function envInt(name: string, fallback: number): number {
 export const VIDEO_LIMITS = {
   /** Projets actifs simultanés par utilisateur (hors archivés). */
   maxActiveProjects: envInt("VIDEO_MAX_ACTIVE_PROJECTS", 12),
-  /** Rendus concurrents par utilisateur. */
-  maxConcurrentRenders: envInt("VIDEO_MAX_CONCURRENT_RENDERS", 2),
+  /** Rendus CONCURRENTS (en traitement, bail actif) par utilisateur.
+   *  Demande propriétaire 2026-11-15 (« gen3 doit pouvoir librement créer
+   *  des vidéos ») : 2 → 4 — la concurrence ne compte plus les jobs
+   *  `queued` (simple file d'attente, voir maxQueuedRenders) et les jobs
+   *  bloqués (bail expiré, tick perdu) sont récoltés avant comptage :
+   *  un rendu coincé ne doit JAMAIS consommer un slot. */
+  maxConcurrentRenders: envInt("VIDEO_MAX_CONCURRENT_RENDERS", 4),
+  /** Profondeur maximale de la FILE D'ATTENTE de rendus par utilisateur :
+   *  au-delà, le lancement est refusé avec un message clair (jamais de file
+   *  infinie — Firestore et le wallet restent bornés). */
+  maxQueuedRenders: envInt("VIDEO_MAX_QUEUED_RENDERS", 8),
   /** Durée cible maximale (60 min par défaut — Long Video Engine). */
   maxDurationSec: envInt("VIDEO_MAX_DURATION_SEC", 3600),
   /** Durée minimale utile. */
