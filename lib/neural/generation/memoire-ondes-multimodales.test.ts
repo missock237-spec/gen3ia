@@ -46,7 +46,10 @@ describe("memoire-ondes-multimodales", () => {
       vus.add(`${u.domaine}|${u.langue}|${u.texte}`);
     }
     const pas = Math.floor(TAILLE_ESPACE_ONDES_MULTIMODAL / 20_000);
-    for (let k = 0; k < 20_000; k++) {
+    // k de 1 à 20 000 : k=0 re-échantillonnerait l'index 0, déjà couvert par
+    // la boucle contiguë ci-dessus (faux positif de déduplication) — et
+    // 20 000 × pas reste strictement sous la borne de l'espace.
+    for (let k = 1; k <= 20_000; k++) {
       const u = uniteOndesMultimodale(k * pas);
       vus.add(`${u.domaine}|${u.langue}|${u.texte}`);
     }
