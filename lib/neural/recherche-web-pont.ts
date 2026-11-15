@@ -76,10 +76,28 @@ function recouvrement(question: string[], texte: string): number {
  *    connaissances, ni paire cortex apprise) et le texte est générique ;
  *  - le cortex a bien répondu mais avec un appariement très faible
  *    (motif distant de la demande — risque réel de hors-sujet).
+ *
+ * À l'inverse, les sources à MATIÈRE RÉELLE (données du compte, calcul
+ * prouvé du compartiment math, terminal exécuté, savoir entraîné du Studio,
+ * ancrage vocation) répondent à la demande même quand la réponse est courte :
+ * un résultat de calcul n'est pas une lacune de connaissance — re-filtrer
+ * « 17 % de 2 345 € = 398,65 € » vers une recherche web serait absurde.
  */
+const SOURCES_MATERE_REELLE = new Set([
+  "pilotage",
+  "connaissances_utilisateur",
+  "vocation",
+  "compartiment_math",
+  "compartiment_monde",
+  "compartiment_terminal",
+  "memoire_utilisateur",
+  "memoire_dev_web",
+]);
+
 export function savoirInsuffisant(composition: CompositionReponse | null | undefined): boolean {
   if (!composition || !composition.texte?.trim()) return true;
   const texte = composition.texte.trim();
+  if (SOURCES_MATERE_REELLE.has(composition.source)) return false;
   if (texte.length < LONGUEUR_MIN_REPONSE_SUFFISANTE) return true;
   if (composition.source === "decoder_intention") return true;
   if (

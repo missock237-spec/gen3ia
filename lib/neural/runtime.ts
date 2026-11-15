@@ -466,9 +466,14 @@ export function getNeuralRuntime(): NeuralRuntime {
   // ou en cas d'échec réseau, null → le moteur passe au repli honnête.
   // JAMAIS de silence : soit réponse fondée sur les sources citées, soit
   // réponse honnête explicite.
+  // HERMÉTICITÉ DES TESTS : en environnement de test (vitest), l'injecteur
+  // réseau est neutre (null) — les tests valident la garantie via des
+  // injecteurs INJECTÉS (engine-garantie-reponse.test.ts) et aucun appel
+  // réseau réel ne ralentit ni ne fragilise la suite (7 000+ tests).
   const rechercheWebAuto = async (
     requete: string,
   ): Promise<ResultatRechercheWeb[] | null> => {
+    if (process.env.VITEST || process.env.NODE_ENV === "test") return null;
     try {
       const recherche = await Promise.race([
         searchWeb(requete, 6),

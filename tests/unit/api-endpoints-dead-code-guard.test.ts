@@ -519,6 +519,12 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     "/storage/r2-diagnostic",
     "/media/professeur-statut",
     "/monde/stats",
+    // /admin/entrainement/webdev : déclencheur d'entraînement web-dev
+    // (pack gen3-webdev-pack, 2,5 M lignes) appelé en POST par les
+    // administrateurs et scripts d'exploitation — GET rend le dernier
+    // rapport (var/neural/webdev/rapport.json) ; npm run train:webdev est
+    // son pendant CLI. Pas de surface UI prévue (opération d'admin).
+    "/admin/entrainement/webdev",
   ],
   /** API documentées au CONTRAT PRODUIT sans appelant dans le dépôt :
    *  les supprimer serait un breaking change contractuel (leçon it.39
