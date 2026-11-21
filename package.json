@@ -61,7 +61,7 @@
     "hyparquet-compressors": "^1.1.2",
     "js-yaml": "^5.5.0",
     "kokoro-js": "^1.2.1",
-    "next": "15.5.28",
+    "next": "15.5.29",
     "onnxruntime-web": "^1.30.0",
     "pdf-lib": "^1.17.1",
     "pino": "^10.4.0",
