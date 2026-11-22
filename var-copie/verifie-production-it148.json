@@ -1,0 +1,49 @@
+[
+  {
+    "controle": "snapshot it.148 servi",
+    "octets": null,
+    "sha256_distant": "",
+    "sha256_local": "9a9e287cf22556e1",
+    "match": false,
+    "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+  },
+  {
+    "controle": "asset multimodal-it148/images/image_000.jpg",
+    "octets": null,
+    "sha256_distant": "",
+    "sha256_local": "0481507464487ace",
+    "match": false,
+    "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+  },
+  {
+    "controle": "asset multimodal-it148/images/image_014.jpg",
+    "octets": null,
+    "sha256_distant": "",
+    "sha256_local": "d69589d214bb56b5",
+    "match": false,
+    "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+  },
+  {
+    "controle": "asset multimodal-it148/audio/audio_000.opus",
+    "octets": null,
+    "sha256_distant": "",
+    "sha256_local": "d46e784bf5348f29",
+    "match": false,
+    "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+  },
+  {
+    "controle": "asset multimodal-it148/audio/audio_007.opus",
+    "octets": null,
+    "sha256_distant": "",
+    "sha256_local": "e826d8097136a685",
+    "match": false,
+    "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+  },
+  {
+    "controle": "build de production = commit poussé",
+    "gitSha_distant": "",
+    "gitSha_local": "56583ae",
+    "buildDate": "indisponible (URLError)",
+    "match": false
+  }
+]
