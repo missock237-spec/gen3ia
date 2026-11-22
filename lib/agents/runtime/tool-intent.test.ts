@@ -48,7 +48,9 @@ describe("detectToolIntents", () => {
     const hints = detectToolIntents("cherche sur le web les concurrents de mon marché");
     expect(hints.map((h) => h.intent)).toContain("web_research");
     const research = hints.find((h) => h.intent === "web_research");
-    expect(research?.toolNames).toEqual(["web.search", "web.open"]);
+    // (demande produit 2026-11-22) : la recherche approfondie multi-pages
+    // (≥ 10 pages réellement lues) prime sur la recherche simple.
+    expect(research?.toolNames).toEqual(["web.deep_research", "web.search", "web.open"]);
   });
 
   it("ne détecte RIEN sur une salutation sans besoin outillé", () => {

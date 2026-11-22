@@ -1,6 +1,7 @@
 import { ToolRegistry } from "./registry";
 import { webSearchTool } from "./web/search";
 import { webOpenTool } from "./web/open";
+import { webDeepResearchTool } from "./web/deep-research";
 import { terminalRunTool } from "./terminal/run";
 import { knowledgeSearchTool } from "./knowledge/search";
 import { getArtifactTool } from "./files/get-artifact";
@@ -119,6 +120,9 @@ export function createDefaultToolRegistry(): ToolRegistry {
   for (const tool of [
     webSearchTool,
     webOpenTool,
+    // Recherche web approfondie multi-pages (plancher 10 pages réellement
+    // lues) — compréhension systématique de toute tâche Gen3.
+    webDeepResearchTool,
     // Task 122 — terminal intégré FONCTIONNEL : outil agent d'exécution
     // RÉELLE de commandes (Docker > serverless en-processus > simulation
     // annoncée). Toujours enregistré : le repli simulation est un résultat

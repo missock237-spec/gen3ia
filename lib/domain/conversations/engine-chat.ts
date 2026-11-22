@@ -11,6 +11,9 @@ import type { ConversationStreamEvent } from "./stream-events";
 import type { ConversationMessage } from "./types";
 import { detectImageRatio, enhanceImagePrompt, extractImagePrompt } from "@/lib/ai/image-intent";
 import { languageDirective } from "@/lib/ai/prompt-enhancer";
+// Réflexion profonde (demande produit 2026-11-22) : raisonnement humain en
+// 4 phases pour toute tâche + recherche web systématique (module pur).
+import { directifReflexionProfonde, evalueDifficulte, estTacheRecherchable } from "@/lib/ai/raisonnement-profond";
 import { RESPONSE_FORMAT_RULES, EXCELLENCE_PAR_DOMAINE, preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
 // it.59 — LA VOCATION DE GEN3 : gen3 sait, à chaque tour, qu'il a été créé
 // pour exécuter des tâches dans les 19 domaines (charte, module pur).
@@ -161,6 +164,13 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     effort.directive,
     // Directives supplémentaires du tour (ex : rapport Deep Research).
     ctx.systemDirectiveAppendix ?? "",
+    // RÉFLEXION PROFONDE (demande produit 2026-11-22) : toute TÂCHE (pas une
+    // salutation) reçoit la directive de raisonnement de type humain —
+    // compréhension exhaustive, réflexion multi-angles, vérification contre
+    // les faits, synthèse argumentée — graduée par la difficulté du prompt.
+    ...(estTacheRecherchable(ctx.message)
+      ? [directifReflexionProfonde(evalueDifficulte(ctx.message).niveau)]
+      : []),
     "La génération d'IMAGES, la production de VIDÉOS, la synthèse d'AUDIOS (moteur audio neural local — composition sonore, pas de parole naturelle) et l'analyse de médias (mesures réelles : format, dimensions, durée, codecs, palette) sont effectuées par la plateforme Gen3ia, jamais par toi dans cette réponse : ne prétends JAMAIS avoir généré un média comme s'il était affiché, et n'invente jamais d'URL.",
     "POLITIQUE UNIVERSELLE (impérative) : la plateforme prend en charge TOUS les types de génération — ne dis JAMAIS qu'elle « ne prend en charge que les images », « ne fait pas d'audio » ou qu'une capacité manque. Si la production n'a pas été déclenchée automatiquement, demande les éléments manquants (ex : le TEXTE à faire entendre pour un audio) ou oriente vers la relance — ne propose JAMAIS un service externe ni un tutoriel à la place d'une capacité de la plateforme.",
     ctx.project?.instructions ? `Instructions du projet « ${ctx.project.name} » :\n${ctx.project.instructions}` : "",
@@ -170,7 +180,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     ctx.skillsSection ?? "",
     ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${securiserContexteChat("Fichiers importés", ctx.filesContext, true)}` : "",
     ctx.mediaAnalysisContext ?? "",
-    ctx.webContext ? `Ces contenus proviennent de liens fournis par l'utilisateur — pages RÉELLEMENT récupérées par la plateforme au moment de la demande. Appuie-toi sur eux pour toute question les concernant, cite-les fidèlement, et ne complète JAMAIS par une invention de leur contenu :${securiserContexteChat("Pages web récupérées", ctx.webContext, false)}` : "",
+    ctx.webContext ? `Ces contenus proviennent de la recherche web RÉELLE effectuée par la plateforme au moment de la demande (liens fournis par l'utilisateur et/ou recherche systématique multi-pages déclenchée pour comprendre ta demande). Appuie-toi sur ces sources pour répondre, cite-les fidèlement, et ne complète JAMAIS par une invention de leur contenu :${securiserContexteChat("Pages web récupérées", ctx.webContext, false)}` : "",
     ctx.knowledgeContext ? `Ces extraits proviennent de la BASE DE CONNAISSANCES du projet (documents indexés par l'utilisateur) — cite-les fidèlement quand ils répondent à la demande et ne complète JAMAIS par une invention de leur contenu :${securiserContexteChat("Base de connaissances", ctx.knowledgeContext, false)}` : "",
   ].filter(Boolean);
 

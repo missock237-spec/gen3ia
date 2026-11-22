@@ -97,10 +97,14 @@ describe("Exigence 2 — recherche web de bout en bout", () => {
     expect(route).toContain("webSearch: body.webSearch");
   });
 
-  it("le moteur FORCE web.search (mode chat et mode plan)", () => {
+  it("le moteur FORCE la recherche web approfondie multi-pages (mode chat et mode plan)", () => {
     const engine = ENGINE;
-    expect(engine).toContain('input.webSearch\n      ? ({ toolName: "web.search"');
-    expect(engine).toContain('if (intent.mode === "plan" && input.webSearch && !(intent.steps ?? []).some((s) => s.toolName === "web.search"))');
+    // (demande produit 2026-11-22) : le bouton « Recherche web » déclenche
+    // désormais web.deep_research — recherche approfondie d'au moins 10
+    // pages réellement lues, graduées selon la difficulté du prompt.
+    expect(engine).toContain('input.webSearch\n      ? ({ toolName: "web.deep_research"');
+    expect(engine).toContain('if (intent.mode === "plan" && input.webSearch && !(intent.steps ?? []).some((s) => s.toolName === "web.search" || s.toolName === "web.deep_research"))');
+    expect(engine).toContain('toolName: "web.deep_research"');
   });
 });
 

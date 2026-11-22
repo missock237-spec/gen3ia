@@ -5,6 +5,9 @@ export interface ToolSecurityDefinition { name: string; risk: ToolRisk; required
 const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "web.search": { name: "web.search", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "web.open": { name: "web.open", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  // Recherche web approfondie multi-pages (plancher 10 pages réellement
+  // lues) : lecture réseau pure SSRF-gardée, comme web.search/web.open.
+  "web.deep_research": { name: "web.deep_research", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
   "file.read": { name: "file.read", risk: "read", requiredPermissions: ["tool.read", "file.read"], filesystemRead: true },
   "file.create": { name: "file.create", risk: "write", requiredPermissions: ["tool.write", "file.create", "file.write"], filesystemWrite: true },
   // it.58 — renommé artifact.get (ID réel de l'exécuteur) ; file.modify,

@@ -17,6 +17,7 @@ import { detectAppCreationIntent, detectChartIntent } from "./artefact-apps";
 import { detectScheduleIntent, detectServiceControlIntent, detectWorkflowIntent } from "./service-intents";
 import { safeEmitter } from "./stream-events";
 import { assessComplexity, buildEvolutionContext, buildRunHistoryContext } from "@/lib/ai/auto-improvement";
+import { evalueDifficulte } from "@/lib/ai/raisonnement-profond";
 import { detectAmbiguitySignals, deterministicClarifyingQuestion, markClarification, resolveClarifiedObjective } from "@/lib/ai/clarification-followup";
 import { looksLikeExplicitDrawingRequest, looksLikeImageRequest } from "@/lib/ai/image-intent";
 import { enhancePromptForExecution, languageDirective } from "@/lib/ai/prompt-enhancer";
@@ -31,6 +32,7 @@ import {
   contexteRechercheTempsReel,
   DIRECTIVE_TEMPS_REEL,
 } from "@/lib/domain/conversations/recherche-temps-reel";
+import { loadSystematicResearchContext, RECHERCHE_SYSTEMATIQUE_BUDGET_MS } from "@/lib/domain/conversations/recherche-systematique";
 import { getProject } from "@/lib/domain/projects/repository";
 import { runAIJSON } from "@/lib/engines/ai-engine";
 import { loadImportedFilesContext } from "@/lib/files/import";
@@ -620,8 +622,10 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     // Garde-fou : la demande exige explicitement un outil réel ?
     // Bouton « Recherche web » activé : la recherche est DEMANDÉE par l'utilisateur
     // (option explicite du composer) — elle prime sur la détection heuristique.
+    // (demande produit 2026-11-22) : elle devient une recherche APPROFONDIE
+    // multi-pages (au moins 10 pages réellement lues, graduées par difficulté).
     const explicit = input.webSearch
-      ? ({ toolName: "web.search", query: extractSearchQuery(input.message) || input.message.trim().slice(0, 300) } as ExplicitToolIntent)
+      ? ({ toolName: "web.deep_research", query: extractSearchQuery(input.message) || input.message.trim().slice(0, 300) } as ExplicitToolIntent)
       : detectExplicitToolIntent(input.message, catalog, customApis);
     if (!explicit && hasSelectedApis) {
       // API personnelle activée via le sélecteur pour CE message : appel réel attendu.
@@ -642,17 +646,47 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         };
       }
     }
-    if (explicit?.toolName === "web.search") {
+    if (explicit?.toolName === "web.deep_research") {
+      // Recherche approfondie explicite : plusieurs requêtes différenciées et
+      // AU MOINS 10 pages réellement lues (graduées selon la difficulté du
+      // prompt), puis rédaction fondée sur ces sources réelles.
+      const evaluation = evalueDifficulte(input.message);
       intent = {
         mode: "plan",
-        understanding: "Demande explicite d'actions réelles (recherche web).",
+        understanding: "Demande explicite d'actions réelles (recherche web approfondie multi-pages).",
         objective: input.message.slice(0, 400),
         steps: [
           {
-            title: "Recherche web",
-            detail: "Recherche réelle sur le web demandée explicitement par l'utilisateur.",
-            toolName: explicit.toolName,
-            toolInput: { query: explicit.query, maxResults: 8 },
+            title: `Recherche web approfondie (${evaluation.pagesRequises} pages minimum)`,
+            detail: `Recherche réelle multi-requêtes sur le web : au moins ${evaluation.pagesRequises} pages lues (difficulté « ${evaluation.niveau} ») pour comprendre la demande en détail.`,
+            toolName: "web.deep_research",
+            toolInput: { objective: input.message.slice(0, 5_000), minPages: evaluation.pagesRequises },
+          },
+          {
+            title: "Synthèse fondée sur les sources",
+            detail: "Rédige la réponse en t'appuyant sur les pages réellement lues (citations des sources).",
+          },
+        ],
+      };
+    } else if (explicit?.toolName === "web.search") {
+      // Recherche simple explicite (verbe de recherche détecté sans bouton) :
+      // (demande produit 2026-11-22) elle est UPGRADEÉE en recherche
+      // approfondie multi-pages — même contrat que le bouton du composer.
+      const evaluation = evalueDifficulte(input.message);
+      intent = {
+        mode: "plan",
+        understanding: "Demande explicite d'actions réelles (recherche web approfondie multi-pages).",
+        objective: input.message.slice(0, 400),
+        steps: [
+          {
+            title: `Recherche web approfondie (${evaluation.pagesRequises} pages minimum)`,
+            detail: `Recherche réelle multi-requêtes sur le web : au moins ${evaluation.pagesRequises} pages lues (difficulté « ${evaluation.niveau} ») pour comprendre la demande en détail.`,
+            toolName: "web.deep_research",
+            toolInput: { objective: input.message.slice(0, 5_000), minPages: evaluation.pagesRequises },
+          },
+          {
+            title: "Synthèse fondée sur les sources",
+            detail: "Rédige la réponse en t'appuyant sur les pages réellement lues (citations des sources).",
           },
         ],
       };
@@ -740,6 +774,22 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     }
   }
   if (intent.mode === "chat") {
+    // RECHERCHE WEB SYSTÉMATIQUE (demande produit 2026-11-22) : toute TÂCHE
+    // (pas une salutation) déclenche AVANT la réponse une recherche web
+    // approfondie multi-pages — Gen3 lit réellement au moins 10 pages
+    // (graduées selon la difficulté du prompt) pour comprendre en détail ce
+    // que l'utilisateur veut, puis raisonne sur ces sources réelles.
+    // Fail-soft total : une panne n'annule jamais le tour.
+    let rechercheSystematique = "";
+    try {
+      rechercheSystematique = await withTimeout(
+        loadSystematicResearchContext(input.message, { userId: input.userId, projectId: input.projectId }),
+        RECHERCHE_SYSTEMATIQUE_BUDGET_MS + 5_000,
+        "recherche web systématique",
+      );
+    } catch {
+      rechercheSystematique = "";
+    }
     // Skills auto-attribuées : la demande de l'utilisateur sélectionne
     // (déterministe, fail-soft) les skills pertinentes de la bibliothèque
     // (skills.sh + plateforme) — injectées comme instructions de mission.
@@ -751,7 +801,8 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     } catch {
       skillsSection = undefined;
     }
-    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext: webContextAvecTempsReel, systemDirectiveAppendix: directiveTempsReel, knowledgeContext, mediaAnalysisContext, skillsSection });
+    const webContextComplet = [webContext, blocTempsReel, rechercheSystematique].filter(Boolean).join("\n\n---\n\n");
+    const result = await runChatTurn({ ...input, conversation, project, projectId, userMessage, priorHistory, intent, filesContext, webContext: webContextComplet, systemDirectiveAppendix: directiveTempsReel, knowledgeContext, mediaAnalysisContext, skillsSection });
     await onEvent({
       type: "done",
       assistantMessage: result.assistantMessage,
@@ -760,18 +811,21 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
     });
     return result;
   }
-  if (intent.mode === "plan" && input.webSearch && !(intent.steps ?? []).some((s) => s.toolName === "web.search")) {
+  if (intent.mode === "plan" && input.webSearch && !(intent.steps ?? []).some((s) => s.toolName === "web.search" || s.toolName === "web.deep_research")) {
     // Recherche web activée depuis le composer : le plan reçoit TOUJOURS une
     // étape de recherche RÉELLE en tête — le bouton ne peut pas être ignoré
     // par la classification (déterministe, aucune variance LLM).
+    // (demande produit 2026-11-22) : recherche APPROFONDIE multi-pages —
+    // au moins 10 pages réellement lues, graduées selon la difficulté.
+    const evaluation = evalueDifficulte(input.message);
     intent = {
       ...intent,
       steps: [
         {
-          title: "Recherche web",
-          detail: "Recherche réelle sur le web activée par l'utilisateur (bouton Recherche web du composer).",
-          toolName: "web.search",
-          toolInput: { query: extractSearchQuery(input.message) || input.message.trim().slice(0, 300), maxResults: 8 },
+          title: `Recherche web approfondie (${evaluation.pagesRequises} pages minimum)`,
+          detail: `Recherche réelle multi-requêtes activée par l'utilisateur (bouton Recherche web) : au moins ${evaluation.pagesRequises} pages lues (difficulté « ${evaluation.niveau} »).`,
+          toolName: "web.deep_research",
+          toolInput: { objective: input.message.slice(0, 5_000), minPages: evaluation.pagesRequises },
         },
         ...(intent.steps ?? []),
       ].slice(0, 8),

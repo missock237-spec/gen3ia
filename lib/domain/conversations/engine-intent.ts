@@ -46,6 +46,7 @@ export type TurnIntent = z.infer<typeof IntentSchema>;
 
 export type ExplicitToolIntent =
   | { toolName: "web.search"; query: string }
+  | { toolName: "web.deep_research"; query: string }
   | { toolName: "custom_api.call"; query: string }
   | { toolName: "web.api"; url: string }
   | { toolName: "web.api.write"; url: string; method: "POST" | "PUT" | "PATCH" | "DELETE"; body?: string }

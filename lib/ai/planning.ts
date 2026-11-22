@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { generate } from "./router";
 import type { AIMessage } from "./models";
+import { directifReflexionProfonde } from "./raisonnement-profond";
 
 /**
  * RAISONNEMENT ET PLANIFICATION DE HAUT NIVEAU (Task 42, axe 5).
@@ -112,6 +113,11 @@ function parseCritique(text: string): PlanCritique {
 
 const PLAN_SYSTEM = [
   "Tu es le planificateur Gen3ia. Construis un plan d'exécution structuré pour l'objectif donné.",
+  // Réflexion profonde (demande produit 2026-11-22) : raisonnement de type
+  // humain expert en 4 phases AVANT de produire le plan — compréhension
+  // exhaustive, réflexion multi-angles, vérification, synthèse argumentée.
+  directifReflexionProfonde("complexe"),
+  "RECHERCHE WEB SYSTÉMATIQUE : si l'objectif dépend d'informations externes, d'un contexte actuel, d'un domaine technique ou commercial, la PREMIÈRE étape du plan est une recherche web approfondie (outil web.deep_research — plusieurs requêtes différenciées, au moins 10 pages réellement lues, graduées selon la difficulté) ; les étapes suivantes s'appuient sur ses résultats au lieu de répondre de mémoire.",
   "Contraintes impératives :",
   "- Chaque étape porte un critère de succès MESURABLE (comment vérifier qu'elle est réussie).",
   "- Chaque étape déclare ses risques réels (pas de risque fantôme, pas d'omission des dépendances).",

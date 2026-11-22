@@ -279,8 +279,11 @@ export function detectToolIntents(objective: string): ToolIntentHint[] {
   }
 
   // WEB_RESEARCH : verbe de recherche + cible d'information actuelle.
+  // (demande produit 2026-11-22) — la recherche approfondie multi-pages
+  // (web.deep_research : au moins 10 pages réellement lues, graduées selon
+  // la difficulté) prime sur la recherche simple ; repli web.search/open.
   if (RESEARCH_VERB_RE.test(text) && RESEARCH_TARGET_RE.test(text)) {
-    push("web_research", ["web.search", "web.open"], "Une information actuelle exige une vraie recherche web (web.search, puis web.open pour lire une page), jamais une réponse de mémoire.");
+    push("web_research", ["web.deep_research", "web.search", "web.open"], "Une information actuelle exige une vraie recherche web approfondie (web.deep_research : plusieurs requêtes et au moins 10 pages réellement lues, puis web.search/web.open en repli), jamais une réponse de mémoire.");
   }
 
   // PUBLISH_SOCIAL : verbe de publication + plateforme sociale énoncée.

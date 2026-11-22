@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { generate } from "@/lib/ai/router";
 import type { AIProvider } from "@/lib/ai/models";
 import { preferFreeForUnderstanding } from "@/lib/ai/response-quality";
+import { estTacheRecherchable, sectionReflexionEtRecherche } from "@/lib/ai/raisonnement-profond";
+import { evalueDifficulte } from "@/lib/ai/raisonnement-profond";
 import { GEN3IA_TOOLS } from "@/lib/tools/registry";
 import { AgentRuntime } from "./runner";
 import { detectToolIntents, formatToolIntentSection } from "./tool-intent";
@@ -20,6 +22,8 @@ const PLAN_SYSTEM = [
   "Use an llm step for reasoning or drafting, a research step for web research, a media step to generate a REAL image via Agnes (input {prompt: detailed visual description}) whenever the user asks for an image/photo/logo/illustration, a tool step for registered tools, and a code step only when isolated computation is necessary. Running shell commands (inspect files, build, verify, run a script) is a tool step with toolName='terminal.run' (input {command}) — the integrated terminal executes commands in a cleaned isolated environment (deny-list, time/memory/output limits) and returns the honest execution mode.",
   "IMPORTANT — downloadable deliverables (report, PDF, Word, Excel, presentation): ALWAYS use a tool step with toolName='artifact.create' and input {title, format, blocks}. The runtime completes empty or missing blocks at execution time. A 'document' type step only drafts text and produces NO file — never use it as the final deliverable step.",
   "For current-information needs (trends, news, prices, competitors), ALWAYS include a research step (web.search) instead of answering from memory.",
+  "SYSTEMATIC WEB RESEARCH (mandatory, demande produit 2026-11-22): EVERY plan starts with a research step type='tool' toolName='web.deep_research' (input { objective: <la demande>, minPages: <pagesRequises du bloc difficulté> }) — the tool runs several differentiated queries and REALLY reads at least 10 web pages (more as difficulty rises) to ground the understanding of what the user wants. Use its findings in the following steps; never base a substantive task on memory alone.",
+  "DEEP REASONING (mandatory): before producing steps, silently reason in 4 phases — 1) exhaustive comprehension (true intent, implicit constraints, what is unstated), 2) multi-angle reflection (decompose, form at least two candidate approaches, weigh risks, consider edge cases), 3) verification (test each approach against the real research findings, seek counter-evidence, never invent missing facts — research instead), 4) argued synthesis (motivated choice, concrete steps, calibrated confidence). The RÉFLEXION PROFONDE section below details this contract.",
   "SUB-AGENTS: when the objective splits into several independent expert sub-tasks and several sub-agents are available, you may delegate to MULTIPLE sub-agents — create one 'agent' step per sub-agent (agentId set); independent 'agent' steps run in parallel.",
   "EXTERNAL ACTIONS RULE: sending a WhatsApp/Telegram/Slack message, calling a phone, publishing ads, executing code, or any connected-app action MUST be a tool step (composio.execute, mcp.call, messaging.send, phone.call, ads.publish…) — NEVER an llm step: an llm step cannot perform an external action. Mark those steps sideEffect=true and requiresApproval=true. EXCEPTION (internal tools): image generation (image.generate), video production (video.create/video.revise), voice synthesis (voice.speak), files/artifacts (file.*, artifact.*, zip.*), memory, schedules, workflows, agent-network tools AND the integrated agent terminal (terminal.run) run on the Gen3ia platform itself — mark them requiresApproval=false: internal tools NEVER require human approval (they are billed and audited by the platform).",
   "AUDIO RULE (the platform SYNTHESIZES audio locally — NEVER say the platform cannot produce audio): any request for an audio, a sound render, a voice-over-style render, narration or « un audio » MUST be a tool step toolName='voice.speak' with input {text: <the EXACT text as source>}. The local neural engine composes the audio from that text (honest note: it is a harmonic neural composition, NOT natural human speech — mention it if the user expects a spoken voice). If the text source is not yet known, use an llm step that asks the user ONE question for the text (never refuse, never suggest an external service). Duration/bounds are applied automatically by the pipeline.",
@@ -143,6 +147,22 @@ function fallbackPlan(objective: string): RuntimePlan {
       description: "Recherche d'informations à jour sur le web pour l'objectif demandé.",
       toolName: "web.search",
       input: { query: objective.slice(0, 300), maxResults: 8 },
+      dependencies: [],
+    });
+  }
+
+  // RECHERCHE WEB SYSTÉMATIQUE (demande produit 2026-11-22) : toute TÂCHE
+  // (verbe d'action / question substantielle) ouvre le plan par une recherche
+  // approfondie multi-pages — plancher 10 pages réellement lues, gradué par
+  // la difficulté évaluée (module pur, déterministe).
+  if (available.has("web.deep_research") && estTacheRecherchable(objective) && !steps.some((step) => step.id === "step-research")) {
+    steps.unshift({
+      id: "step-deep-research",
+      type: "tool",
+      name: "Recherche web approfondie",
+      description: "Recherche web systématique multi-pages (au moins 10 pages réellement lues) pour comprendre la demande en détail avant d'agir.",
+      toolName: "web.deep_research",
+      input: { objective: objective.slice(0, 5_000), minPages: evalueDifficulte(objective).pagesRequises },
       dependencies: [],
     });
   }
@@ -319,13 +339,27 @@ export async function planUniversalAgent(
   }
   const finalSystemPromptWithTwin = `${finalSystemPromptWithEvolution}${twinSection}`;
 
-  const buildUserPrompt = (correctiveHint?: string) =>
-    [
-      JSON.stringify({ objective: trimmed, availableCapabilities: toolCatalog(catalog) }),
+  // RÉFLEXION PROFONDE + RECHERCHE WEB SYSTÉMATIQUE (demande produit
+  // 2026-11-22) : toute mission reçoit la directive de raisonnement en 4
+  // phases graduée par difficulté, plus l'exigence de recherche multi-pages
+  // (plancher 10 pages réellement lues). Fail-soft : module pur, aucun
+  // appel réseau — la section est toujours constructible.
+  const reflexionSection = `\n\n${sectionReflexionEtRecherche(trimmed)}`;
+  const finalSystemPromptWithReflexion = `${finalSystemPromptWithTwin}${reflexionSection}`;
+
+  const buildUserPrompt = (correctiveHint?: string) => {
+    const difficulte = evalueDifficulte(trimmed);
+    return [
+      JSON.stringify({
+        objective: trimmed,
+        difficulte: { niveau: difficulte.niveau, score: difficulte.score, pagesRequises: difficulte.pagesRequises },
+        availableCapabilities: toolCatalog(catalog),
+      }),
       correctiveHint
         ? `\nIMPORTANT — ta réponse précédente a été rejetée :\n${correctiveHint}\nCorrige-la et renvoie un JSON valide avec AU MOINS UNE étape.`
         : "",
     ].join("");
+  };
 
   // Résilience (jamais de plan invalide au runtime) : 1) tentative initiale ;
   // 2) une tentative corrective avec l'erreur renvoyée au modèle ; 3) plan de
@@ -341,7 +375,7 @@ export async function planUniversalAgent(
       response = await generate({
         task: "agent",
         messages: [
-          { role: "system", content: finalSystemPromptWithTwin },
+          { role: "system", content: finalSystemPromptWithReflexion },
           { role: "user", content: buildUserPrompt(essai > 1 ? dernierErreur : undefined) },
         ],
         requiresStructuredOutput: true,

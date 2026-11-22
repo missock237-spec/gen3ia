@@ -34,6 +34,7 @@ export interface Gen3iaToolDefinition {
 export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "web.search", description: "Search the public web.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "web.open", description: "Open and extract text from a public web page.", risk: "read", permission: "network.read", sideEffect: false },
+  { name: "web.deep_research", description: "Deep multi-page web research: several differentiated queries then REAL reading of at least 10 pages (scaled to the request's difficulty) with sourced excerpts.", risk: "read", permission: "network.read", sideEffect: false },
   { name: "file.read", description: "Read a REAL file: an attachment from the owner's permanent storage (users/<uid>/permanent/...) or an authorized workspace file (input { path, workspaceId? }). Returns converted text plus metadata.", risk: "read", permission: "file.read", sideEffect: false },
   { name: "file.create", description: "Create a workspace file.", risk: "write", permission: "file.create", sideEffect: true },
   // it.58 — file.modify RETIRÉ du catalogue : aucun exécuteur n'a jamais
