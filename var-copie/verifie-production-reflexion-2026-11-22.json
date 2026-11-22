@@ -1,0 +1,41 @@
+{
+  "base": "https://gen3ia.online",
+  "controles": [
+    {
+      "controle": "health",
+      "chemin": "/api/health",
+      "statut": null,
+      "ok": false,
+      "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+    },
+    {
+      "controle": "accueil",
+      "chemin": "/",
+      "statut": null,
+      "ok": false,
+      "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+    },
+    {
+      "controle": "chat",
+      "chemin": "/chat",
+      "statut": null,
+      "ok": false,
+      "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+    },
+    {
+      "controle": "capacites",
+      "chemin": "/capacites",
+      "statut": null,
+      "ok": false,
+      "erreur": "joignable impossible : URLError: <urlopen error timed out>"
+    },
+    {
+      "controle": "build de production = commit poussé",
+      "gitSha_distant": "",
+      "gitSha_local": "ae79f39",
+      "buildDate": "indisponible (URLError)",
+      "match": false
+    }
+  ],
+  "tous_ok": false
+}

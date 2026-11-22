@@ -86,7 +86,11 @@ Budgets : 12 s/page, budget total par défaut 60 s (chat : 55 s), garde `AbortSi
 
 ## 5. Journal d'exécution
 
-- (rempli au moment du commit — voir worklog.md)
+- **Pipeline local (commit 8c19900)** : vitest intégral **7430 verts** (14 skipped), eslint 0 erreur, tsc 0 erreur, scan secrets 0 occurrence. CI GitHub : 1er run rouge sur un **timeout flake** du test lourd d'entraînement SNN (`lib/neural/training/webdev.test.ts`, 120 s sous instrumentation coverage — sans rapport avec la livraison) ; **relance des jobs en échec → CI VERTE**.
+- **CD « Déploiement continu VPS »** : build production OK, release `cd-latest` publiée (canal pull faisant autorité, sha 8c19900f…) ; le contrôle de livraison PULL a violé le SLE (2400 s) car **gen3ia.online était injoignable** pendant toute la fenêtre (prod='injoignable') → escalade automatique **issue #163** (« intervention console VPS requise », même modèle que #106/#109).
+- **Point clé d'attribution** : le site était DÉJÀ injoignable depuis le sandbox à 07:33Z (sondes en timeout) — AVANT le début du CD à 07:57Z et AVANT le push. La surveillance synthétique GitHub échoue de façon concordante. Conclusion : **indisponibilité VPS préexistante** (voir aussi issue #160 « production dégradée » du 2026-11-17), NON causée par la livraison. Le canal pull du VPS rattrapera la release dès le retour du serveur ; la vérification `version.json → gitSha` reste à exécuter après intervention console (script `scripts/verifie-production-reflexion-2026-11-22.py`).
+- **Preuve des sondes du jour** : `var-copie/verifie-production-reflexion-2026-11-22.json` (échecs enregistrés honnêtement, `tous_ok: false`).
+- Commit de preuve inclus dans **ae79f39 (it.148, Job 478451)** qui pousse au-dessus de 8c19900 ; CI ae79f39 : 7439 verts.
 
 ## 6. Limites honnêtes
 

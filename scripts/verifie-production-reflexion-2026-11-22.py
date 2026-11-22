@@ -22,10 +22,12 @@ BASE = "https://gen3ia.online"
 def statut(url: str) -> int:
     req = urllib.request.Request(url, headers={"User-Agent": "gen3ia-verifie-reflexion/1.0"})
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             return int(resp.status)
     except urllib.error.HTTPError as err:
         return int(err.code)
+    except Exception as err:  # timeout / DNS / refus — enregistré honnêtement
+        raise RuntimeError(f"joignable impossible : {err.__class__.__name__}: {err}")
 
 
 def version_json() -> dict:
@@ -48,18 +50,27 @@ def main() -> None:
         ("chat", "/chat"),
         ("capacites", "/capacites"),
     ]:
-        code = statut(f"{BASE}{chemin}")
-        rapport.append({"controle": nom, "chemin": chemin, "statut": code, "ok": code == 200})
+        try:
+            code = statut(f"{BASE}{chemin}")
+            rapport.append({"controle": nom, "chemin": chemin, "statut": code, "ok": code == 200})
+        except RuntimeError as err:
+            rapport.append({"controle": nom, "chemin": chemin, "statut": None, "ok": False, "erreur": str(err)})
 
-    version = version_json()
+    try:
+        version = version_json()
+        sha_distant = str(version.get("gitSha", ""))
+        build_date = version.get("buildDate")
+    except Exception as err:
+        version = {}
+        sha_distant = ""
+        build_date = f"indisponible ({err.__class__.__name__})"
     sha_local = git_sha_local()
-    sha_distant = str(version.get("gitSha", ""))
     rapport.append({
         "controle": "build de production = commit poussé",
         "gitSha_distant": sha_distant,
         "gitSha_local": sha_local,
-        "buildDate": version.get("buildDate"),
-        "match": sha_distant == sha_local,
+        "buildDate": build_date,
+        "match": bool(sha_distant) and sha_distant == sha_local,
     })
 
     resultat = {"base": BASE, "controles": rapport, "tous_ok": all(c["ok"] for c in rapport[:4]) and rapport[-1]["match"]}
