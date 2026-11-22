@@ -564,17 +564,17 @@ export async function getImportedFileContent(userId: string, id: string): Promis
  * DEUX sources de vérité :
  *  - fileId présent → le contenu converti est relu de la base de données
  *    (collection `importedFiles`, remplie par POST /api/files/import) ;
- *  - FILET DE COMPATIBILITÉ — fileId ABSENT mais `path` présent : le flux
- *    n'est pas passé par /api/files/import (UI historiques aurora/nova/v4
- *    avant branchement, replis non-stream) — le fichier est relu À LA VOLÉE
- *    depuis le stockage PERMANENT du propriétaire (clé R2 cloisonnée par
- *    isOwnedPermanentKey) puis converti avec les MÊMES règles. Les pièces
- *    non textuelles restent honnêtement « métadonnées seulement » (note
- *    explicite dans le bloc) : le moteur est textuel, aucune perception
- *    d'image/audio/vidéo/PDF scanné n'est jamais simulée. Ce filet est là
- *    pour qu'un attachment { path } seul produise quand même un contexte
- *    réel — à supprimer quand toutes les UI émettent systématiquement un
- *    fileId.
+ *  - FILET — `path` présent : le fichier est relu À LA VOLÉE depuis le
+ *    stockage PERMANENT du propriétaire (clé R2 cloisonnée par
+ *    isOwnedPermanentKey) puis converti avec les MÊMES règles. Le filet
+ *    s'applique AUSSI quand fileId est présent mais que le record d'import
+ *    est introuvable/illisible en base (import interrompu, purge, latence
+ *    Firestore) — avant, le fichier était alors abandonné en silence et le
+ *    moteur répondait SANS lui (bug production « il ignore le fichier »).
+ *    Les pièces non textuelles restent honnêtement « métadonnées seulement »
+ *    (note explicite dans le bloc) : le moteur est textuel, aucune perception
+ *    d'image/audio/vidéo/PDF scanné n'est jamais simulée. Un échec total
+ *    produit une note honnête dans le bloc — JAMAIS un abandon silencieux.
  */
 export async function loadImportedFilesContext(
   userId: string,
@@ -585,17 +585,23 @@ export async function loadImportedFilesContext(
   const maxTotal = budget.total ?? 60_000;
   if (!attachments || attachments.length === 0) return "";
 
-  type ReferenceFichier =
-    | { fileId: string }
-    | { path: string; filename: string; contentType?: string };
+  type ReferenceFichier = {
+    fileId?: string;
+    path?: string;
+    filename?: string;
+    contentType?: string;
+  };
   const references: ReferenceFichier[] = attachments
     .slice(0, ATTACHMENT_MAX_FILES)
     .map((attachment): ReferenceFichier | null => {
-      if (attachment.fileId) return { fileId: attachment.fileId };
-      if (attachment.path) {
+      // fileId ET path sont PORés ensemble : si le record d'import devient
+      // introuvable en base, le repli de lecture au volée (filet) reste
+      // possible au lieu d'un abandon silencieux du fichier.
+      if (attachment.fileId || attachment.path) {
         return {
-          path: attachment.path,
-          filename: attachment.filename || attachment.path.split("/").pop() || attachment.path,
+          ...(attachment.fileId ? { fileId: attachment.fileId } : {}),
+          ...(attachment.path ? { path: attachment.path } : {}),
+          filename: attachment.filename || attachment.path?.split("/").pop() || "fichier joint",
           ...(attachment.contentType ? { contentType: attachment.contentType } : {}),
         };
       }
@@ -616,47 +622,42 @@ export async function loadImportedFilesContext(
     source: "base" | "storage";
   }
 
-  const charge = async (reference: ReferenceFichier): Promise<ContenuCharge | null> => {
-    if ("fileId" in reference) {
-      const record = await getImportedFileContent(userId, reference.fileId).catch(() => null);
-      if (!record) return null;
-      return {
-        filename: record.filename,
-        kind: record.kind,
-        conversion: record.conversion,
-        charCount: record.charCount,
-        ...(record.rowCount !== undefined ? { rowCount: record.rowCount } : {}),
-        textContent: record.textContent,
-        ...(record.note ? { note: record.note } : {}),
-        source: "base",
-      };
+  const echec = (reference: ReferenceFichier, note: string): ContenuCharge => ({
+    filename: reference.filename || reference.path?.split("/").pop() || "fichier joint",
+    kind: "binary",
+    conversion: "metadata-only",
+    charCount: 0,
+    textContent: "",
+    note,
+    source: "storage",
+  });
+
+  /** Lecture R2 à la volée d'un attachment portant un chemin permanent
+   *  (cloisonné par propriétaire) — utilisée par le filet « path seul » ET
+   *  par le repli « record d'import introuvable en base ». Retourne TOUJOURS
+   *  un ContenuCharge : un échec produit une note honnête, jamais un abandon
+   *  silencieux (bug production « le moteur ignore le fichier »). */
+  const lireDepuisStockage = async (reference: ReferenceFichier): Promise<ContenuCharge> => {
+    if (!reference.path) {
+      return echec(reference, "contenu non chargé (pièce jointe sans fileId exploitable ni chemin de stockage)");
     }
-    const echec = (note: string): ContenuCharge => ({
-      filename: reference.filename,
-      kind: "binary",
-      conversion: "metadata-only",
-      charCount: 0,
-      textContent: "",
-      note,
-      source: "storage",
-    });
     // Cloisonnement : seule la clé permanente de CE propriétaire est lisible.
     if (!isOwnedPermanentKey(userId, reference.path)) {
-      return echec("contenu non chargé (chemin hors du stockage permanent du compte)");
+      return echec(reference, "contenu non chargé (chemin hors du stockage permanent du compte)");
     }
     try {
       const buffer = await downloadFromR2(reference.path, ATTACHMENT_MAX_FILE_BYTES);
       if (!buffer || buffer.length === 0) {
-        return echec("contenu non chargé (fichier introuvable dans le stockage permanent)");
+        return echec(reference, "contenu non chargé (fichier introuvable dans le stockage permanent)");
       }
       const conversion = await convertFileBuffer(
         buffer,
-        reference.filename,
+        reference.filename || reference.path.split("/").pop() || reference.path,
         reference.contentType || "application/octet-stream",
         buffer.length,
       );
       return {
-        filename: reference.filename,
+        filename: reference.filename || reference.path.split("/").pop() || reference.path,
         kind: conversion.kind,
         conversion: conversion.conversion,
         charCount: conversion.text.length,
@@ -667,8 +668,35 @@ export async function loadImportedFilesContext(
       };
     } catch (error) {
       const raison = error instanceof Error ? error.message.slice(0, 160) : "lecture impossible";
-      return echec(`contenu non chargé (${raison})`);
+      return echec(reference, `contenu non chargé (${raison})`);
     }
+  };
+
+  const charge = async (reference: ReferenceFichier): Promise<ContenuCharge> => {
+    // 1) fileId présent : le contenu converti est relu de la base de données.
+    if (reference.fileId) {
+      const record = await getImportedFileContent(userId, reference.fileId).catch(() => null);
+      if (record) {
+        return {
+          filename: record.filename,
+          kind: record.kind,
+          conversion: record.conversion,
+          charCount: record.charCount,
+          ...(record.rowCount !== undefined ? { rowCount: record.rowCount } : {}),
+          textContent: record.textContent,
+          ...(record.note ? { note: record.note } : {}),
+          source: "base",
+        };
+      }
+      // 1 bis) REPLI PRODUCTION : le record d'import est absent/illisible en
+      // base (import interrompu, purge, latence Firestore) mais l'attachment
+      // PORTE le chemin R2 du fichier permanent du propriétaire — le contenu
+      // reste accessible par lecture au volée au lieu d'un abandon silencieux
+      // qui laissait le moteur répondre SANS le fichier (hors sujet).
+      return lireDepuisStockage(reference);
+    }
+    // 2) path seul (flux historiques) : lecture R2 à la volée.
+    return lireDepuisStockage(reference);
   };
 
   // Lecture PARALLÉLISÉE à concurrence bornée (4), ordre d'entrée préservé —

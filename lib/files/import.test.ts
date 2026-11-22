@@ -234,13 +234,29 @@ describe("loadImportedFilesContext — contenu réel injecté au tour", () => {
     expect(contexte).toContain("Notes de réunion réelles.");
   });
 
-  it("ignore un fileId inconnu sans casser le reste du contexte", async () => {
+  it("REPLI : un fileId inconnu MAIS porté par un path permanent reste lisible (bug « le moteur ignore le fichier »)", async () => {
+    // Avant correction : record absent en base → abandon silencieux, le
+    // moteur répondait SANS le fichier. Désormais : lecture R2 au volée.
+    mockedDownload.mockResolvedValue(Buffer.from("Contenu réel récupéré malgré l'import manquant.") as never);
+    const contexte = await loadImportedFilesContext(USER, [
+      { fileId: "file-sans-record", path: `${PREFIX}ventes.csv`, filename: "ventes.csv", contentType: "text/csv" },
+    ]);
+    expect(mockedDownload).toHaveBeenCalledOnce();
+    expect(contexte).toContain("ventes.csv");
+    expect(contexte).toContain("Contenu réel récupéré malgré l'import manquant.");
+    expect(contexte).not.toContain("contenu non chargé");
+  });
+
+  it("un fileId inconnu sans path produit une note honnête — JAMAIS d'abandon silencieux", async () => {
     mockedDownload.mockResolvedValue(Buffer.from("Contenu du chemin secours.") as never);
     const contexte = await loadImportedFilesContext(USER, [
       { fileId: "inconnu-absent", filename: "perdu.pdf" },
       { path: `${PREFIX}secours.txt`, filename: "secours.txt", contentType: "text/plain" },
     ]);
-    expect(contexte).not.toContain("perdu.pdf");
+    // Le fichier est ANNONCÉ (la réponse ne peut plus l'ignorer) mais son
+    // contenu manquant est dit honnêtement — jamais improvisé.
+    expect(contexte).toContain("perdu.pdf");
+    expect(contexte).toContain("contenu non chargé");
     expect(contexte).toContain("secours.txt");
     expect(contexte).toContain("Contenu du chemin secours.");
   });

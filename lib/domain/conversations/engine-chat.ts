@@ -138,6 +138,16 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
   const identityPart = ctx.agent
     ? `Tu réponds actuellement sous l'identité de l'agent dédié « ${ctx.agent.name} ». La charte de cet agent prime sur ton identité par défaut — respecte son ton, son périmètre et ses garde-fous tout en gardant toutes tes capacités d'exécution :\n\n${ctx.agent.charter}`
     : "Tu es l'assistant de conversation Gen3ia, propulsé par le moteur neuronal Gen3 : tu réponds de façon directe, structurée et actionnable, et tu ne prétends jamais tenir des capacités que tu n'as pas.";
+  // EXIGENCE PRODUCTION (bug « il ignore le fichier et répond selon sa
+  // volonté ») : un message avec pièces jointes est traité COMME TEL — la
+  // réponse analyse le contenu réel injecté ci-dessous et résout la demande
+  // associée au fichier. Même quand le contenu n'a pas pu être chargé
+  // (metadata-only), la réponse reste honnête : jamais d'improvisation sur
+  // un contenu supposé, jamais de réponse hors sujet.
+  const attachmentsPresentes = (ctx.attachments ?? []).filter((a) => Boolean(a.filename || a.path));
+  const consigneAttachments = attachmentsPresentes.length > 0
+    ? `CONSIGNE IMPÉRATIVE — FICHIERS JOINTS À CE MESSAGE : l'utilisateur a joint ${attachmentsPresentes.length} fichier(s) — ${attachmentsPresentes.map((a) => `« ${a.filename} »`).join(", ")} — et sa demande porte dessus. Ta réponse DOIT : (1) analyser le contenu réel de ces fichiers tel qu'injecté dans le contexte ci-dessus ; (2) résoudre la demande de l'utilisateur en t'appuyant EXCLUSIVEMENT sur ce contenu réel, sans jamais inventer de données ; (3) si le contenu d'un fichier est absent du contexte (chargement impossible), le dire honnêtement et proposer une relance ou l'outil file.read — jamais improviser sur son contenu supposé. Répondre en ignorant les fichiers joints, ou hors de leur contenu réel, est une erreur grave.`
+    : "";
   const systemParts = [
     identityPart,
     // Task 52 : contrat de présentation visible (clarté, précision selon le
@@ -179,6 +189,7 @@ export async function runChatTurn(ctx: TurnContext): Promise<ConversationTurnRes
     // par la demande utilisateur — fail-soft, absent si aucune ne matche.
     ctx.skillsSection ?? "",
     ctx.filesContext ? `Ces contenus proviennent de fichiers importés par l'utilisateur (conversion réelle stockée en base de données) — appuie-toi EXCLUSIVEMENT sur eux pour toute question les concernant, sans jamais inventer de données :${securiserContexteChat("Fichiers importés", ctx.filesContext, true)}` : "",
+    consigneAttachments,
     ctx.mediaAnalysisContext ?? "",
     ctx.webContext ? `Ces contenus proviennent de la recherche web RÉELLE effectuée par la plateforme au moment de la demande (liens fournis par l'utilisateur et/ou recherche systématique multi-pages déclenchée pour comprendre ta demande). Appuie-toi sur ces sources pour répondre, cite-les fidèlement, et ne complète JAMAIS par une invention de leur contenu :${securiserContexteChat("Pages web récupérées", ctx.webContext, false)}` : "",
     ctx.knowledgeContext ? `Ces extraits proviennent de la BASE DE CONNAISSANCES du projet (documents indexés par l'utilisateur) — cite-les fidèlement quand ils répondent à la demande et ne complète JAMAIS par une invention de leur contenu :${securiserContexteChat("Base de connaissances", ctx.knowledgeContext, false)}` : "",

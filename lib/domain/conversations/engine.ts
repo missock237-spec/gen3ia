@@ -226,9 +226,17 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
 
   // 1 quater) Contenu RÉEL des fichiers importés (conversion stockée en base).
   // Deux budgets : raccourci pour la classification (latence), complet pour
-  // la réponse (le modèle répond sur la pleine teneur).
-  const filesContext = await loadImportedFilesContext(input.userId, input.attachments).catch(() => "");
-  const filesContextShort = await loadImportedFilesContext(input.userId, input.attachments, { perFile: 2_500, total: 6_000 }).catch(() => "");
+  // la réponse (le modèle répond sur la pleine teneur). Un échec de
+  // chargement est JOURNALISÉ : un prompt sans le fichier attendu doit rester
+  // traçable en production (bug « le moteur ignore le fichier »).
+  const filesContext = await loadImportedFilesContext(input.userId, input.attachments).catch((erreur) => {
+    console.warn("[conversation] contenu des fichiers importés indisponible (fail-soft) :", erreur instanceof Error ? erreur.message : String(erreur));
+    return "";
+  });
+  const filesContextShort = await loadImportedFilesContext(input.userId, input.attachments, { perFile: 2_500, total: 6_000 }).catch((erreur) => {
+    console.warn("[conversation] contenu court des fichiers importés indisponible (fail-soft) :", erreur instanceof Error ? erreur.message : String(erreur));
+    return "";
+  });
 
   // 1 septies) Analyse RÉELLE des médias joints (image/audio/vidéo) :
   // moteur LOCAL (audit multimodal) — sharp (dimensions, palette, luminosité,

@@ -262,6 +262,21 @@ interface NovaFichierMsg {
   type: string;
 }
 
+/** Descripteur API d'une pièce jointe du tour (clé R2 permanente + import) —
+ *  persisté sur le message utilisateur pour que la RÉGÉNÉRATION re-transmette
+ *  EXACTEMENT les mêmes fichiers au lieu d'un tableau vide (bug : tour
+ *  régénéré hors sujet, le fichier « ignoré »). */
+interface NovaPieceApi {
+  filename: string;
+  path: string;
+  contentType: string;
+  sizeBytes: number;
+  fileId?: string;
+  fileKind?: string;
+  charCount?: number;
+  rowCount?: number;
+}
+
 interface NovaMessage {
   id: string;
   /** Identifiant serveur du message (événements message_complete/done) —
@@ -281,6 +296,8 @@ interface NovaMessage {
    *  (URL de lecture fraîche à chaque affichage — jamais présignée figée). */
   videoProjectId?: string;
   fichiers?: NovaFichierMsg[];
+  /** Descripteurs des pièces jointes réellement envoyées avec CE message. */
+  attachments?: NovaPieceApi[];
   /** Télémétrie brute du tour (événement turn_telemetry — mode debug). */
   telemetrie?: TelemetrieTour;
   /** Retour utilisateur déjà envoyé (anti-double-vote, miroir visuel). */
@@ -1317,7 +1334,7 @@ export default function NovaChat() {
   /** Exécute un tour réel : conversation serveur paresseuse, téléversement,
    *  puis consommation du flux NDJSON (écriture progressive via le tampon). */
   const lancerGeneration = React.useCallback(
-    async (conv: NovaConversation, message: string, pieces: NovaPiece[]) => {
+    async (conv: NovaConversation, message: string, pieces: NovaPiece[], piecesDejaTeleversees?: NovaPieceApi[]) => {
       convCouranteRef.current = conv.id;
 
       // 1) Conversation serveur (paresseuse : créée au premier message).
@@ -1344,17 +1361,8 @@ export default function NovaChat() {
       //    — fileId du contenu converti stocké en base, injecté au prompt du
       //    moteur), puis descripteur du tour. Échec d'import : attachment sans
       //    fileId, envoi maintenu.
-      let piecesApi: Array<{
-        filename: string;
-        path: string;
-        contentType: string;
-        sizeBytes: number;
-        fileId?: string;
-        fileKind?: string;
-        charCount?: number;
-        rowCount?: number;
-      }> = [];
-      if (pieces.length > 0) {
+      let piecesApi: NovaPieceApi[] = piecesDejaTeleversees ?? [];
+      if (piecesApi.length === 0 && pieces.length > 0) {
         setStatut("Téléversement des pièces jointes…");
         const resultat = await uploadPermanentFiles(pieces.map((p) => p.fichier));
         if (resultat.uploaded.length === 0) {
@@ -1369,6 +1377,13 @@ export default function NovaChat() {
             ...(await importerFichierImporte(u)),
           })),
         );
+      }
+      // Persister les descripteurs sur le dernier message utilisateur : la
+      // régénération (« Réessayer ») re-transmettra EXACTEMENT les mêmes
+      // pièces jointes (R2 permanent + fileId) au lieu d'un tableau vide.
+      if (piecesApi.length > 0) {
+        const dernierUser = [...conv.messages].reverse().find((m) => m.role === "user");
+        if (dernierUser) dernierUser.attachments = piecesApi;
       }
 
       // 3) Flux NDJSON du tour.
@@ -1751,7 +1766,10 @@ export default function NovaChat() {
     }
     majConvs(convsRef.current.slice());
     try {
-      await lancerGeneration(conv, dernierUser.content, []);
+      // Les descripteurs persistés sur le message (R2 permanent + fileId) sont
+      // re-transmis tels quels : pas de re-téléversement, le fichier joint au
+      // tour PRÉCÉDENT reste bien analysé par le tour régénéré.
+      await lancerGeneration(conv, dernierUser.content, [], dernierUser.attachments ?? []);
     } catch {
       afficherToast("Erreur de génération");
     }

@@ -202,10 +202,16 @@ export async function uploadPermanentFiles(
       if (!commitResponse.ok) throw new Error(await jsonError(commitResponse, "Assemblage du fichier impossible."));
 
       const committed = (commitBody as { file?: UploadedFile }).file;
+      // Un commit SANS descripteur de fichier (corps inattendu) est un échec
+      // RÉEL : un attachment { path: "" } serait filtré par le moteur (path
+      // falsy) et le fichier partirait « ignoré » sans aucune trace.
+      if (!committed || !committed.path) {
+        throw new Error("Assemblage du fichier confirme mais descripteur absent du serveur.");
+      }
       item.status = "done";
       item.progress = 1;
       item.sentBytes = item.file.size;
-      uploaded.push(committed ?? { path: "", filename: item.filename, sizeBytes: item.sizeBytes, contentType: item.file.type || "application/octet-stream" });
+      uploaded.push(committed);
       notify();
     } catch (error) {
       item.status = "error";
