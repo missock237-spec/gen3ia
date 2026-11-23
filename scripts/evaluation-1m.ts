@@ -66,13 +66,6 @@ function NOXAU_FALLBACK(): Record<string, string[]> {
   return NOYAU;
 }
 
-function normaliser(texte: string): string {
-  return texte
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
 function predireLexical(texte: string): { id: string; score: number } | null {
   const tokens = new Set(tokenize(texte));
   if (tokens.size === 0) return null;

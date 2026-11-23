@@ -28,7 +28,6 @@ import {
   construireSignaturesDomaines,
   texteEntrainement,
 } from "../neural/training/domaines";
-import { tokenize } from "../neural/encoding/text-encoder";
 import { resoudreCouleurs } from "../neural/solveurs/moteur-couleurs";
 import { resoudreCalcul } from "../neural/solveurs/moteur-calcul";
 
@@ -58,88 +57,88 @@ const PHRASES_PAR_DOMAINE: Record<string, Array<(r: () => number) => string>> = 
   ],
   video: [
     (r) => `Monte une vidéo de ${["30", "45", "60"][Math.floor(r() * 3)]} secondes avec un storyboard ${["dynamique", "lent", "rythmé"][Math.floor(r() * 3)]}`,
-    (r) => `Crée un clip vidéo explicatif avec sous-titres et transitions`,
-    (r) => `Produce a short video with cinematic shots and smooth editing`,
+    ( _r ) => `Crée un clip vidéo explicatif avec sous-titres et transitions`,
+    ( _r ) => `Produce a short video with cinematic shots and smooth editing`,
   ],
   son: [
     (r) => `Synthétise une ambiance sonore de ${["pluie", "forêt", "vagues", "vent"][Math.floor(r() * 4)]} pour ${["dix", "cinq", "trente"][Math.floor(r() * 3)]} minutes`,
-    (r) => `Génère une voix off claire pour mon podcast audio`,
-    (r) => `Create a calm sound ambience with soft voiceover`,
+    ( _r ) => `Génère une voix off claire pour mon podcast audio`,
+    ( _r ) => `Create a calm sound ambience with soft voiceover`,
   ],
   clips_musicaux: [
     (r) => `Compose un clip musical ${["afrobeat", "amapiano", "lo-fi", "jazz"][Math.floor(r() * 4)]} à ${["90", "100", "120"][Math.floor(r() * 3)]} BPM`,
-    (r) => `Écris les paroles du refrain de ma chanson et structure le beat`,
-    (r) => `Write lyrics for the chorus of an uplifting song`,
+    ( _r ) => `Écris les paroles du refrain de ma chanson et structure le beat`,
+    ( _r ) => `Write lyrics for the chorus of an uplifting song`,
   ],
   developpement_web: [
     (r) => `Corrige le bug de mon composant React sur la page des ${["articles", "profils", "commandes"][Math.floor(r() * 3)]}`,
-    (r) => `Ajoute une route API backend avec validation et un endpoint frontend`,
-    (r) => `Fix the frontend bug in my component and deploy the site`,
+    ( _r ) => `Ajoute une route API backend avec validation et un endpoint frontend`,
+    ( _r ) => `Fix the frontend bug in my component and deploy the site`,
   ],
   test: [
     (r) => `Écris des tests unitaires ${["jest", "pytest"][Math.floor(r() * 2)]} pour ce module avec mocks et couverture`,
-    (r) => `Ajoute un test e2e d'intégration pour la régression de l'authentification`,
-    (r) => `Write unit tests with mocks to raise coverage`,
+    ( _r ) => `Ajoute un test e2e d'intégration pour la régression de l'authentification`,
+    ( _r ) => `Write unit tests with mocks to raise coverage`,
   ],
   redaction_documents: [
     (r) => `Rédige un ${["rapport", "courrier", "manuel", "résumé"][Math.floor(r() * 4)]} professionnel sur ${["la qualité", "le budget", "le planning"][Math.floor(r() * 3)]}`,
-    (r) => `Relis et corrige ce document, puis fais le résumé exécutif`,
-    (r) => `Write a professional report outline and executive summary`,
+    ( _r ) => `Relis et corrige ce document, puis fais le résumé exécutif`,
+    ( _r ) => `Write a professional report outline and executive summary`,
   ],
   sciences_humaines: [
     (r) => `Explique l'histoire ${["de la Révolution industrielle", "des routes de la soie", "de l'imprimerie"][Math.floor(r() * 3)]} et son impact sur la société`,
-    (r) => `Analyse ce phénomène sociologique avec une approche philosophique`,
-    (r) => `Explain the history and sociology of this cultural phenomenon`,
+    ( _r ) => `Analyse ce phénomène sociologique avec une approche philosophique`,
+    ( _r ) => `Explain the history and sociology of this cultural phenomenon`,
   ],
   recherche_scientifique: [
-    (r) => `Conçois le protocole d'une expérience scientifique avec hypothèse falsifiable et randomisation`,
-    (r) => `Analyse les résultats de cette étude et l'effet mesuré avec reproductibilité`,
-    (r) => `Design a research protocol with a falsifiable hypothesis`,
+    ( _r ) => `Conçois le protocole d'une expérience scientifique avec hypothèse falsifiable et randomisation`,
+    ( _r ) => `Analyse les résultats de cette étude et l'effet mesuré avec reproductibilité`,
+    ( _r ) => `Design a research protocol with a falsifiable hypothesis`,
   ],
   cybersecurite: [
     (r) => `Analyse cette alerte de sécurité : ${["phishing", "ransomware", "port ouvert", "CVE"][Math.floor(r() * 4)]} — containment et patch`,
-    (r) => `Renforce le pare-feu et l'authentification MFA du serveur après l'incident`,
-    (r) => `Handle this security incident and harden the firewall`,
+    ( _r ) => `Renforce le pare-feu et l'authentification MFA du serveur après l'incident`,
+    ( _r ) => `Handle this security incident and harden the firewall`,
   ],
   recherche_web: [
     (r) => `Fais une recherche internet sur ${["les élections", "la fusion nucléaire", "les pompiers de Paris"][Math.floor(r() * 3)]} et vérifie les sources`,
-    (r) => `Browse the web and fact-check these URLs with reliable sources`,
-    (r) => `Vérifie en ligne cette information et cite les sources`,
+    ( _r ) => `Browse the web and fact-check these URLs with reliable sources`,
+    ( _r ) => `Vérifie en ligne cette information et cite les sources`,
   ],
   multimodal: [
-    (r) => `Extrais le texte par OCR de cette image de facture et structure-le`,
-    (r) => `Analyse cette capture d'écran multimodale et le reçu joint`,
-    (r) => `Run OCR on the invoice image and align the modalities`,
+    ( _r ) => `Extrais le texte par OCR de cette image de facture et structure-le`,
+    ( _r ) => `Analyse cette capture d'écran multimodale et le reçu joint`,
+    ( _r ) => `Run OCR on the invoice image and align the modalities`,
   ],
   hacker: [
-    (r) => `Résous ce challenge CTF : décoding stego du flag avec writeup`,
-    (r) => `Analyse ce binaire en reversing léger (VM challenge, flag benign)`,
-    (r) => `Solve this CTF challenge and write the writeup with the flag`,
+    ( _r ) => `Résous ce challenge CTF : décoding stego du flag avec writeup`,
+    ( _r ) => `Analyse ce binaire en reversing léger (VM challenge, flag benign)`,
+    ( _r ) => `Solve this CTF challenge and write the writeup with the flag`,
   ],
   construction_machines: [
-    (r) => `Aide-moi à construire un robot avec capteur ultrason et asservissement PID sur Arduino`,
-    (r) => `Règle le firmware du microcontrôleur et l'actionneur avec watchdog`,
-    (r) => `Tune the PID loop and firmware of my machine controller`,
+    ( _r ) => `Aide-moi à construire un robot avec capteur ultrason et asservissement PID sur Arduino`,
+    ( _r ) => `Règle le firmware du microcontrôleur et l'actionneur avec watchdog`,
+    ( _r ) => `Tune the PID loop and firmware of my machine controller`,
   ],
   vente: [
-    (r) => `Prépare un pitch de vente avec devis et traitement des objections pour mon prospect`,
-    (r) => `Rédige la proposition commerciale et le suivi CRM de ce deal`,
-    (r) => `Prepare a sales pitch and quote with objection handling`,
+    ( _r ) => `Prépare un pitch de vente avec devis et traitement des objections pour mon prospect`,
+    ( _r ) => `Rédige la proposition commerciale et le suivi CRM de ce deal`,
+    ( _r ) => `Prepare a sales pitch and quote with objection handling`,
   ],
   sante_medical: [
-    (r) => `Rédige une fiche de prévention santé sur l'hydratation et le paludisme`,
-    (r) => `Explique cette ordonnance et le traitement au patient en consultation`,
-    (r) => `Explain the prescription and treatment plan to the patient`,
+    ( _r ) => `Rédige une fiche de prévention santé sur l'hydratation et le paludisme`,
+    ( _r ) => `Explique cette ordonnance et le traitement au patient en consultation`,
+    ( _r ) => `Explain the prescription and treatment plan to the patient`,
   ],
   analyse_donnees: [
-    (r) => `Analyse ce CSV avec pandas : médiane, histogramme et corrélation des données`,
-    (r) => `Écris la requête SQL d'extraction puis nettoie le dataset`,
-    (r) => `Analyze the dataset: median, correlation and chart in pandas`,
+    ( _r ) => `Analyse ce CSV avec pandas : médiane, histogramme et corrélation des données`,
+    ( _r ) => `Écris la requête SQL d'extraction puis nettoie le dataset`,
+    ( _r ) => `Analyze the dataset: median, correlation and chart in pandas`,
   ],
   conseiller_commercial: [
-    (r) => `Recommande un plan d'action pour fidéliser ce client et prioriser le suivi`,
-    (r) => `Fais une recommandation de roadmap conseil pour ce compte`,
-    (r) => `Recommend the best consulting plan and followup for this client`,
+    ( _r ) => `Recommande un plan d'action pour fidéliser ce client et prioriser le suivi`,
+    ( _r ) => `Fais une recommandation de roadmap conseil pour ce compte`,
+    ( _r ) => `Recommend the best consulting plan and followup for this client`,
   ],
 };
 
@@ -192,9 +191,6 @@ describe("ÉVALUATION v5 — cerveau Gen3", () => {
     let ok = 0;
     let total = 0;
     // Références indépendantes calculées ici (ne partagent AUCUN code avec le solveur)
-    const hex2rgb = (h: string) => [
-      parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16),
-    ];
     const rgb2hex = (r: number, g: number, b: number) =>
       "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
     for (let i = 0; i < N; i++) {
