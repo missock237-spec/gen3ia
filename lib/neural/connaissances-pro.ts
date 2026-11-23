@@ -154,9 +154,19 @@ export async function ingérerConnaissancesPro(
   const { paires, parSource } = await construirePairesConnaissancesPro();
   if (paires.length > 0) {
     try {
-      const stats = await apprendre(paires);
+      // CHUNKING (même pattern que NeuralTrainer : rend la main à l'event
+      // loop tous les 150 appels) — l'ingestion de démarrage ne doit JAMAIS
+      // affamer un entraînement concurrent (mesuré : timeout CI webdev sur
+      // runner 2 cœurs sans ce chunking) ni un tour de chat.
+      let pairesAjoutees = 0;
+      for (let i = 0; i < paires.length; i += 150) {
+        const lot = paires.slice(i, i + 150);
+        const stats = await apprendre(lot);
+        pairesAjoutees += stats.pairesAjoutees;
+        await new Promise<void>((resoudre) => setImmediate(resoudre));
+      }
       resultat.ingere = true;
-      resultat.paires = stats.pairesAjoutees;
+      resultat.paires = pairesAjoutees;
       resultat.parSource = parSource;
     } catch {
       // Cortex indisponible : dégradation silencieuse (jamais de panne de boot).

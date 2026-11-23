@@ -19,8 +19,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { readFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import {
   DOMAINES_GEN3,
@@ -356,6 +356,7 @@ describe("ÉVALUATION v5 — cerveau Gen3", () => {
 
   it("7. RAPPORT — écrit le bilan JSON", () => {
     const chemin = join(RACINE, "var", "rapports", "evaluation-v5.json");
+    mkdirSync(dirname(chemin), { recursive: true });
     writeFileSync(chemin, JSON.stringify(RAPPORT, null, 1), "utf8");
     console.log("Rapport écrit:", chemin);
   });
