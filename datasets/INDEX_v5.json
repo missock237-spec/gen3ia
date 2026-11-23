@@ -1,0 +1,65 @@
+{
+ "gen3ia-professional-v5": {
+  "version": 5,
+  "generated_at": "2026-11-23T16:28:34.754449+00:00",
+  "note": "Datasets professionnels v5 — sources réelles HF/Kaggle + corpus calculés exacts. Les fichiers *_complet restent hors git et sont publiés sur HF (Kings237/gen3ia-media-engine@v5).",
+  "datasets": [
+   {
+    "id": "couleurs_v5",
+    "path": "datasets/couleurs_v5/train.jsonl",
+    "rows": 20000,
+    "rows_complet": 150000,
+    "media": null
+   },
+   {
+    "id": "raisonnement_professionnel",
+    "path": "datasets/raisonnement_professionnel/train.jsonl",
+    "rows": 20000,
+    "rows_complet": 150000,
+    "media": null
+   },
+   {
+    "id": "math_professionnel",
+    "path": "datasets/math_professionnel/train.jsonl",
+    "rows": 7473,
+    "rows_complet": 7473,
+    "media": null
+   },
+   {
+    "id": "sciences_professionnel",
+    "path": "datasets/sciences_professionnel/train.jsonl",
+    "rows": 3370,
+    "rows_complet": 3370,
+    "media": null
+   },
+   {
+    "id": "texte_professionnel",
+    "path": "datasets/texte_professionnel/train.jsonl",
+    "rows": 15000,
+    "rows_complet": 15000,
+    "media": null
+   },
+   {
+    "id": "vision_professionnel",
+    "path": "datasets/vision_professionnel/train.jsonl",
+    "rows": 3000,
+    "rows_complet": 3000,
+    "media": 3000
+   },
+   {
+    "id": "parole_professionnelle",
+    "path": "datasets/parole_professionnelle/train.jsonl",
+    "rows": 300,
+    "rows_complet": 300,
+    "media": 300
+   },
+   {
+    "id": "videos_professionnel",
+    "path": "datasets/videos_professionnel/train.jsonl",
+    "rows": 40,
+    "rows_complet": 40,
+    "media": 40
+   }
+  ]
+ }
+}

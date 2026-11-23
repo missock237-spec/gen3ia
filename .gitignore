@@ -99,3 +99,8 @@ datasets/security_v4/train.jsonl
 datasets/professions/train.jsonl
 datasets/sciences/train.jsonl
 scripts/.smoke_adaptateur/
+
+# ── v5 : versions complètes hors git (publiées sur HF v5) ──
+datasets/*/train_complet.jsonl
+data_externes/
+training/gen3-domain-datasets/data/complet/

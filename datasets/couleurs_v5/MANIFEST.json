@@ -1,0 +1,34 @@
+{
+ "name": "couleurs_v5",
+ "version": 5,
+ "generated_at": "2026-11-23T16:27:35.687818+00:00",
+ "description": "Reconnaissance des couleurs, propriétés, mélanges — données réelles XKCD+CSS + calculs exacts (HSL, WCAG, Machado 2009)",
+ "rows": 20000,
+ "languages": [
+  "en",
+  "fr"
+ ],
+ "task_types": [
+  "color_family",
+  "color_mixing",
+  "color_properties",
+  "couleur_complementaire",
+  "daltonisme_simulation",
+  "melange_couleurs",
+  "melange_numerique",
+  "propriete_couleur",
+  "temperature_couleur",
+  "wcag_contrast"
+ ],
+ "license": "CC-BY-4.0-gen3ia-v5",
+ "seed": 20261124,
+ "rows_complet": 150000,
+ "couleurs_reelles": 1346,
+ "formules": [
+  "RGB↔HSL (Rec. 709 sRGB)",
+  "luminance WCAG 2.1",
+  "contraste WCAG",
+  "simulation daltonisme Machado et al. 2009",
+  "mélanges soustractifs documentés"
+ ]
+}

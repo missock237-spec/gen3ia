@@ -1,0 +1,17 @@
+{
+ "name": "texte_professionnel",
+ "version": 5,
+ "generated_at": "2026-11-23T16:27:40.208115+00:00",
+ "description": "Corpus textuel réel : wikitext-2 + dbpedia_14 (HF)",
+ "rows": 15000,
+ "languages": [
+  "en"
+ ],
+ "task_types": [
+  "classification_domaine",
+  "corpus_continuation"
+ ],
+ "license": "CC-BY-4.0-gen3ia-v5",
+ "seed": 20261124,
+ "source": "HF Salesforce/wikitext-2 + fancyzhx/dbpedia_14"
+}

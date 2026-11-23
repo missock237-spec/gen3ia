@@ -612,6 +612,17 @@ export interface DetectionDomaine {
 }
 
 /** Ancres étendues statiques (complément des motsCles — sans I/O). */
+// ANCRÉES ENRICHIES v5 (Job 478451) : tokens discriminants extraits des
+// datasets complets (100 000 lignes/domaine, seuil : présent dans ≤ 3
+// domaines, ≥ 8 occurrences — cf. mots-cles-enrichis.ts généré). Consommés
+// comme ancres ÉTENDUES (1 point) dans predireDomaineLexical : ils élargissent
+// la couverture de vocabulaire du routeur lexical de production SANS écraser
+// les mots-clés noyau (2 points, précision curatée) en cas de recouvrement.
+const ANCRER_ENRICHIES_V5: Record<string, readonly string[]> = MOTS_CLES_ENRICHIS_V5;
+
+// Import placé après les constantes du domaine (module généré, zéro I/O).
+import { MOTS_CLES_ENRICHIS as MOTS_CLES_ENRICHIS_V5 } from "./mots-cles-enrichis";
+
 const ANCRES_ETENDUES: Record<string, string[]> = {
   generation_images: ["rendu", "photorealiste", "photorealistic", "watercolor", "aquarelle", "variation"],
   video: ["scenario", "script", "plan", "shot", "fps", "codec", "montage", "editing"],
@@ -649,6 +660,15 @@ export function predireDomaineLexical(texte: string): DetectionDomaine | null {
       }
     }
     for (const ancre of ANCRES_ETENDUES[domaine.id] ?? []) {
+      if (tokens.has(ancre)) {
+        score += 1;
+        matched.push(ancre);
+      }
+    }
+    // v5 : ancres enrichies des datasets complets (1 point, comme les
+    // ancres étendues — elles élargissent la couverture sans écraser les
+    // mots-clés noyau en cas de recouvrement inter-domaines).
+    for (const ancre of ANCRER_ENRICHIES_V5[domaine.id] ?? []) {
       if (tokens.has(ancre)) {
         score += 1;
         matched.push(ancre);

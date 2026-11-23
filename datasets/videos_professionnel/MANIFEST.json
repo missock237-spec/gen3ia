@@ -1,0 +1,20 @@
+{
+ "name": "videos_professionnel",
+ "version": 5,
+ "generated_at": "2026-11-23T16:28:34.754332+00:00",
+ "description": "Vidéos MP4 réelles dérivées d'images réelles (Ken Burns, ffmpeg)",
+ "rows": 40,
+ "languages": [
+  "fr"
+ ],
+ "task_types": [
+  "clip_video"
+ ],
+ "license": "CC-BY-4.0-gen3ia-v5",
+ "seed": 20261124,
+ "source": "ffmpeg 7.1 + CIFAR-10",
+ "videos": 40,
+ "octets": 3724066,
+ "resolution": "640x360@25fps",
+ "duree": "8 s"
+}

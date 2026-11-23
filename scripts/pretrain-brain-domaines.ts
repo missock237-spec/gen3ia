@@ -80,12 +80,12 @@ const DOMAINS_POOLS: Record<string, readonly number[]> = Object.fromEntries(
 // ─── Paramètres (alignés sur le trainer) ────────────────────────────────────
 
 const SEED = 42;
-const EPOCHS = 4;
+const EPOCHS = 6;
 const LR_BOOST = 0.15;
 const CYCLES = 4;
 const TEST_RATIO = 0.15;
 /** Échantillons max par domaine (FR + EN confondus, instruction → label). */
-const MAX_PAR_DOMAINE = 400;
+const MAX_PAR_DOMAINE = 2000;
 
 const DIR_COMPLET = join(
   process.cwd(),

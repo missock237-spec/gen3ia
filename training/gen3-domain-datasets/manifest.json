@@ -84,7 +84,7 @@
         "en": 49895
       },
       "safety_label": "sans_objet",
-      "duree_s": 7.1
+      "duree_s": 7.3
     },
     {
       "id": "son",
@@ -118,7 +118,7 @@
         "en": 50022
       },
       "safety_label": "sans_objet",
-      "duree_s": 5.8
+      "duree_s": 5.9
     },
     {
       "id": "clips_musicaux",
@@ -152,7 +152,7 @@
         "en": 50094
       },
       "safety_label": "sans_objet",
-      "duree_s": 6.0
+      "duree_s": 5.9
     },
     {
       "id": "developpement_web",
@@ -187,7 +187,7 @@
         "fr": 49958
       },
       "safety_label": "sans_objet",
-      "duree_s": 8.2
+      "duree_s": 8.3
     },
     {
       "id": "test",
@@ -221,7 +221,7 @@
         "en": 49964
       },
       "safety_label": "sans_objet",
-      "duree_s": 7.5
+      "duree_s": 7.4
     },
     {
       "id": "construction_machines",
@@ -255,7 +255,7 @@
         "fr": 50008
       },
       "safety_label": "sans_objet",
-      "duree_s": 7.6
+      "duree_s": 7.7
     },
     {
       "id": "cybersecurite",
@@ -284,7 +284,7 @@
         "fr": 50115
       },
       "safety_label": "recherche_defensive",
-      "duree_s": 6.2
+      "duree_s": 6.1
     },
     {
       "id": "hacker",
@@ -313,7 +313,7 @@
         "en": 49953
       },
       "safety_label": "ctf_educatif",
-      "duree_s": 9.1
+      "duree_s": 9.0
     },
     {
       "id": "redaction_documents",
@@ -342,7 +342,7 @@
         "en": 49899
       },
       "safety_label": "sans_objet",
-      "duree_s": 6.3
+      "duree_s": 6.2
     },
     {
       "id": "sciences_humaines",
@@ -458,7 +458,7 @@
         "en": 49833
       },
       "safety_label": "sans_objet",
-      "duree_s": 9.5
+      "duree_s": 9.4
     },
     {
       "id": "vente",
@@ -549,7 +549,7 @@
         "fr": 50027
       },
       "safety_label": "sans_objet",
-      "duree_s": 11.7
+      "duree_s": 11.8
     },
     {
       "id": "conseiller_commercial",
@@ -578,7 +578,7 @@
         "en": 49995
       },
       "safety_label": "sans_objet",
-      "duree_s": 8.9
+      "duree_s": 9.0
     }
   ]
 }

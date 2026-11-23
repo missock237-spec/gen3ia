@@ -1,0 +1,17 @@
+{
+ "name": "math_professionnel",
+ "version": 5,
+ "generated_at": "2026-11-23T16:27:39.243609+00:00",
+ "description": "Problèmes mathématiques réels GSM8K (HF openai/gsm8k)",
+ "rows": 7473,
+ "languages": [
+  "en"
+ ],
+ "task_types": [
+  "word_problem"
+ ],
+ "license": "CC-BY-4.0-gen3ia-v5",
+ "seed": 20261124,
+ "source": "HF openai/gsm8k",
+ "license_source": "MIT"
+}

@@ -1,0 +1,27 @@
+{
+ "name": "raisonnement_professionnel",
+ "version": 5,
+ "generated_at": "2026-11-23T16:27:38.031366+00:00",
+ "description": "Raisonnement multi-étapes à réponses exactes calculées (arithmétique, logique, temporel, planification)",
+ "rows": 20000,
+ "languages": [
+  "en",
+  "fr"
+ ],
+ "task_types": [
+  "boolean_logic",
+  "chaine_arithmetique",
+  "comparaison_ordre",
+  "pourcentage",
+  "proportion",
+  "raisonnement_temporel",
+  "schedule_planning",
+  "suite_arithmetique",
+  "syllogisme",
+  "temps_voyage"
+ ],
+ "license": "CC-BY-4.0-gen3ia-v5",
+ "seed": 20261124,
+ "rows_complet": 150000,
+ "garantie": "chaque output est calculé, jamais inventé"
+}

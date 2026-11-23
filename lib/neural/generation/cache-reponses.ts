@@ -44,6 +44,8 @@ interface EntreeCache {
       | "memoire_dev_web"
       | "recherche_web"
       | "repli_honnete";
+      | \"moteur_couleurs\"
+      | \"moteur_calcul\";
     theme?: string;
     scoreAppariement?: number;
     clePair?: string;

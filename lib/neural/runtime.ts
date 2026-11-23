@@ -56,6 +56,11 @@ import { CORPUS_QUESTIONS_VOCATION } from "../gen3/corpus-questions";
 // utilisateur « entraîne gen3 à comprendre les abréviations ») — idempotent
 // via marqueur var/neural, jamais bloquant.
 import { ingérerAbréviationsDansCortex } from "./abbreviations";
+// CONNAISSANCES PROFESSIONNELLES v5 (Job 478451) : ingestion cortex des
+// datasets réels HF/Kaggle + corpus calculés (couleurs, math GSM8K, sciences
+// ARC, raisonnement, vision CIFAR-10, parole LibriSpeech, texte). Idempotent,
+// fire-and-forget — même contrat que l'ingestion des abréviations.
+import { ingérerConnaissancesPro } from "./connaissances-pro";
 import {
   exporterRegistreTokens,
   importerRegistreTokens,
@@ -499,6 +504,11 @@ export function getNeuralRuntime(): NeuralRuntime {
   // pas — la compréhension à l'encodage est immédiate, la réponse pédagogique
   // cortex arrive une fraction de seconde plus tard, une seule fois).
   void ingérerAbréviationsDansCortex((paires, opts) => cortex.apprendre(paires, opts));
+  // Ingestion des connaissances professionnelles v5 (fire-and-forget,
+  // idempotent) : le cortex gagne la couverture conversationnelle des
+  // datasets réels ; les solveurs exacts (moteur-couleurs, moteur-calcul)
+  // garantissent par ailleurs la précision computationnelle.
+  void ingérerConnaissancesPro((paires) => cortex.apprendre(paires));
 
   // 9. Moteur IA adapté au contrat du projet (cortex + hippocampe câblés :
   //    conversation réelle + mémoire de reprise) — et ÉVOLUTION CONTINUE :

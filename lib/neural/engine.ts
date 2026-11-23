@@ -46,6 +46,11 @@ import {
   enregistrerFenetreExecutee,
   enregistrerFenetreEvitee,
 } from "./core/v2/compteur-energie-process";
+// SOLVEURS EXACTS v5 (Job 478451) : couleurs (palette XKCD+W3C, HSL, WCAG,
+// Machado 2009, mélanges) et calcul arithmétique exact — aucune IA externe,
+// réponses calculées de façon déterministe AVANT le repli cortex.
+import { resoudreCouleurs } from "./solveurs/moteur-couleurs";
+import { resoudreCalcul } from "./solveurs/moteur-calcul";
 import { nouvelleFenetreNeuronale } from "./core/v2/effecteur-cortex";
 import { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
@@ -74,7 +79,9 @@ export type SourceLangage =
   | "memoire_utilisateur"
   | "memoire_dev_web"
   | "recherche_web"
-  | "repli_honnete";
+  | "repli_honnete"
+  | "moteur_couleurs"
+  | "moteur_calcul";
 
 /** Résultat de consultation de la mémoire utilisateur (Studio) — le texte
  * servi et son score d'appariement réels. */
@@ -1051,6 +1058,17 @@ export class NeuralEngine {
     cleMemoire: string = "sans-compte|hors-conversation",
     domaine?: { label: string; nom: string; nomEn: string | null; score: number; source: string } | null,
   ): CompositionReponse {
+    // SOLVEURS EXACTS v5 (couleurs, calcul) : toute question computable
+    // reçoit une réponse CALCULÉE (déterministe, vérifiable) avant le repli
+    // cortex. Zéro IA externe — ce sont des capacités propres du cerveau.
+    const couleurs = resoudreCouleurs(prompt);
+    if (couleurs) {
+      return { texte: couleurs, source: "moteur_couleurs", cache: "miss" };
+    }
+    const calcul = resoudreCalcul(prompt);
+    if (calcul) {
+      return { texte: calcul, source: "moteur_calcul", cache: "miss" };
+    }
     if (this.cortex) {
       const contexte: ContexteLangage = {};
       if (memoire) {

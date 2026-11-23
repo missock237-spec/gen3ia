@@ -1,0 +1,19 @@
+{
+ "name": "parole_professionnelle",
+ "version": 5,
+ "generated_at": "2026-11-23T16:29:28.414264+00:00",
+ "description": "Parole réelle LibriSpeech : clips FLAC + transcriptions vérifiées",
+ "rows": 300,
+ "languages": [
+  "en"
+ ],
+ "task_types": [
+  "transcription_vocale"
+ ],
+ "license": "CC-BY-4.0-gen3ia-v5",
+ "seed": 20261124,
+ "source": "HF openslr/librispeech_asr",
+ "clips_extraites": 300,
+ "clips_commis": 57,
+ "transcriptions_reelles": true
+}

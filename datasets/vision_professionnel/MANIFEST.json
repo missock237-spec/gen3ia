@@ -1,0 +1,19 @@
+{
+ "name": "vision_professionnel",
+ "version": 5,
+ "generated_at": "2026-11-23T16:27:40.419098+00:00",
+ "description": "Vision : images réelles CIFAR-10 + paires de reconnaissance étiquetées",
+ "rows": 3000,
+ "languages": [
+  "en",
+  "fr"
+ ],
+ "task_types": [
+  "reconnaissance_image"
+ ],
+ "license": "CC-BY-4.0-gen3ia-v5",
+ "seed": 20261124,
+ "source": "HF uoft-cs/cifar10",
+ "images_extraites": 3000,
+ "images_commises": 600
+}
