@@ -1,6 +1,7 @@
 "use client";
 
 import { PwaInstallButton, useStandaloneInstalled } from "@/components/pwa/install-button";
+import { PwaUpdateStatus } from "@/components/settings/pwa-update-status";
 import { useDevice } from "@/lib/device/use-device";
 
 /**
@@ -47,6 +48,10 @@ export function PwaInstallSection() {
           <PwaInstallButton align="start" />
         </div>
       )}
+
+      {/* App CONNECTÉE au site : même session, mêmes données, mises à jour
+          automatiques à chaque déploiement — statut réel visible ici. */}
+      <PwaUpdateStatus />
 
       {!standalone && isIos && (
         <div className="mt-4 rounded-2xl bg-[var(--g3-elevated)]/60 p-4">
