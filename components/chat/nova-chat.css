@@ -1146,6 +1146,65 @@
   border: 1px solid var(--g3-border); border-radius: 10px;
   background: var(--g3-elevated);
 }
+
+/* MODE VOIX CONTINU : toggle conversation vocale mains libres + état du cycle. */
+.nova-mode-voix {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px; flex-wrap: wrap;
+}
+.nova-mode-voix-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+  color: var(--g3-text-secondary);
+  padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--g3-border); background: var(--g3-elevated);
+  cursor: pointer;
+}
+.nova-mode-voix-btn.actif {
+  color: var(--g3-primary);
+  border-color: var(--g3-primary);
+  box-shadow: 0 0 0 1px var(--g3-primary) inset;
+}
+.nova-mode-voix-etat {
+  font-size: 12px; color: var(--g3-text-secondary);
+  padding: 4px 10px; border-radius: 10px;
+  border: 1px solid var(--g3-border); background: var(--g3-elevated);
+}
+
+/* ARTEFACT ACTIONS : boutons « Télécharger » et « Modifier » sur les médias créés par gen3. */
+.nova-artefact-actions {
+  margin-top: 6px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.nova-artefact-actions-ligne {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.nova-artefact-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+  color: var(--g3-text-secondary);
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--g3-border); background: var(--g3-elevated);
+  cursor: pointer; text-decoration: none;
+}
+.nova-artefact-btn:hover { border-color: var(--g3-primary); color: var(--g3-primary); }
+.nova-artefact-btn.primaire { border-color: var(--g3-primary); color: var(--g3-primary); }
+.nova-artefact-btn:disabled { opacity: 0.5; cursor: wait; }
+.nova-artefact-etat { font-size: 12px; color: var(--g3-text-secondary); }
+.nova-artefact-editeur {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; border-radius: 10px;
+  border: 1px solid var(--g3-border); background: var(--g3-elevated);
+}
+.nova-artefact-prompt {
+  width: 100%; resize: vertical; font-size: 13px;
+  padding: 6px 8px; border-radius: 8px;
+  border: 1px solid var(--g3-border); background: transparent;
+  color: var(--g3-text-primary);
+}
+.nova-artefact-erreur { font-size: 12px; color: #b3261e; margin: 0; }
+.nova-artefact-resultat { font-size: 12px; color: var(--g3-text-secondary); display: flex; flex-direction: column; gap: 6px; }
+.nova-artefact-resultat p { margin: 0; }
 .nova-lecture-vocale .nova-point-lecture {
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
   background: var(--g3-primary);

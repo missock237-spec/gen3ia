@@ -40,6 +40,8 @@ import { uploadPermanentFiles } from "@/lib/storage/upload-client";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
 import { useVoiceInput } from "./use-voice-input";
 import { cancelSpeech, speakFr } from "./voice-speak";
+import { useVoiceModeContinu } from "./use-voice-mode";
+import { ArtefactActions } from "./artefact-actions";
 import { useWebGpuMedia } from "./use-webgpu-media";
 import "./nova-chat.css";
 
@@ -487,8 +489,12 @@ const MessageView = React.memo(function MessageView({ m, dernierBot, dernierUser
                   ),
                 )}
                 {m.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.imageUrl} alt="Image générée par Gen3ia" className="nova-image-generee" />
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.imageUrl} alt="Image générée par Gen3ia" className="nova-image-generee" />
+                    {/* BOUTONS ARTEFACT : télécharger + modifier par prompt (gen3 applique réellement la volonté de l'utilisateur). */}
+                    <ArtefactActions url={m.imageUrl} type="image" titre="Image générée" />
+                  </>
                 ) : null}
                 {m.enCours ? <span className="nova-curseur" aria-hidden="true" /> : null}
               </>
@@ -1239,13 +1245,18 @@ export default function NovaChat() {
                   ),
                 );
               }
-              /* Chat voix : réponse LUE uniquement si le tour a été dicté —
-               * les tours écrits normaux restent silencieux (pas de TTS intrusif).
+              /* Chat voix : réponse LUE —
+               * · MODE VOIX CONTINU activé : TOUTES les réponses sont lues
+               *   de façon synchronisée (fin réelle de synthèse → réarmement
+               *   automatique du micro — conversation mains libres) ;
+               * · sinon, uniquement les tours DICTÉS (pas de TTS intrusif).
                * VOIX HUMAINE : Kokoro (WebGPU local) d'abord — vraie voix
                * neuronale française ; repli Web Speech puis textuel. */
-              if (dernierTourVocalRef.current) {
+              const texteVoix = final.content || contenu;
+              if (voixContinueRef.current.actif) {
+                if (texteVoix.trim()) voixContinueRef.current.notifierReponse(texteVoix);
+              } else if (dernierTourVocalRef.current) {
                 dernierTourVocalRef.current = false;
-                const texteVoix = final.content || contenu;
                 if (texteVoix.trim()) {
                   setLectureVocale(true);
                   // Lecture asynchrone HORS du dispatch (fonction sync) :
@@ -1402,10 +1413,50 @@ export default function NovaChat() {
     onTranscript: (texte) => {
       dernierTourVocalRef.current = true;
       setSaisie(texte); // injection dans l'état de saisie
+      // MODE VOIX CONTINU : le transcript envoyé fait avancer le cycle
+      // (écoute → attente de la réponse) — conversation mains libres.
+      if (voixContinueRef.current.actif) voixContinueRef.current.notifierTranscriptEnvoye(texte);
       void envoyer(texte); // envoi automatique sans seconde action
     },
     onErreur: (message) => afficherToast(message),
   });
+
+  /* ---- MODE VOIX CONTINU (conversation vocale mains libres) ----
+   * Une fois activé : écoute → envoi auto → réponse gen3 LUE DE FAÇON
+   * SYNCHRONISÉE → fin RÉELLE de la lecture → réarmement automatique du
+   * micro → écoute → … Le cycle tourne jusqu'à désactivation explicite.
+   * La lecture du mode continu passe par Web Speech (fin fiable via le
+   * callback de fin de synthèse) : Kokoro reste la voix des tours dictés
+   * single-shot mais ne fournit pas de signal de fin joué — la
+   * synchronisation du cycle exige une fin réelle (jamais de timer devin). */
+  const voixContinue = useVoiceModeContinu({
+    supported: saisieVocale.supported,
+    ecouter: () => saisieVocale.demarrer(),
+    arreterEcoute: () => saisieVocale.annuler(),
+    lire: (texte) =>
+      new Promise<void>((resoudre, rejeter) => {
+        setLectureVocale(true);
+        const parle = speakFr(texte, {
+          onFin: () => {
+            setLectureVocale(false);
+            resoudre();
+          },
+        });
+        if (!parle) {
+          setLectureVocale(false);
+          rejeter(new Error("Synthèse vocale indisponible sur ce navigateur."));
+        }
+      }),
+    onErreur: (message) => afficherToast(message),
+  });
+  const voixContinueRef = React.useRef(voixContinue);
+  voixContinueRef.current = voixContinue;
+
+  /* Le début d'écoute réel (micro armé par le mode continu OU par le bouton
+   * micro) fait avancer le cycle du mode continu. */
+  React.useEffect(() => {
+    if (saisieVocale.etat === "ecoute") voixContinueRef.current.notifierDebutEcoute();
+  }, [saisieVocale.etat]);
 
   /* ---- Régénération : renvoie le dernier message utilisateur ---- */
   const regenerer = React.useCallback(async () => {
@@ -1898,6 +1949,35 @@ export default function NovaChat() {
                       </span>
                     ))}
                   </div>
+                ) : null}
+              </div>
+
+              {/* MODE VOIX CONTINU : toggle conversation vocale mains libres +
+                  état du cycle synchronisé (écoute / gen3 réfléchit / gen3 parle). */}
+              <div className="nova-mode-voix">
+                <button
+                  type="button"
+                  className={voixContinue.actif ? "nova-mode-voix-btn actif" : "nova-mode-voix-btn"}
+                  aria-pressed={voixContinue.actif}
+                  title={
+                    voixContinue.actif
+                      ? "Mode voix continu activé — cliquer pour désactiver"
+                      : "Activer le mode voix continu (conversation vocale mains libres)"
+                  }
+                  onClick={() => (voixContinue.actif ? voixContinue.desactiver() : voixContinue.activer())}
+                >
+                  🎙 Mode voix{voixContinue.actif ? " : ON" : ""}
+                </button>
+                {voixContinue.actif ? (
+                  <span className="nova-mode-voix-etat" role="status">
+                    {voixContinue.etatCycle === "ecoute"
+                      ? "Écoute… parlez"
+                      : voixContinue.etatCycle === "attente-reponse"
+                        ? "Gen3 réfléchit…"
+                        : voixContinue.etatCycle === "lecture"
+                          ? "Gen3 parle…"
+                          : "Prêt à écouter"}
+                  </span>
                 ) : null}
               </div>
 

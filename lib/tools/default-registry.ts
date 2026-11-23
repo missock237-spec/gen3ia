@@ -93,6 +93,16 @@ import { terminalGuideTool } from "@/lib/tools/agent-suite/terminal-guide";
 import { contentPackageTool } from "@/lib/tools/agent-suite/content-package";
 import { knowledgeGraphTool } from "@/lib/tools/agent-suite/knowledge-graph";
 import { decisionAnalyzeTool } from "@/lib/tools/agent-suite/decision-analyze";
+// Entraînement gen3 (clé facturation, données synthétiques, modèles fournis,
+// monde virtuel pour IA, registre des modèles) — garde de clé obligatoire dans chaque execute().
+import {
+  entrainementCleStatutTool,
+  entrainementDatasetCreerTool,
+  entrainementModeleEntrainerTool,
+  entrainementModeleTesterTool,
+} from "@/lib/tools/entrainement/outils";
+import { entrainementModeleRegistreTool, mondeIaSeanceTool } from "@/lib/tools/entrainement/outils";
+import { artefactModifierTool } from "@/lib/tools/artefacts/modifier";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -217,6 +227,18 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(contentPackageTool);
   registry.register(knowledgeGraphTool);
   registry.register(decisionAnalyzeTool);
+  // Entraînement gen3 : la VÉRIFICATION de la clé de niveau unique
+  // d'entraînement (facturation) est faite DANS chaque execute() — sans clé
+  // valable, l'outil refuse avec la démarche d'obtention (jamais simulé).
+  registry.register(entrainementCleStatutTool);
+  registry.register(entrainementDatasetCreerTool);
+  registry.register(entrainementModeleEntrainerTool);
+  registry.register(entrainementModeleTesterTool);
+  registry.register(entrainementModeleRegistreTool);
+  registry.register(mondeIaSeanceTool);
+  // Édition d'artefacts par prompt (image/audio/vidéo) : bouton « Modifier »
+  // et outil gen3 partagent le même moteur réel (sharp / PCM-WAV / ffmpeg).
+  registry.register(artefactModifierTool);
   // build.autofix : crée une PULL REQUEST GitHub réelle — gated par le token
   // de la plateforme (comme github.create_repository) ; sans token, l'outil
   // n'est ni enregistré ni annoncé au planner.
