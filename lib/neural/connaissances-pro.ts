@@ -22,6 +22,13 @@ import "server-only";
  * moteur-calcul) branchés dans engine.composer — les paires ici apportent la
  * couverture conversationnelle (phrasings variés), les solveurs la précision
  * mathématique/computationnelle sur toute question nouvelle.
+ *
+ * TESTS : sous vitest (VITEST=1) l'ingestion lourde au boot est DÉSACTIVÉE
+ * (les suites qui bootent le runtime réel — webdev, job-domaines — ont des
+ * budgets de temps serrés sur runners 2 cœurs ; l'ingestion 7 000+ paires
+ * y créait un timeout). Le comportement PRODUCTION est inchangé (VPS/PM2 :
+ * ingestion complète). Les tests qui veulent le savoir v5 le construisent
+ * explicitement (cf. lib/__tests__/evaluation-v5.test.ts : cortex dédié).
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -135,6 +142,13 @@ export async function ingérerConnaissancesPro(
     parSource: {},
     dureeMs: 0,
   };
+
+  // TESTS (vitest) : boot léger — voir en-tête du module. L'ingestion reste
+  // complète en production ; les tests dédiés construisent leur propre cortex.
+  if (process.env.VITEST || process.env.NODE_ENV === "test") {
+    resultat.dureeMs = Date.now() - debut;
+    return resultat;
+  }
 
   // Idempotence : si le marqueur existe avec des paires déjà apprises, skip.
   try {
