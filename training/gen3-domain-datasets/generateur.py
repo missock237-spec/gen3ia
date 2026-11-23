@@ -163,6 +163,12 @@ def generer_domaine(spec, nb_lignes: int, rng: random.Random) -> list[dict]:
             f"(déduplication : {len(vus)} contenus uniques)",
             file=sys.stderr,
         )
+    # MÉLANGE v5 (Job 478451) : les types de tâches sont tirés par poids mais
+    # se retrouvent groupés en tête de fichier — un chargement streaming à
+    # plafond (webdev, chargers domaines) ne verrait alors qu'une partie des
+    # types. Mélange reproductible (même rng) AVANT l'écriture : chaque
+    # fenêtre de lecture devient représentative des 10 types de tâches.
+    rng.shuffle(lignes)
     return lignes[:nb_lignes]
 
 
