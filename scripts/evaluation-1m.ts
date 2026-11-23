@@ -196,7 +196,7 @@ function evaluerCortex(): Record<string, unknown> {
 
   // Questions tenues à l'écart : les DERNIÈRES lignes de chaque dataset
   // (l'ingestion ci-dessus a pris les PREMIÈRES — jamais vues en apprentissage)
-  const tests: Array<{ dataset: string; question: string; motsClesReponse: string[] }[]> = {
+  const tests: Record<string, Array<{ dataset: string; question: string; motsClesReponse: string[] }>> = {
     couleurs_v5: [], math_professionnel: [], sciences_professionnel: [],
   };
   const REGLES: Record<string, number> = {
@@ -218,7 +218,7 @@ function evaluerCortex(): Record<string, unknown> {
           });
         }
       } catch { /* ignore */ }
-      if (tests[dossier as keyof typeof tests].length >= n) break;
+      if (tests[dossier].length >= n) break;
     }
   }
 

@@ -43,9 +43,9 @@ interface EntreeCache {
       | "memoire_utilisateur"
       | "memoire_dev_web"
       | "recherche_web"
-      | "repli_honnete";
-      | \"moteur_couleurs\"
-      | \"moteur_calcul\";
+      | "repli_honnete"
+      | "moteur_couleurs"
+      | "moteur_calcul";
     theme?: string;
     scoreAppariement?: number;
     clePair?: string;
