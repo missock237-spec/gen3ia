@@ -9,7 +9,7 @@ import { authFetch, useSessionAvailable } from "@/lib/firebase/auth-client";
 import type { LiveAction } from "@/lib/live/types";
 import { useVisiblePolling } from "@/components/hooks/use-visible-polling";
 
-import { LiveGeminiPanel } from "./live-gemini-panel";
+import { LiveNeuralPanel } from "./live-neural-panel";
 
 type Permission =
   | "screen.read"
@@ -834,7 +834,7 @@ export function LiveDashboard() {
 
       {/* Canal complémentaire Gemini Live (écran + voix) — Task 2-a :
           le flux sessions/frames existant ci-dessus reste inchangé. */}
-      <LiveGeminiPanel />
+      <LiveNeuralPanel />
     </div>
   );
 }

@@ -29,6 +29,17 @@ import type { CoucheOndesNeuronales } from "./core/couche-rpia";
 import { INTENSITE_MAX_PAR_NEURONE } from "./encoding/text-encoder";
 import { predireDomaineLexical } from "./training/domaines";
 
+// ADAPTATION DE DOMAINE DYNAMIQUE : un domaine hors des 18 pools entraînés
+// est appris depuis les mots informatifs du message et mémorisé par le
+// moteur — la reconnaissance de domaine devient évolutive (n'importe quel
+// domaine ou situation, sans réentraînement complet).
+import {
+  formerDomaineDynamique,
+  reconnaitreDomaineDynamique,
+  renforcerDomaineDynamique,
+  type DomaineDynamiqueGen3,
+} from "./adaptation-domaine";
+
 /** Nombre d'époques de résonance RPIA par tour de chat (latence bornée : chaque époque = O(100) ops). */
 export const EPOQUES_RPIA_CHAT = 12;
 
@@ -171,12 +182,59 @@ function phraseDomaine(nomFr: string, score: number): string {
 }
 
 export class NeuralEngine {
+  /** ADAPTATION DE DOMAINE : registre des domaines APPRIS à la volée
+   * (mémoire d'adaptation du moteur — les échanges restent par ailleurs
+   * consolidés dans l'hippocampe). Renforcé à chaque reconnaissance. */
+  private readonly domainesDynamiques = new Map<string, DomaineDynamiqueGen3>();
+
   /**
    * CACHE D'INFÉRENCE (par moteur — cf. creerCacheReponses) : les redites
    * identiques au sein d'une même conversation court-circuitent le scoring
    * du cortex. Scopé par compte/conversation (voir cleMemoirePour).
    */
   private readonly cacheReponses = creerCacheReponses();
+
+  /**
+   * ADAPTATION DE DOMAINE DYNAMIQUE — la couche entraînée (18 domaines)
+   * PRIME toujours ; en cas de carence, le domaine est reconnu dans le
+   * registre des domaines appris, sinon il est FORMÉ depuis les mots
+   * informatifs réels du message et mémorisé. Chaque requête hors-catalogue
+   * enrichit donc le cerveau au lieu de retomber sur du générique —
+   * « n'importe quel domaine ou situation » depuis le système neuronal et
+   * sa mémoire, sans réentraînement complet.
+   */
+  private domaineAvecAdaptation(texte: string): {
+    label: string;
+    nom: string;
+    nomEn: string | null;
+    score: number;
+    source: string;
+  } | null {
+    const lexicale = detecterDomaine(texte);
+    if (lexicale) return lexicale;
+    const reconnu = reconnaitreDomaineDynamique(texte, this.domainesDynamiques);
+    if (reconnu) {
+      const existant = this.domainesDynamiques.get(reconnu.label);
+      if (existant) this.domainesDynamiques.set(reconnu.label, renforcerDomaineDynamique(existant));
+      return reconnu;
+    }
+    const apprenti = formerDomaineDynamique(texte, Date.now(), this.domainesDynamiques.size + 1);
+    if (!apprenti) return null;
+    this.domainesDynamiques.set(apprenti.label, apprenti);
+    return {
+      label: apprenti.label,
+      nom: apprenti.nom,
+      nomEn: null,
+      score: apprenti.score,
+      source: "dynamique",
+    };
+  }
+
+  /** Domaines appris à la volée (transparence Studio / tests), les plus
+   * renforcés d'abord. */
+  domainesDynamiquesAppris(): DomaineDynamiqueGen3[] {
+    return Array.from(this.domainesDynamiques.values()).sort((a, b) => b.score - a.score);
+  }
 
   constructor(
     private readonly noyau: NoyauCentralGen3,
@@ -384,8 +442,11 @@ export class NeuralEngine {
     // cortex et décodeur, comme avant.
     const knowledgeContext = options.knowledgeContext?.trim() ?? "";
     const memoire = this.memoirePour(options);
-    // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
-    const domaine = detecterDomaine(messageUtilisateur);
+    // COUCHE DES DOMAINES : détection lexicale (18 domaines entraînés)
+    // puis ADAPTATION DYNAMIQUE — un domaine hors catalogue est appris
+    // depuis le message et mémorisé (n'importe quel domaine, sans
+    // réentraînement complet).
+    const domaine = this.domaineAvecAdaptation(messageUtilisateur);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
@@ -470,8 +531,11 @@ export class NeuralEngine {
     // ici aussi (correction — avant, seul generate() non-flux la consultait :
     // les reprises anaphoriques ne fonctionnaient jamais en production).
     const memoire = this.memoirePour(options);
-    // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
-    const domaine = detecterDomaine(messageUtilisateur);
+    // COUCHE DES DOMAINES : détection lexicale (18 domaines entraînés)
+    // puis ADAPTATION DYNAMIQUE — un domaine hors catalogue est appris
+    // depuis le message et mémorisé (n'importe quel domaine, sans
+    // réentraînement complet).
+    const domaine = this.domaineAvecAdaptation(messageUtilisateur);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       (knowledgeContext ? composerDepuisConnaissances(messageUtilisateur, knowledgeContext) : null) ??
@@ -548,8 +612,11 @@ export class NeuralEngine {
 
     const decode = decodeResponse(dernierRapport, resonances, motsCles);
     const memoire = this.memoirePour(options);
-    // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
-    const domaine = detecterDomaine(messageUtilisateur);
+    // COUCHE DES DOMAINES : détection lexicale (18 domaines entraînés)
+    // puis ADAPTATION DYNAMIQUE — un domaine hors catalogue est appris
+    // depuis le message et mémorisé (n'importe quel domaine, sans
+    // réentraînement complet).
+    const domaine = this.domaineAvecAdaptation(messageUtilisateur);
     const composition =
       (await this.pilotage?.(messageUtilisateur, options)) ??
       this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
