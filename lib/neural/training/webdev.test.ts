@@ -128,5 +128,10 @@ describe("entrainerDeveloppementWeb — chaîne réelle", () => {
     const lu = await lireRapportWebdev();
     expect(lu).not.toBeNull();
     expect(lu?.statut).toBe("termine");
-  }, 120_000);
+    // 240 s : durée mesurée sur runner CI 2 cœurs (coverage v8) — 114 215 ms
+    // au run vert 4e527f1 (95 % du budget 120 s) ; la variance du runner
+    // (+5 %) a fait dépasser le budget au run 7632ea7 sans aucun changement
+    // fonctionnel (36 s en local). 240 s absorbe la variance mesurée,
+    // production inchangée (test-only).
+  }, 240_000);
 });
