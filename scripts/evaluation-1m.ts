@@ -10,6 +10,7 @@ import { join } from "node:path";
 
 import { tokenize } from "../lib/neural/encoding/text-encoder";
 import { MOTS_CLES_ENRICHIS } from "../lib/neural/training/mots-cles-enrichis";
+import { POIDS_ANCRS_V51, NOUVEAUX_ANCRS_V51, ANCRS_CURATES_V51 } from "../lib/neural/training/ancres-ponderees-v51";
 import { resoudreCouleurs } from "../lib/neural/solveurs/moteur-couleurs";
 import { resoudreCalcul } from "../lib/neural/solveurs/moteur-calcul";
 import { CortexLangagierGen3 } from "../lib/neural/generation/language";
@@ -69,12 +70,22 @@ function NOXAU_FALLBACK(): Record<string, string[]> {
 function predireLexical(texte: string): { id: string; score: number } | null {
   const tokens = new Set(tokenize(texte));
   if (tokens.size === 0) return null;
+  // Miroir EXACT de predireDomaineLexical v5.1 (domaines.ts) : contribution
+  // = base × masse d'usage mesurée (POIDS_ANCRS_V51) ; token non mesuré =
+  // exclusif → masse 1.
   let meilleur: { id: string; score: number } | null = null;
   for (const id of IDS) {
     let score = 0;
-    for (const mot of NOYAU[id] ?? []) if (tokens.has(mot)) score += 2;
-    for (const ancre of ANCRES_ETENDUES[id] ?? []) if (tokens.has(ancre)) score += 1;
-    for (const ancre of MOTS_CLES_ENRICHIS[id] ?? []) if (tokens.has(ancre)) score += 1;
+    const contribuer = (token: string, base: number): void => {
+      if (!tokens.has(token)) return;
+      const table = POIDS_ANCRS_V51[token];
+      score += base * (table ? (table[id] ?? 0) : 1);
+    };
+    for (const mot of NOYAU[id] ?? []) contribuer(mot, 2);
+    for (const ancre of ANCRES_ETENDUES[id] ?? []) contribuer(ancre, 1);
+    for (const ancre of MOTS_CLES_ENRICHIS[id] ?? []) contribuer(ancre, 1);
+    for (const ancre of NOUVEAUX_ANCRS_V51[id] ?? []) contribuer(ancre, 1);
+    for (const ancre of ANCRS_CURATES_V51[id] ?? []) if (tokens.has(ancre)) score += 1;
     if (score <= 0) continue;
     if (!meilleur || score > meilleur.score) meilleur = { id, score };
   }

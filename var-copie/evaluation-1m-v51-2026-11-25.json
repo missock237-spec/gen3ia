@@ -1,0 +1,105 @@
+{
+ "date": "2026-11-24T18:41:29.225Z",
+ "job": "478451",
+ "graine": 999001,
+ "routing1M": {
+  "requetesExecutees": 1000000,
+  "dureeMs": 49134,
+  "requetesParSeconde": 20353,
+  "accuracyGlobale": 1,
+  "parDomaine": {
+   "generation_images": {
+    "total": 55559,
+    "accuracy": 1
+   },
+   "video": {
+    "total": 55708,
+    "accuracy": 1
+   },
+   "son": {
+    "total": 55488,
+    "accuracy": 1
+   },
+   "clips_musicaux": {
+    "total": 55632,
+    "accuracy": 1
+   },
+   "developpement_web": {
+    "total": 55635,
+    "accuracy": 1
+   },
+   "test": {
+    "total": 55324,
+    "accuracy": 1
+   },
+   "redaction_documents": {
+    "total": 55338,
+    "accuracy": 1
+   },
+   "sciences_humaines": {
+    "total": 55719,
+    "accuracy": 1
+   },
+   "recherche_scientifique": {
+    "total": 55874,
+    "accuracy": 1
+   },
+   "cybersecurite": {
+    "total": 55638,
+    "accuracy": 1
+   },
+   "recherche_web": {
+    "total": 55403,
+    "accuracy": 1
+   },
+   "multimodal": {
+    "total": 55416,
+    "accuracy": 1
+   },
+   "hacker": {
+    "total": 55233,
+    "accuracy": 1
+   },
+   "construction_machines": {
+    "total": 55657,
+    "accuracy": 1
+   },
+   "vente": {
+    "total": 55254,
+    "accuracy": 1
+   },
+   "sante_medical": {
+    "total": 55809,
+    "accuracy": 1
+   },
+   "analyse_donnees": {
+    "total": 55466,
+    "accuracy": 1
+   },
+   "conseiller_commercial": {
+    "total": 55847,
+    "accuracy": 1
+   }
+  }
+ },
+ "cortex": {
+  "pairesApprises": 7341,
+  "questionsHorsApprentissage": 900,
+  "hits": 0.2656,
+  "parDataset": {
+   "couleurs_v5": 0.783,
+   "math_professionnel": 0.003,
+   "sciences_professionnel": 0.01
+  }
+ },
+ "solveurs": {
+  "calcul": {
+   "questions": 10000,
+   "exactitude": 1
+  },
+  "couleurs": {
+   "questions": 10000,
+   "exactitude": 1
+  }
+ }
+}

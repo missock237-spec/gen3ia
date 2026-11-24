@@ -596,16 +596,20 @@ export function predireDomaine(
  * primaire (INTENT_KEYWORDS) + apprentissage SNN en plasticité (le
  * substrat vivant continue d'apprendre, accuracy rapportée honnêtement).
  *
- * Score : 2 points par mot-clé du domaine reconnu (mots-clés noyau), 1
- * point par ancre étendue (vocabulaire métier statique). null si aucun
- * match (honnêteté : pas de domaine inventé).
+ * Score v5.1 : base (2 points par mot-clé noyau, 1 par ancre étendue/enrichie
+ * /nouvelle) MULTIPLIÉE par la masse d'usage réelle du token dans le domaine
+ * (POIDS_ANCRS_V51, mesurée sur les 18 datasets complets — un token partagé
+ * ne rapporte plus 2 points entiers à chaque domaine qui le revendique :
+ * chaque domaine reçoit sa fraction mesurée, ce qui lève les collisions
+ * « analyse », « qualité », « suivi », « web »). Token absent de la table =
+ * exclusif → masse 1. null si aucun match (honnêteté : pas de domaine inventé).
  */
 export interface DetectionDomaine {
   label: string;
   id: string;
   nomFr: string;
   nomEn: string;
-  /** Score lexicale brut (2/mot-clé noyau + 1/mot-clé étendu). */
+  /** Score lexical v5.1 (Σ base × masse d'usage mesurée — peut être flottant). */
   score: number;
   /** Tokens reconnus (traçabilité). */
   matched: string[];
@@ -614,14 +618,18 @@ export interface DetectionDomaine {
 /** Ancres étendues statiques (complément des motsCles — sans I/O). */
 // ANCRÉES ENRICHIES v5 (Job 478451) : tokens discriminants extraits des
 // datasets complets (100 000 lignes/domaine, seuil : présent dans ≤ 3
-// domaines, ≥ 8 occurrences — cf. mots-cles-enrichis.ts généré). Consommés
-// comme ancres ÉTENDUES (1 point) dans predireDomaineLexical : ils élargissent
-// la couverture de vocabulaire du routeur lexical de production SANS écraser
-// les mots-clés noyau (2 points, précision curatée) en cas de recouvrement.
+// domaines, ≥ 8 occurrences — cf. mots-cles-enrichis.ts généré v5.1 avec le
+// tokeniseur exact du routeur). Consommés comme ancres ÉTENDUES (1 point ×
+// masse) dans predireDomaineLexical : ils élargissent la couverture de
+// vocabulaire réel SANS écraser les mots-clés noyau (2 points × masse).
 const ANCRER_ENRICHIES_V5: Record<string, readonly string[]> = MOTS_CLES_ENRICHIS_V5;
 
 // Import placé après les constantes du domaine (module généré, zéro I/O).
 import { MOTS_CLES_ENRICHIS as MOTS_CLES_ENRICHIS_V5 } from "./mots-cles-enrichis";
+// v5.1 (Job 478451) : masses d'usage mesurées sur les 18 datasets complets +
+// tokens exclusifs découverts avec le tokeniseur exact du routeur + complément
+// curaté (vocabulaire métier produit, mesuré absent des datasets).
+import { POIDS_ANCRS_V51, NOUVEAUX_ANCRS_V51, ANCRS_CURATES_V51 } from "./ancres-ponderees-v51";
 
 const ANCRES_ETENDUES: Record<string, string[]> = {
   generation_images: ["rendu", "photorealiste", "photorealistic", "watercolor", "aquarelle", "variation"],
@@ -653,22 +661,26 @@ export function predireDomaineLexical(texte: string): DetectionDomaine | null {
     const label = `DOM_${domaine.id.toUpperCase()}`;
     let score = 0;
     const matched: string[] = [];
-    for (const motCle of domaine.motsCles) {
-      if (tokens.has(motCle)) {
-        score += 2;
-        matched.push(motCle);
-      }
-    }
-    for (const ancre of ANCRES_ETENDUES[domaine.id] ?? []) {
-      if (tokens.has(ancre)) {
-        score += 1;
-        matched.push(ancre);
-      }
-    }
-    // v5 : ancres enrichies des datasets complets (1 point, comme les
-    // ancres étendues — elles élargissent la couverture sans écraser les
-    // mots-clés noyau en cas de recouvrement inter-domaines).
-    for (const ancre of ANCRER_ENRICHIES_V5[domaine.id] ?? []) {
+    // v5.1 : contribution = base × masse d'usage mesurée du token pour ce
+    // domaine (token non mesuré = exclusif → masse 1 ; token partagé →
+    // fraction réelle, ce qui démote les mots génériques inter-domaines).
+    const contribuer = (token: string, base: number): void => {
+      if (!tokens.has(token)) return;
+      const table = POIDS_ANCRS_V51[token];
+      score += base * (table ? (table[domaine.id] ?? 0) : 1);
+      matched.push(token);
+    };
+    for (const motCle of domaine.motsCles) contribuer(motCle, 2);
+    for (const ancre of ANCRES_ETENDUES[domaine.id] ?? []) contribuer(ancre, 1);
+    // v5 : ancres enrichies des datasets complets (tokeniseur exact depuis
+    // v5.1 — couverture du vocabulaire réel, masse appliquée).
+    for (const ancre of ANCRER_ENRICHIES_V5[domaine.id] ?? []) contribuer(ancre, 1);
+    // v5.1 : tokens exclusifs découverts (≤ 2 domaines, ≥ 8 occurrences,
+    // masse ≥ 0.8) — ex. « mfa », « cve », « pare » + « feu » cybersecurite.
+    for (const ancre of NOUVEAUX_ANCRS_V51[domaine.id] ?? []) contribuer(ancre, 1);
+    // v5.1 curaté : vocabulaire métier produit, base 1 FLAT (insensible à la
+    // masse — ancres d'expert bornées, provenance documentée dans le module).
+    for (const ancre of ANCRS_CURATES_V51[domaine.id] ?? []) {
       if (tokens.has(ancre)) {
         score += 1;
         matched.push(ancre);

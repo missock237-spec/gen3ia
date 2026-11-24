@@ -46,7 +46,7 @@
         "en": 50044
       },
       "safety_label": "sans_objet",
-      "duree_s": 6.7
+      "duree_s": 7.2
     },
     {
       "id": "video",
@@ -80,11 +80,11 @@
         }
       },
       "langues": {
-        "fr": 50105,
-        "en": 49895
+        "en": 49896,
+        "fr": 50104
       },
       "safety_label": "sans_objet",
-      "duree_s": 7.3
+      "duree_s": 8.2
     },
     {
       "id": "son",
@@ -106,11 +106,11 @@
         },
         "voix_off": {
           "poids": 0.3,
-          "generees": 28858
+          "generees": 28859
         },
         "chaine_audio": {
           "poids": 0.3,
-          "generees": 30212
+          "generees": 30211
         }
       },
       "langues": {
@@ -118,7 +118,7 @@
         "en": 50022
       },
       "safety_label": "sans_objet",
-      "duree_s": 5.9
+      "duree_s": 7.0
     },
     {
       "id": "clips_musicaux",
@@ -152,7 +152,7 @@
         "en": 50094
       },
       "safety_label": "sans_objet",
-      "duree_s": 5.9
+      "duree_s": 6.9
     },
     {
       "id": "developpement_web",
@@ -183,11 +183,11 @@
         }
       },
       "langues": {
-        "en": 50042,
-        "fr": 49958
+        "fr": 49958,
+        "en": 50042
       },
       "safety_label": "sans_objet",
-      "duree_s": 8.3
+      "duree_s": 9.0
     },
     {
       "id": "test",
@@ -221,7 +221,7 @@
         "en": 49964
       },
       "safety_label": "sans_objet",
-      "duree_s": 7.4
+      "duree_s": 8.2
     },
     {
       "id": "construction_machines",
@@ -239,7 +239,7 @@
       "taches": {
         "conception_machine": {
           "poids": 0.35,
-          "generees": 47132
+          "generees": 47133
         },
         "depannage_machine": {
           "poids": 0.3,
@@ -247,15 +247,15 @@
         },
         "programmation_controle": {
           "poids": 0.35,
-          "generees": 43994
+          "generees": 43993
         }
       },
       "langues": {
-        "en": 49992,
-        "fr": 50008
+        "en": 49993,
+        "fr": 50007
       },
       "safety_label": "sans_objet",
-      "duree_s": 7.7
+      "duree_s": 8.5
     },
     {
       "id": "cybersecurite",
@@ -280,11 +280,11 @@
         }
       },
       "langues": {
-        "en": 49885,
-        "fr": 50115
+        "en": 49886,
+        "fr": 50114
       },
       "safety_label": "recherche_defensive",
-      "duree_s": 6.1
+      "duree_s": 7.0
     },
     {
       "id": "hacker",
@@ -309,11 +309,11 @@
         }
       },
       "langues": {
-        "fr": 50047,
-        "en": 49953
+        "en": 49954,
+        "fr": 50046
       },
       "safety_label": "ctf_educatif",
-      "duree_s": 9.0
+      "duree_s": 9.5
     },
     {
       "id": "redaction_documents",
@@ -338,11 +338,11 @@
         }
       },
       "langues": {
-        "fr": 50101,
-        "en": 49899
+        "en": 49899,
+        "fr": 50101
       },
       "safety_label": "sans_objet",
-      "duree_s": 6.2
+      "duree_s": 7.2
     },
     {
       "id": "sciences_humaines",
@@ -367,11 +367,11 @@
         }
       },
       "langues": {
-        "fr": 49980,
-        "en": 50020
+        "en": 50021,
+        "fr": 49979
       },
       "safety_label": "sans_objet",
-      "duree_s": 8.8
+      "duree_s": 9.8
     },
     {
       "id": "recherche_scientifique",
@@ -388,11 +388,11 @@
       "taches": {
         "protocole_recherche": {
           "poids": 0.55,
-          "generees": 57582
+          "generees": 57581
         },
         "vulgarisation": {
           "poids": 0.45,
-          "generees": 42418
+          "generees": 42419
         }
       },
       "langues": {
@@ -400,7 +400,7 @@
         "en": 50121
       },
       "safety_label": "sans_objet",
-      "duree_s": 6.2
+      "duree_s": 6.9
     },
     {
       "id": "recherche_web",
@@ -425,11 +425,11 @@
         }
       },
       "langues": {
-        "fr": 50146,
-        "en": 49854
+        "en": 49854,
+        "fr": 50146
       },
       "safety_label": "sans_objet",
-      "duree_s": 9.0
+      "duree_s": 9.8
     },
     {
       "id": "multimodal",
@@ -454,11 +454,11 @@
         }
       },
       "langues": {
-        "fr": 50167,
-        "en": 49833
+        "en": 49833,
+        "fr": 50167
       },
       "safety_label": "sans_objet",
-      "duree_s": 9.4
+      "duree_s": 10.3
     },
     {
       "id": "vente",
@@ -483,11 +483,11 @@
         }
       },
       "langues": {
-        "fr": 49970,
-        "en": 50030
+        "en": 50031,
+        "fr": 49969
       },
       "safety_label": "sans_objet",
-      "duree_s": 6.3
+      "duree_s": 7.0
     },
     {
       "id": "sante_medical",
@@ -512,11 +512,11 @@
         }
       },
       "langues": {
-        "fr": 49945,
-        "en": 50055
+        "en": 50055,
+        "fr": 49945
       },
       "safety_label": "info_medicale_generale",
-      "duree_s": 9.9
+      "duree_s": 10.7
     },
     {
       "id": "analyse_donnees",
@@ -545,11 +545,11 @@
         }
       },
       "langues": {
-        "en": 49973,
-        "fr": 50027
+        "fr": 50027,
+        "en": 49973
       },
       "safety_label": "sans_objet",
-      "duree_s": 11.8
+      "duree_s": 12.8
     },
     {
       "id": "conseiller_commercial",
@@ -578,7 +578,7 @@
         "en": 49995
       },
       "safety_label": "sans_objet",
-      "duree_s": 9.0
+      "duree_s": 9.9
     }
   ]
 }

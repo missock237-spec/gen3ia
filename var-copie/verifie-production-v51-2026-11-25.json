@@ -1,0 +1,56 @@
+{
+ "date": "2026-11-24T17:27:35.445603+00:00",
+ "job": "478451",
+ "tache": "Relance CD gen3ia e49ca45 + vérification production",
+ "resultats": [
+  {
+   "controle": "version.json servi par la production",
+   "url": "https://gen3ia.online/version.json",
+   "http": null,
+   "match": false,
+   "erreur": "URLError: <urlopen error timed out>"
+  },
+  {
+   "controle": "page d'accueil production",
+   "url": "https://gen3ia.online/",
+   "http": null,
+   "match": false,
+   "erreur": "URLError: <urlopen error timed out>"
+  },
+  {
+   "controle": "release cd-latest = origin/main",
+   "sha_cd_latest": "4e527f1761d14829e65752d4f9fc98fca0ba49f7",
+   "sha_main": "4e527f1761d14829e65752d4f9fc98fca0ba49f7",
+   "buildId": "AMH5D7lOEN8mJ9hqC3-Mx",
+   "publishedAt": "2026-11-24T17:19:41Z",
+   "match": true
+  },
+  {
+   "controle": "derniere surveillance production",
+   "run": 45361525286,
+   "status": "completed",
+   "conclusion": "failure",
+   "created_at": "2026-11-24T09:03:15Z",
+   "match": false
+  },
+  {
+   "controle": "dernier guerisseur production",
+   "run": 45359671857,
+   "status": "completed",
+   "conclusion": "success",
+   "created_at": "2026-11-24T08:50:43Z",
+   "match": true
+  },
+  {
+   "controle": "HF Kings237/gen3ia-media-engine v5/medias",
+   "detail": "670 fichiers réels publiés et vérifiés par scripts/publish_hf_v5.py (600 images CIFAR-10, 30 clips LibriSpeech, 40 vidéos ffmpeg)",
+   "fichiers_verifies": 670,
+   "match": true
+  }
+ ],
+ "conclusion": {
+  "production_joignable": false,
+  "cd_relance": "workflow_dispatch 45446576599 déclenché sur main (sha 4e527f1) ; build cd-latest déjà à jour du sha main (canal pull armé)",
+  "vps": "injoignable — issue #163 ouverte, escalade console propriétaire en cours ; autorisation propriétaire appliquée : le travail continue sans le VPS"
+ }
+}
