@@ -124,6 +124,11 @@ export class Gen3iaCoeurAutonome {
     return this.cycle;
   }
 
+  /** Dossier d'état du core (var/autonomous — partagé par les modules). */
+  dossierEtat(): string {
+    return this.dossier;
+  }
+
   /**
    * Exécute UN cycle : chaque module DÛ est dispatché SANS être attendu
    * (les cycles ne dépendent pas des cycles précédents), avec plafond de
