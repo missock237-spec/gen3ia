@@ -46,16 +46,35 @@ export async function demarrerCoeurAutonome(): Promise<ResultatArmement> {
   try {
     const { agentSanteCerveau } = await import("./modules/agent-sante-cerveau");
     const coeur = getCoeurAutonome({ config });
+    const modules: string[] = ["sante-cerveau"];
     coeur.enregistrerModule(agentSanteCerveau());
+
+    // LOT 2-5 (collecteur + pipeline) : armés par défaut (cycles 5 min du
+    // plan), désactivables par AUTO_COLLECTE=0 (collecte légère possible).
+    if (process.env.AUTO_COLLECTE !== "0") {
+      const { agentCollecteur } = await import("./acquisition/collecteur");
+      const { agentTraitement } = await import("./pipeline/worker");
+      const { RegistreSources } = await import("./acquisition/source-registry");
+      const { FileLots } = await import("./pipeline/queue");
+      const { MemoireConnaissances } = await import("./knowledge/memoire-connaissances");
+      const dossier = coeur.dossierEtat();
+      const registre = new RegistreSources(dossier);
+      const file = new FileLots(dossier);
+      const memoire = new MemoireConnaissances(dossier);
+      coeur.enregistrerModule(agentCollecteur({ registre, file }));
+      coeur.enregistrerModule(agentTraitement({ file, memoire, registre, dossierCore: dossier }));
+      modules.push("acquisition", "traitement");
+    }
+
     const reprise = coeur.demarrer();
     return {
       arme: true,
       dejaDemarre: reprise.dejaDemarre,
-      modulesEnregistres: ["sante-cerveau"],
+      modulesEnregistres: modules,
       tachesReprises: reprise.tachesReprises,
       message: reprise.dejaDemarre
         ? "Cœur autonome déjà actif (idempotent)."
-        : `Cœur autonome armé (cycle 5 min) — ${reprise.tachesReprises} tâche(s) interrompue(s) reprise(s) de l'état persisté.`,
+        : `Cœur autonome armé — modules : ${modules.join(", ")} (cycle 5 min) — ${reprise.tachesReprises} tâche(s) interrompue(s) reprise(s) de l'état persisté.`,
     };
   } catch (erreur) {
     return {
