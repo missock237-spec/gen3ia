@@ -103,6 +103,23 @@ export async function register(): Promise<void> {
         erreur instanceof Error ? erreur.message : String(erreur),
       );
     }
+
+    // GEN3IA AUTONOMOUS CORE (Phase 1 du plan « GEN3IA AUTONOMOUS BRAIN ») :
+    // le centre de coordination des modules-agents est armé ICI, au boot —
+    // cycle 5 min, supervision, traçabilité, reprise après redémarrage
+    // (var/autonomous/etat.json). Désactivable par AUTO_CORE=0 ; aucun
+    // échec ici ne peut empêcher le démarrage (fail-soft, même contrat que
+    // l'auto-apprentissage ci-dessus).
+    try {
+      const { demarrerCoeurAutonome } = await import("./lib/autonomous");
+      const armement = await demarrerCoeurAutonome();
+      console.log("[INSTRUMENTATION] Cœur autonome :", armement.message);
+    } catch (erreur) {
+      console.warn(
+        "[INSTRUMENTATION] Cœur autonome non armé (non fatal) :",
+        erreur instanceof Error ? erreur.message : String(erreur),
+      );
+    }
   }
 
   if (process.env.NEXT_RUNTIME === "edge") {
