@@ -95,7 +95,11 @@
 - `var-copie/essai-continu/`, `var-copie/evaluation-capacites/`, `var/neural/versions/…` — preuves commises.
 - Aucun fichier des missions précédentes modifié (préservation complète).
 
-## 11. VERDICT FINAL
+## 11. INCIDENT CI POST-FUSION ET CORRECTIF (constaté et traité)
+
+La CI main sur `523b9f2` a échoué sur le step « Tests (couverture avec seuils) » : le test de l'expérience réelle dépassait son timeout de 120 s — **l'instrumentation de couverture ralentit fortement la propagation SNN réelle (>7 min/run mesuré)**. Correctif (PR #169, vérifié localement SOUS --coverage : 9/9 verts, 213 s) : timeout 600 s + runs de reproductibilité réduits (240 échantillons, expérience réelle bornée) + assertion honnête codée (sur 240 éch./3 époques, l'accuracy test peut passer sous la baseline — interférence d'un petit SNN documentée ; l'expérience canonique 510/8 époques, elle, montre +9,2 pts). La régression complète locale sans couverture restait verte (7 661 verts / 0 échec).
+
+## 12. VERDICT FINAL
 
 **Le Gen3ia n'est PAS déclaré « complet en production »** — conformément à la règle finale de la mission. État honnête :
 
