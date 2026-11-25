@@ -94,3 +94,19 @@ export function isolationCoherente(): boolean {
     (p) => !PREFIXES_UTILISATEURS.some((u) => p.startsWith(u) || u.startsWith(p)),
   );
 }
+
+/**
+ * DÉTECTE un chemin/URL PRIVE dans une source de lot (2e couche de défense
+ * du worker) : un contenu prétendant venir d'un espace utilisateur
+ * (users/, user/, personal/, private/) est refusé AVANT tout traitement —
+ * même si le fichier de lot lui-même est légitime (anti-détournement).
+ * Les URL publiques normales (https://…) passent.
+ */
+export function detecterCheminPrive(cheminOuUrl: string): boolean {
+  try {
+    const normalise = normalize(cheminOuUrl).split(sep).join("/").toLowerCase();
+    return PREFIXES_UTILISATEURS.some((u) => normalise.includes(u));
+  } catch {
+    return true; // indétectable → refus fail-closed
+  }
+}

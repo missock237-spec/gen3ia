@@ -525,13 +525,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
     // rapport (var/neural/webdev/rapport.json) ; npm run train:webdev est
     // son pendant CLI. Pas de surface UI prévue (opération d'admin).
     "/admin/entrainement/webdev",
-    // /admin/autonomous/etat : tableau de supervision du Gen3ia Autonomous
-    // Brain (Lot 10 du plan « GEN3IA AUTONOMOUS BRAIN ») — GET lecture
-    // seule, honnête (santé du core, cycles, file des lots, mémoire,
-    // compétences), consommé par les opérateurs et la sonde de supervision
-    // (Phase 12 : le dashboard interne l'utilisera comme source de données) ;
-    // protect requireAdmin, aucun secret exposé.
-    "/admin/autonomous/etat",
   ],
   /** API documentées au CONTRAT PRODUIT sans appelant dans le dépôt :
    *  les supprimer serait un breaking change contractuel (leçon it.39

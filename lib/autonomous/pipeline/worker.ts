@@ -20,7 +20,7 @@ import { traiterLot } from "../intelligence/traiter";
 import { verifierEnregistrement } from "../intelligence/verifier";
 import type { MemoireConnaissances } from "../knowledge/memoire-connaissances";
 import type { RegistreSources } from "../acquisition/source-registry";
-import { verifierAccesEntrainement } from "../privacy/firewall";
+import { verifierAccesEntrainement, detecterCheminPrive } from "../privacy/firewall";
 
 /** Options du worker (tout injectable pour les tests). */
 export interface OptionsWorker {
@@ -58,7 +58,21 @@ export function agentTraitement(options: OptionsWorker): ModuleAgent {
       let echecs = 0;
 
       for (const lot of aTraiter) {
-        // Firewall : le lot appartient-il bien à l'espace autorisé ?
+        // Prise en charge d'abord (machine à états : le refus passe par le
+        // chemin légal PROCESSING→VALIDATING→REJECTED — jamais de saut).
+        options.file.transitioner(lot.id, "PROCESSING", "prise en charge worker");
+        // Firewall (2e couche — anti-détournement) : un lot dont la SOURCE
+        // prétend venir d'un espace utilisateur est refusé AVANT tout
+        // traitement — les mémoires privées ne peuvent jamais entrer
+        // (Règle 11 : isolation technique, pas déclarative).
+        if (detecterCheminPrive(lot.url) || detecterCheminPrive(lot.sourceId)) {
+          options.file.transitioner(lot.id, "VALIDATING", "firewall : source privée détectée");
+          options.file.transitioner(lot.id, "REJECTED", "firewall : source privée détectée (isolation technique)");
+          rejetes += 1;
+          resultat.push(`${lot.id} : REFUSÉ firewall (source privée)`);
+          continue;
+        }
+        // Firewall (1re couche) : le lot appartient-il bien à l'espace autorisé ?
         const acces = verifierAccesEntrainement(`pipeline/lots/${lot.id}.json`, options.dossierCore);
         if (!acces.autorise) {
           // Jamais traité hors espace blanc : refus tracé, lot rejeté.
@@ -69,7 +83,6 @@ export function agentTraitement(options: OptionsWorker): ModuleAgent {
           continue;
         }
 
-        options.file.transitioner(lot.id, "PROCESSING", "prise en charge worker");
         const traite = traiterLot(lot);
         if (!traite.ok || !traite.enregistrement) {
           options.file.replanifier(lot.id, traite.message);

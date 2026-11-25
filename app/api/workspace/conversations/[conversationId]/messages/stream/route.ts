@@ -8,6 +8,10 @@ import { rateLimitDistributed } from "@/lib/cache/redis";
 import { definirContexteRequeteTenant } from "@/lib/observability/contexte-requete";
 import { runConversationTurn } from "@/lib/domain/conversations/engine";
 import type { ConversationStreamEvent } from "@/lib/domain/conversations/stream-events";
+// ANTI-HALLUCINATION AUTONOME (Lot 07) : l'événement `done` est annoté à la
+// volée (citations de provenance réelles + signal d'incertitude honnête).
+// Fail-soft : jamais casser le flux.
+import { annoterEvenementsFlux } from "@/lib/autonomous/anti-hallucination/verificateur-chat";
 import { ATTACHMENT_MAX_FILE_BYTES, ATTACHMENT_MAX_FILES } from "@/lib/files/attachment-policy";
 import { resolveOrigineClient } from "@/lib/media/origine-client";
 // Task 153 — paiement par exécution : réservation AVANT le flux (402
@@ -149,6 +153,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
             closed = true;
           }
         };
+        // Lot 07 : les événements transitent par le vérificateur autonome —
+        // le `done` est annoté (provenance réelle + incertitude) avant envoi.
+        const sendAnnote = annoterEvenementsFlux((evenement) => {
+          send(evenement as ConversationStreamEvent);
+        });
 
         // Tout le tour s'exécute DANS la session de facturation : chaque
         // appel LLM du moteur est compté au réel (AsyncLocalStorage).
@@ -176,7 +185,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
               // (Constat production 2026-11-12 : nextUrl.origin vaut
               // « https://localhost:3000 » derrière nginx — jamais livré.)
               origineClient: resolveOrigineClient(request),
-              onEvent: send,
+              onEvent: (event) => sendAnnote(event as unknown as { type: string; [cle: string]: unknown }),
             });
             void result;
 
