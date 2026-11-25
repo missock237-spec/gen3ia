@@ -43,7 +43,11 @@ export async function obtenirDevicePartage(options: ConfigDeviceUnifie = {}): Pr
   }
 
   try {
-    const adaptateur = await navigator.gpu.requestAdapter({ powerPreference: options.powerPreference ?? "high-performance" });
+    const gpu = (navigator as Navigator & { gpu?: GPU }).gpu;
+    if (!gpu) {
+      return { etat: { statut: "indisponible", raison: "navigator.gpu absent de cet environnement", pertes: 0 } };
+    }
+    const adaptateur = await gpu.requestAdapter({ powerPreference: options.powerPreference ?? "high-performance" });
     if (!adaptateur) {
       return { etat: { statut: "indisponible", raison: "aucun adaptateur WebGPU accepté (pilote désactivé, VM sans GPU)", pertes: 0 } };
     }

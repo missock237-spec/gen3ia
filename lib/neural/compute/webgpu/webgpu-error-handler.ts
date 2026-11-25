@@ -31,7 +31,7 @@ export async function verifierCompilation(module: GPUShaderModule, contexte?: st
       .map((msg) => {
         const e: ErreurGpuClassifiee = {
           type: "compilation-wgsl",
-          message: `${msg.message} (ligne ${msg.lineNum})`,
+          message: msg.message,
           contexte,
           horodatage: Date.now(),
         };
