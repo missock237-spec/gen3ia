@@ -53,7 +53,7 @@ export interface ResultatDebug {
  * Boucle de correction BORNÉE : au plus `essaisMax` régénérations. Chaque
  * essai est journalisé — aucun essai silencieux, aucun dépassement de budget.
  */
-export async function corrigerAvecBudget<T>(
+export async function corrigerAvecBudget(
   executer: () => Promise<{ ok: boolean; erreur?: string; journaux: string[] }>,
   regenerer: (diagnostic: DiagnosticEchec) => Promise<boolean>,
   essaisMax = 2,

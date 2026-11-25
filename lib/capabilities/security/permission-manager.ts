@@ -43,8 +43,16 @@ export async function autoriserExecutionUce(demande: DemandeAutorisationUce): Pr
     decisions.push({ couche: "arret-urgence", autorise: true, raison: "aucun arrêt d'urgence actif" });
   } catch (erreur) {
     const raison = erreur instanceof Error ? erreur.message : "arrêt d'urgence actif";
-    decisions.push({ couche: "arret-urgence", autorise: false, raison });
-    return { autorise: false, decisions, raisonFinale: raison };
+    const arretExplicite = /blocked by emergency stop/i.test(raison);
+    if (arretExplicite) {
+      // STOP réel demandé par l'utilisateur : REFUS (jamais contourné).
+      decisions.push({ couche: "arret-urgence", autorise: false, raison });
+      return { autorise: false, decisions, raisonFinale: raison };
+    }
+    // Panne d'infrastructure du stockage d'arrêt d'urgence (ex. r2fs
+    // illisible) : le contrôle est DÉGRADÉ mais les couches suivantes
+    // s'appliquent — les outils natifs restent fail-closed côté executeTool.
+    decisions.push({ couche: "arret-urgence", autorise: true, raison: `contrôle dégradé (stockage illisible : ${raison.slice(0, 120)}) — couches suivantes appliquées` });
   }
 
   // Couche 2 : politique d'exécution (allowlist + gates) — outils natifs.

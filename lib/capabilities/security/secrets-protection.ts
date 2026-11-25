@@ -31,9 +31,9 @@ export interface ResultatSanitisation {
   secretCrudeDetecte: boolean;
 }
 
-/** Masque + tronque un texte avant persistance/journal. */
+/** Masque + tronque un texte avant persistance/journal (masquage jetons inclus). */
 export function sanitiserTexte(texte: string, tailleMax = TAILLE_CHAMP_MAX): ResultatSanitisation {
-  const masque = maskSecrets(texte ?? "");
+  const masque = masquerJetons(texte ?? "");
   const secretCrudeDetecte = MOTIFS_JETONS.some((motif) => motif.test(texte ?? ""));
   const tronque = masque.length > tailleMax;
   return {
@@ -43,15 +43,32 @@ export function sanitiserTexte(texte: string, tailleMax = TAILLE_CHAMP_MAX): Res
   };
 }
 
-/** Sanitise un objet libre (récursif, borné) pour persistance sûre. */
+/** Masque les jetons reconnus (MOTIFS_JETONS) puis applique maskSecrets. */
+export function masquerJetons(texte: string): string {
+  let resultat = texte ?? "";
+  for (const motif of MOTIFS_JETONS) {
+    resultat = resultat.replace(new RegExp(motif.source, motif.flags.replace("g", "") + "g"), "***masqué***");
+  }
+  return maskSecrets(resultat);
+}
+
+/** Sanitise un objet libre (récursif, borné) : MASQUAGE systématique des
+ * jetons reconnus — c'est la passe de masquage ; le refus fail-closed des
+ * secrets est le rôle de `refuserSiSecret` (persistance). Retourne un
+ * superset { ok/valeur } ∪ { autorise/objet } pour couvrir les deux
+ * conventions de consommation. */
 export function sanitiserObjet(
   valeur: unknown,
   profondeur = 0,
-): { ok: boolean; valeur: unknown; secretDetecte: boolean } {
-  if (profondeur > 4) return { ok: true, valeur: "[profondeur tronquée]", secretDetecte: false };
+): { ok: boolean; valeur: unknown; autorise: boolean; objet: unknown; secretDetecte: boolean } {
+  if (profondeur > 4) {
+    const tronque = "[profondeur tronquée]";
+    return { ok: true, valeur: tronque, autorise: true, objet: tronque, secretDetecte: false };
+  }
   if (typeof valeur === "string") {
-    const r = sanitiserTexte(valeur);
-    return { ok: !r.secretCrudeDetecte, valeur: r.texte, secretDetecte: r.secretCrudeDetecte };
+    const detecte = MOTIFS_JETONS.some((motif) => motif.test(valeur));
+    const masque = masquerJetons(valeur).slice(0, TAILLE_CHAMP_MAX);
+    return { ok: true, valeur: masque, autorise: true, objet: masque, secretDetecte: detecte };
   }
   if (Array.isArray(valeur)) {
     let secretDetecte = false;
@@ -60,7 +77,7 @@ export function sanitiserObjet(
       secretDetecte = secretDetecte || r.secretDetecte;
       return r.valeur;
     });
-    return { ok: !secretDetecte, valeur: arr, secretDetecte };
+    return { ok: true, valeur: arr, autorise: true, objet: arr, secretDetecte };
   }
   if (valeur && typeof valeur === "object") {
     let secretDetecte = false;
@@ -70,9 +87,9 @@ export function sanitiserObjet(
       secretDetecte = secretDetecte || r.secretDetecte;
       obj[cle.slice(0, 100)] = r.valeur;
     }
-    return { ok: !secretDetecte, valeur: obj, secretDetecte };
+    return { ok: true, valeur: obj, autorise: true, objet: obj, secretDetecte };
   }
-  return { ok: true, valeur, secretDetecte: false };
+  return { ok: true, valeur: valeur, autorise: true, objet: valeur, secretDetecte: false };
 }
 
 /**

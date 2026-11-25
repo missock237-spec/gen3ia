@@ -25,18 +25,16 @@ afterEach(async () => {
 });
 
 const SCRIPT_OK = `
-const { emettre } = require("sandbox-uce");
 const debut = Date.now();
 // travail réel borné : somme de 10 000 éléments
 let somme = 0;
 for (let i = 0; i < 10000; i++) somme += i;
 const memoire = process.memoryUsage();
-emettre({ ok: true, somme, memoireMo: memoire.heapUsed / (1024 * 1024), duree: Date.now() - debut });
+emettre({ ok: true, somme, memoireMo: Math.round(memoire.heapUsed / (1024 * 1024)), duree: Date.now() - debut });
 `;
 
 const SCRIPT_KO = `
-const { emettre } = require("sandbox-uce");
-emettre({ ok: false });
+throw new Error("échec volontaire du scénario");
 `;
 
 describe("moteur de benchmark", () => {

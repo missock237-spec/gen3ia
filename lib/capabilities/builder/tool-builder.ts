@@ -109,7 +109,7 @@ export async function construireOutil(demande: DemandeConstruction): Promise<Res
       );
       return { ok: resultat.ok, erreur: resultat.erreur, journaux: resultat.journaux };
     },
-    async (diagnostic) => {
+    async (_diagnostic) => {
       // Régénération = re-gabarit déterministe (les archétypes sont éprouvés) ;
       // une vraie variante se produirait seulement pour des champs custom.
       const nova = genererCode({ ...spec, champs: [] });

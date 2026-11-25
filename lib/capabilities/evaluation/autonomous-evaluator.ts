@@ -47,7 +47,7 @@ export interface EntreesEvaluation {
 }
 
 /** Calcule chaque critère depuis des mesures (jamais de la documentation). */
-export function critèresDepuisMesures(entrees: EntreesEvaluation): EvaluationCriteria {
+export function criteresDepuisMesures(entrees: EntreesEvaluation): EvaluationCriteria {
   const { compatibilite, securite, qualite, benchmark } = entrees;
 
   // Fonctionnement réel : UNIQUEMENT si un benchmark a tourné.
@@ -108,7 +108,7 @@ export function verdictDepuisScore(score: number, criteria: EvaluationCriteria):
  * déjà mesurés par les moteurs spécialisés) et persiste l'évaluation.
  */
 export async function evaluerAutonome(entrees: EntreesEvaluation, options: { dossier?: string; persister?: boolean } = {}): Promise<CapabilityEvaluation> {
-  const criteria = critèresDepuisMesures(entrees);
+  const criteria = criteresDepuisMesures(entrees);
   const score = scoreAgregue(criteria);
   const verdict = verdictDepuisScore(score, criteria);
   const raisons: string[] = [];

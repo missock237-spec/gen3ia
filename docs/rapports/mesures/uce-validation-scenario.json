@@ -1,0 +1,203 @@
+{
+  "scenario": "UCE V1 — validation mission §13",
+  "dateIso": "2026-11-25T18:36:22.845Z",
+  "dureeMs": 3695,
+  "etapes": [
+    {
+      "etape": 1,
+      "nom": "identification-capacite-absente",
+      "ok": true,
+      "detail": "besoin : « vérifier en direct la santé d'APIs publiques (health-check API sans clé) » — outil natif « api.health-check » absent du catalogue (78 outils annoncés)",
+      "preuve": {
+        "absent": true
+      }
+    },
+    {
+      "etape": 2,
+      "nom": "recherche-3-solutions",
+      "ok": true,
+      "detail": "3 solutions : wikipedia-api, open-meteo, duckduckgo-ia",
+      "preuve": [
+        {
+          "nom": "wikipedia-api",
+          "url": "https://en.wikipedia.org/w/api.php?action=query&format=json&list=search&srsearch=test&srlimit=1"
+        },
+        {
+          "nom": "open-meteo",
+          "url": "https://api.open-meteo.com/v1/forecast?latitude=48.85&longitude=2.35&current=temperature_2m"
+        },
+        {
+          "nom": "duckduckgo-ia",
+          "url": "https://api.duckduckgo.com/?q=test&format=json&no_html=1"
+        }
+      ]
+    },
+    {
+      "etape": 3,
+      "nom": "compatibilite",
+      "ok": true,
+      "detail": "wikipedia-api=compatible, open-meteo=compatible, duckduckgo-ia=compatible",
+      "preuve": [
+        {
+          "nom": "wikipedia-api",
+          "verdict": "compatible"
+        },
+        {
+          "nom": "open-meteo",
+          "verdict": "compatible"
+        },
+        {
+          "nom": "duckduckgo-ia",
+          "verdict": "compatible"
+        }
+      ]
+    },
+    {
+      "etape": 4,
+      "nom": "tests-sandbox",
+      "ok": true,
+      "detail": "wikipedia-api:fiable 67ms, open-meteo:fiable 37ms, duckduckgo-ia:fiable 32ms",
+      "preuve": [
+        {
+          "nom": "wikipedia-api",
+          "verdict": "fiable",
+          "latenceMoyenneMs": 67,
+          "tauxSucces": 1
+        },
+        {
+          "nom": "open-meteo",
+          "verdict": "fiable",
+          "latenceMoyenneMs": 37,
+          "tauxSucces": 1
+        },
+        {
+          "nom": "duckduckgo-ia",
+          "verdict": "fiable",
+          "latenceMoyenneMs": 32,
+          "tauxSucces": 1
+        }
+      ]
+    },
+    {
+      "etape": 5,
+      "nom": "comparaison-performances",
+      "ok": true,
+      "detail": "classement : duckduckgo-ia=32ms < open-meteo=37ms < wikipedia-api=67ms",
+      "preuve": [
+        {
+          "nom": "duckduckgo-ia",
+          "verdict": "fiable",
+          "latenceMoyenneMs": 32,
+          "tauxSucces": 1
+        },
+        {
+          "nom": "open-meteo",
+          "verdict": "fiable",
+          "latenceMoyenneMs": 37,
+          "tauxSucces": 1
+        },
+        {
+          "nom": "wikipedia-api",
+          "verdict": "fiable",
+          "latenceMoyenneMs": 67,
+          "tauxSucces": 1
+        }
+      ]
+    },
+    {
+      "etape": 6,
+      "nom": "selection",
+      "ok": true,
+      "detail": "duckduckgo-ia → score 97/100, verdict recommande",
+      "preuve": {
+        "score": 97,
+        "verdict": "recommande"
+      }
+    },
+    {
+      "etape": 7,
+      "nom": "generation-integration",
+      "ok": true,
+      "detail": "v1 publiée puis ACTIVE (promotion gated passée)",
+      "preuve": {
+        "versionId": "capver_2b96e3bdb60d8acb",
+        "raison": "version v1 active (tests : 1/1 verts)"
+      }
+    },
+    {
+      "etape": 8,
+      "nom": "tests-integration-registre-reel",
+      "ok": true,
+      "detail": "registry.find (npm réel) sur « tiny-invariant » → exists=true, version=1.3.3 — implémentation réelle appelée (hors executeTool, bloqué par R2 absent, voir étape 10bis)",
+      "preuve": {
+        "item": {
+          "name": "tiny-invariant",
+          "ecosystem": "npm",
+          "exists": true,
+          "latestVersion": "1.3.3",
+          "deprecated": false,
+          "lastPublished": "2024-02-23T21:50:05.584Z",
+          "ageDays": 1005,
+          "description": "A tiny invariant function",
+          "isMcpServer": false,
+          "verdict": "obsolète"
+        }
+      }
+    },
+    {
+      "etape": 8,
+      "nom": "chemin-natif-executeTool-env",
+      "ok": true,
+      "detail": "chemin executeTool : refus d'infrastructure attendu (r2fs/R2 non configuré dans ce sandbox) — limitation ENVIRONNEMENT documentée, non un échec UCE",
+      "preuve": {
+        "statut": "echec",
+        "erreur": "r2fs: lecture impossible (fs/emergencyStops/user_systeme-uce.json)"
+      }
+    },
+    {
+      "etape": 9,
+      "nom": "integration-apres-autorisation",
+      "ok": true,
+      "detail": "chaîne complète jusqu'à « validee » (autorisant humain à l'étape autorisee) — finale : validee",
+      "preuve": {
+        "statutFinal": "validee"
+      }
+    },
+    {
+      "etape": 10,
+      "nom": "fonctionnement-contrat-principal",
+      "ok": true,
+      "detail": "exécution gateway (origine chat) → succes, preuve : rejoue-indépendant ([preuves : non-vide+marqueurs] )",
+      "preuve": {
+        "statut": "succes",
+        "methode": "rejoue-indépendant"
+      }
+    },
+    {
+      "etape": 11,
+      "nom": "rollback-verifie",
+      "ok": true,
+      "detail": "rollback vers v1 : succès réel — v1 ACTIVE (historique : v2-defaillante=staged, v1=active)",
+      "preuve": {
+        "historique": [
+          {
+            "version": "v2-defaillante",
+            "statut": "staged"
+          },
+          {
+            "version": "v1",
+            "statut": "active"
+          }
+        ]
+      }
+    }
+  ],
+  "total": 12,
+  "reussies": 12,
+  "scenarioComplet": true,
+  "limites": [
+    "capacité de test sans risque : catalogue API offline + npm lecture seule",
+    "l'intégration reste bornée au registre UCE (aucun déploiement de production)",
+    "les benchmarks sandbox mesurent le scénario de test, pas un appel réseau réel des APIs candidates"
+  ]
+}

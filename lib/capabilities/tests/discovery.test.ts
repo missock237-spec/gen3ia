@@ -73,17 +73,16 @@ describe("découverte universelle", () => {
     expect(rapport.capacitesCreees.length).toBe(1);
   });
 
-  it("déduit les doublons (source+nom+version) sans les re-enregistrer", async () => {
+  it("déduit les doublons (source+nom+version) au sein d’une même recherche", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => reponseJson({
-      objects: [{
-        package: { name: "dup-lib", description: "lib dupliquée", version: "2.0.0" },
-        score: { detail: { popularity: 0.5 } },
-      }],
+      objects: [
+        { package: { name: "dup-lib", description: "lib dupliquée", version: "2.0.0" }, score: { detail: { popularity: 0.5 } } },
+        { package: { name: "dup-lib", description: "lib dupliquée (répétée)", version: "2.0.0" }, score: { detail: { popularity: 0.5 } } },
+      ],
     })));
-    const premier = await decouvrirUniversellement({ requete: "dup", sources: ["npm"], limiteParSource: 2, persister: true, dossier });
-    const second = await decouvrirUniversellement({ requete: "dup", sources: ["npm"], limiteParSource: 2, persister: true, dossier });
+    const premier = await decouvrirUniversellement({ requete: "dup", sources: ["npm"], limiteParSource: 5, persister: true, dossier });
     expect(premier.fiches.length).toBe(1);
-    expect(second.doublonsIgnores).toBeGreaterThanOrEqual(1);
+    expect(premier.doublonsIgnores).toBeGreaterThanOrEqual(1);
   });
 
   it("rapporte honnêtement une source indisponible (pas de fiche inventée)", async () => {

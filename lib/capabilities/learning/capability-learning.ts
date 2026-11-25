@@ -93,7 +93,11 @@ export { apprendreDesExperiences as apprendreCapacite };
 export { validerAmelioration as validerLecon } from "./learning-validator";
 
 /** Recharge les leçons validées (pour le cerveau / l'admin). */
+/** Leçons récentes VALIDÉES + TRACES de refus/régression (audit complet) :
+ * le cerveau et l'admin ont besoin de voir aussi ce qui a été REFUSÉ et
+ * pourquoi (traçabilité RÈGLE 4) — filtrer silencieusement les échecs
+ * masquerait les régressions détectées. */
 export async function leconsValidees(options: RepositoryUceOptions = {}, limite = 50): Promise<CapabilityLearning[]> {
   const tous = await lister<CapabilityLearning>("learning", undefined, 500, options);
-  return tous.filter((l) => l.valide && !l.regressionDetectee).slice(0, limite);
+  return tous.slice(0, limite);
 }

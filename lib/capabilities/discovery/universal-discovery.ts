@@ -98,13 +98,21 @@ export async function decouvrirUniversellement(options: OptionsDecouverteUnivers
   }
 
   // Persistance : fiches + capacités au statut « decouverte » (non exécutable).
+  // Déduplication inter-appels : une fiche déjà persistée (même id = hash
+  // source+nom+version) est ignorée et comptée comme doublon.
   const capacitesCreees: string[] = [];
   if (options.persister !== false) {
     const gestionnaire = obtenirGestionnaireCapacites({ dossier: options.dossier });
+    const { recuperer } = await import("../storage/capability-repository");
     for (const fiche of toutes) {
       const garde = refuserSiSecret(JSON.stringify(fiche));
       if (!garde.autorise) continue; // fiche contaminée par un secret : jamais persistée
       try {
+        const dejaConnue = await recuperer<CapabilityDiscovery>("discoveries", fiche.id, { dossier: options.dossier });
+        if (dejaConnue) {
+          doublons++;
+          continue;
+        }
         await sauvegarder("discoveries", fiche, { dossier: options.dossier });
         const capacite = await gestionnaire.enregistrerCapacite({
           id: construireCapabilityId("decouverte", fiche.source, fiche.nom),

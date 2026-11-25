@@ -94,11 +94,13 @@ export async function sonderGpu(): Promise<{ present: boolean; nom?: string }> {
 }
 
 /** Compare une version simple (x.y[.z]) à un plancher ">=x.y". */
+/** Compare une version réelle (x.y.z) à un plancher ("99", ">=99", ">=20.1"). */
 function satisfait(version: string, plancher: string): boolean {
-  const m = /(\d+)\.(\d+)(?:\.(\d+))?/.exec(plancher);
-  if (!m) return true;
-  const [maj, min, patch] = version.split(".").map((p) => parseInt(p, 10) || 0);
-  const [pMaj, pMin, pPatch] = [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3] ?? "0", 10)];
+  const numPlancher = plancher.match(/\d+/g) ?? [];
+  if (numPlancher.length === 0) return true; // exigence non numérique : rien à imposer
+  const reel = version.match(/\d+/g) ?? [];
+  const [pMaj, pMin = 0, pPatch = 0] = numPlancher.map((p) => parseInt(p, 10));
+  const [maj = 0, min = 0, patch = 0] = reel.map((p) => parseInt(p, 10));
   if (maj !== pMaj) return maj > pMaj;
   if (min !== pMin) return min > pMin;
   return patch >= pPatch;

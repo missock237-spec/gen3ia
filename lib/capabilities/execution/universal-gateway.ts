@@ -14,7 +14,6 @@
 import "server-only";
 
 import {
-  EXECUTION_STATUSES,
   maintenantIso,
   type CapabilityExecution,
   type CapabilityExecutionRequest,
@@ -113,7 +112,8 @@ export async function executerCapacite(
   });
   journal.ajouter(`autorisation : ${autorisation.raisonFinale}`);
 
-  const statutFinal: (typeof EXECUTION_STATUSES)[number] = autorisation.autorise ? "succes" : "refusee";
+  // Le statut final est calculé à la construction de l'enregistrement
+  // (refusee si autorisation refusée, sinon succes/echec selon vérification).
   let sortie: SortieAdaptateur | null = null;
 
   // 3) Exécution par l'adaptateur choisi (ou refus honnête).

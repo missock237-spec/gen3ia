@@ -11,25 +11,30 @@ import { sanitiserTexte } from "../security/secrets-protection";
 const PLAFOND_LIGNES = 100;
 
 export class JournalExecution {
-  private lignes: string[] = [];
+  private tampon: string[] = [];
   private readonly debutMs = Date.now();
 
   /** Horodate + message masqué + tronqué. */
   ajouter(message: string): void {
-    if (this.lignes.length >= PLAFOND_LIGNES) {
-      if (!this.lignes.some((l) => l.includes("[journal tronqué]"))) {
-        this.lignes.push("[journal tronqué] lignes suivantes ignorées");
+    if (this.tampon.length >= PLAFOND_LIGNES) {
+      if (!this.tampon.some((l) => l.includes("[journal tronqué]"))) {
+        this.tampon.push("[journal tronqué] lignes suivantes ignorées");
       }
       return;
     }
     const ms = Date.now() - this.debutMs;
     const propre = sanitiserTexte(message, 500).texte;
-    this.lignes.push(`+${ms}ms ${propre}`);
+    this.tampon.push(`+${ms}ms ${propre}`);
   }
 
   /** Récupère les lignes (copie) pour l'enregistrement d'exécution. */
   lignesActuelles(): string[] {
-    return [...this.lignes];
+    return [...this.tampon];
+  }
+
+  /** Alias court (contrat tests/consommateurs). */
+  lignes(): string[] {
+    return this.lignesActuelles();
   }
 }
 

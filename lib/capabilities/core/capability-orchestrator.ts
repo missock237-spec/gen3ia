@@ -82,7 +82,6 @@ export async function executerCycleEvolution(demande: DemandeCycle): Promise<Res
   const etapes: EtapeCycle[] = [];
   const options: RepositoryUceOptions = demande.dossier ? { dossier: demande.dossier, forcerLocal: true } : {};
   const candidats: ResultatCycle["candidats"] = [];
-  let selection: ResultatCycle["selection"];
   let capacite: Capability | undefined;
   let integree = false;
 
@@ -173,7 +172,7 @@ export async function executerCycleEvolution(demande: DemandeCycle): Promise<Res
   const meilleur = classement[0];
   ajouter(7, "comparaison", "effectuee", t, `${mesures.length} candidat(s) comparé(s) sur mesures réelles`);
   t = Date.now();
-  selection = { nom: meilleur.fiche.nom, score: meilleur.score!, capabilityId: construireIdSelection(meilleur.fiche.nom) };
+  const selection: ResultatCycle["selection"] = { nom: meilleur.fiche.nom, score: meilleur.score!, capabilityId: construireIdSelection(meilleur.fiche.nom) };
   ajouter(8, "selection", "effectuee", t, `${selection.nom} (score mesuré ${selection.score}/100)`);
   capacite = await enregistrerSelection(demande.besoin, selection.nom, options);
 

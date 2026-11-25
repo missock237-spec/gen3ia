@@ -67,7 +67,12 @@ export async function benchmarker(
       { timeoutMs: 15_000, memoryMb: 256 },
     );
     latences.push(resultat.dureeMs);
-    if (resultat.ok) succes++;
+    // Succès RÉEL = process sandbox ok ET résultat émis non-échec
+    // (emettre({ok:false}) est un échec métier, pas un succès de process).
+    const emise = resultat.resultat;
+    const echecMetierEmis = emise !== null && emise !== undefined
+      && typeof emise === "object" && (emise as { ok?: unknown }).ok === false;
+    if (resultat.ok && !echecMetierEmis) succes++;
     // Pic mémoire : MESURÉ côté enfant quand le scénario le rapporte
     // (emettre({ok, memoireMo})) — jamais inventé par le parent.
     if (resultat.resultat && typeof resultat.resultat === "object") {

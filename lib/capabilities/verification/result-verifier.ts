@@ -44,6 +44,7 @@ export interface DemandeVerification {
  */
 export async function verifierResultat(demande: DemandeVerification): Promise<ExecutionVerification> {
   const raisons: string[] = [];
+  const methodes: string[] = [];
   let verifie = true;
 
   // Cohérence minimale : une sortie vide n'est pas un succès confirmé.
@@ -54,16 +55,22 @@ export async function verifierResultat(demande: DemandeVerification): Promise<Ex
   if (demande.spec.nonVide !== false && sortieTexte.trim().length === 0) {
     verifie = false;
     raisons.push("sortie vide");
+  } else {
+    methodes.push("non-vide");
   }
 
-  for (const marqueur of demande.spec.marqueurs ?? []) {
-    if (!sortieTexte.includes(marqueur)) {
-      verifie = false;
-      raisons.push(`marqueur attendu absent : « ${marqueur.slice(0, 60)} »`);
+  if ((demande.spec.marqueurs ?? []).length > 0) {
+    methodes.push("marqueurs");
+    for (const marqueur of demande.spec.marqueurs ?? []) {
+      if (!sortieTexte.includes(marqueur)) {
+        verifie = false;
+        raisons.push(`marqueur attendu absent : « ${marqueur.slice(0, 60)} »`);
+      }
     }
   }
 
   if (demande.spec.fichier) {
+    methodes.push("fichier");
     const verdict = await verifierFichier(demande.spec.fichier.chemin, { extensions: demande.spec.fichier.extensions });
     if (!verdict.verifie) {
       verifie = false;
@@ -74,6 +81,7 @@ export async function verifierResultat(demande: DemandeVerification): Promise<Ex
   }
 
   if (demande.spec.dossier) {
+    methodes.push("dossier");
     const verdict = await verifierDossierNonVide(demande.spec.dossier.chemin);
     if (!verdict.verifie) {
       verifie = false;
@@ -84,6 +92,7 @@ export async function verifierResultat(demande: DemandeVerification): Promise<Ex
   }
 
   if (demande.spec.api) {
+    methodes.push("api");
     const verdict = await verifierApiRepond(demande.spec.api.url, { contient: demande.spec.api.contient });
     if (!verdict.verifie) {
       verifie = false;
@@ -94,6 +103,7 @@ export async function verifierResultat(demande: DemandeVerification): Promise<Ex
   }
 
   if (demande.spec.code) {
+    methodes.push("code-sandbox");
     const verdict = await verifierCodeFonctionne(demande.executionId, demande.spec.code.script, {
       valeurVerite: demande.spec.code.valeurVerite,
     });
@@ -105,15 +115,16 @@ export async function verifierResultat(demande: DemandeVerification): Promise<Ex
     }
   }
 
-  if (raisons.length === 0) {
+  if (methodes.length === 0) {
     // Aucune preuve spécifique demandée : vérification minimale = non-vide.
+    methodes.push("non-vide");
     raisons.push("vérification minimale (sortie non vide) — aucune preuve forte demandée");
   }
 
   return {
     verifie,
     methode: "rejoue-indépendant",
-    details: raisons.join(" ; ").slice(0, TAILLE_DETAILS),
+    details: `[preuves : ${methodes.join("+")}] ${raisons.join(" ; ")}`.slice(0, TAILLE_DETAILS),
   };
 }
 

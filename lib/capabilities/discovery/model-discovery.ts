@@ -11,7 +11,6 @@ import {
   maintenantIso,
   type CapabilityDiscovery,
 } from "../core/capability-contract";
-import { sanitiserTexte } from "../security/secrets-protection";
 
 const TIMEOUT_MS = 10_000;
 const PLAFOND = 20;

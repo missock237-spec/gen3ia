@@ -30,11 +30,23 @@ export async function verifierCodeFonctionne(
   if (!resultat.ok) {
     return { verifie: true, ok: false, dureeMs: resultat.dureeMs, journaux: resultat.journaux, cause: resultat.erreur ?? "sandbox a signalé un échec" };
   }
-  if (attendu.valeurVerite !== undefined && resultat.resultat !== attendu.valeurVerite) {
+  // Valeur comparée : si la sandbox a émis un objet avec un champ ok
+  // (convention emettre({ok, resultat})), on compare son champ `resultat` ;
+  // sinon la valeur émise elle-même.
+  const emise = resultat.resultat;
+  const valeurComparee = emise !== null && typeof emise === "object" && "ok" in (emise as Record<string, unknown>)
+    ? (emise as { resultat?: unknown }).resultat
+    : emise;
+  if (attendu.valeurVerite !== undefined && valeurComparee !== attendu.valeurVerite) {
     return {
       verifie: true, ok: false, dureeMs: resultat.dureeMs, journaux: resultat.journaux,
-      cause: `résultat sandbox « ${JSON.stringify(resultat.resultat)?.slice(0, 120)} » ≠ attendu « ${JSON.stringify(attendu.valeurVerite)} »`,
+      cause: `résultat sandbox « ${JSON.stringify(valeurComparee)?.slice(0, 120)} » ≠ attendu « ${JSON.stringify(attendu.valeurVerite)} »`,
     };
+  }
+  // Un objet émis avec ok:false est un échec métier même si le process a tourné.
+  const echecMetier = emise !== null && typeof emise === "object" && (emise as { ok?: unknown }).ok === false;
+  if (echecMetier) {
+    return { verifie: true, ok: false, dureeMs: resultat.dureeMs, journaux: resultat.journaux, cause: "la sandbox a émis ok:false (échec métier)" };
   }
   return { verifie: true, ok: true, dureeMs: resultat.dureeMs, journaux: resultat.journaux };
 }
