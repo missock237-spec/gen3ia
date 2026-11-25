@@ -324,7 +324,6 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
   /** Consommés par des clients hors dépôt app : SDK public, extension
    *  navigateur, bridge d'entraînement, scripts d'exploitation souverains. */
   "api-publique-sdk": [
-    "/capabilities",
     "/public/sdk/download",
     "/v1/capabilities",
     "/v1/chat",
