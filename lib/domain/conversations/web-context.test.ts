@@ -12,9 +12,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  *  5. bloc vide quand il n'y a aucune URL.
  */
 
-vi.mock("@/lib/tools/executor", () => ({ executeTool: vi.fn() }));
+vi.mock("@/lib/capabilities/execution/pont-legacy", () => ({ executerOutilViaGateway: vi.fn() }));
 
-import { executeTool } from "@/lib/tools/executor";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 import {
   extractUserUrls,
   loadWebPageContext,
@@ -22,7 +22,7 @@ import {
   WEB_CONTEXT_MAX_URLS,
 } from "./web-context";
 
-const mockExecute = vi.mocked(executeTool);
+const mockExecute = vi.mocked(executerOutilViaGateway);
 
 afterEach(() => {
   vi.clearAllMocks();

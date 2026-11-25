@@ -1,0 +1,20 @@
+# LIVRABLE 14 — LIMITATIONS RESTANTES PRÉCISES (UCE V1.1)
+
+**Date** : 2026-11-25 · Chaque limitation : cause, impact, contournement/solution.
+
+| # | Limitation | Cause | Impact | Solution nécessaire |
+|---|---|---|---|---|
+| L1 | **Production VPS non vérifiée** (aucun statut PRODUCTION_VERIFIED) | VPS du projet indisponible dans cette session (historique : HTTP 000, CD en file) ; le sandbox de développement n'est pas un environnement persistant | les contrôles réels en production (R2 lisible, Firestore en ligne, kill switch effectif) ne sont pas revérifiés | déployer via le CD du dépôt puis exécuter les vérifications post-déploiement (livrable 12 §2) |
+| L2 | **Endurance 72 h non exécutée** | requiert un environnement de production stable et persistant | la stabilité longue durée (fuites, reprises répétées) n'est observée que sur tests courts | lancer le test 72 h sur le VPS avec le monitoring du dashboard |
+| L3 | **Verrous best-effort** | Firestore `merge:true` / journal local « dernier gagne » ne fournissent pas de test-et-pose atomique ; Redis absent du dépôt | deux exécuteurs pourraient théoriquement démarrer le même cycle entre deux lectures | introduire une transaction Firestore (`runTransaction`) pour `cap_locks` ; l'idempotence par clé de besoin borne déjà l'effet |
+| L4 | **Garde anti-contournement = analyse de code source en CI** | un test scanne les fichiers `.ts/.tsx` du dépôt | ne couvre pas les imports dynamiques construits à l'exécution (aucun existant hors adaptateurs autorisés) | ajouter un garde runtime (proxy du module executor) si le besoin apparaît |
+| L5 | **Découverte GitHub** | API GitHub 403 anonyme (mesuré) ; `GITHUB_TOKEN` absent du sandbox | la source GitHub est « indisponible » honnête | fournir `GITHUB_TOKEN` dans l'environnement |
+| L6 | **Découverte PyPI par nom exact** | recherche XML-RPC désactivée par PyPI (externe, depuis 2021) | pas de recherche floue PyPI | utiliser l'API JSON de recherche officielle si PyPI la rétablit / index alternatif |
+| L7 | **Benchmarks = scénario sandbox, pas d'appel réseau réel** | choix V1 : reproductibilité + aucun coût + sécurité | les latences candidates ne reflètent pas la latence réseau des services réels | ajouter des scénarios réseau gated (consentement) si souhaité |
+| L8 | **Builder limité à 4 archétypes** (calcul-deterministe, validation-texte, transformation-json, verification-contenu) | gabarits déterministes éprouvés uniquement | les fonctionnalités hors archétypes → découverte d'abord, sinon non constructible (refus honnête) | ajouter des gabarits + jeux d'essai testés |
+| L9 | **Exécution locale de modèles HF** | poids à télécharger + GPU absent (mesuré) | les modèles découverts sont des métadonnées, non exécutables ici | infrastructure GPU + stockage des poids |
+| L10 | **`maxCost`/`maxMemoryMb` de la décision contraints** | le contrat mission porte les champs ; le coût réel dépend des services tiers | les limites sont posées (durée par défaut 300 s, monitor 5 s) mais non arbitrées par un moteur de coût externe | brancher un moteur de coût si des services payants deviennent autorisés (toujours gated) |
+| L11 | **Cycle : états evaluating/building journalisés par agrégat** | le moteur 14 étapes V1 exécute découverte→sélection en un appel | les transitions intermédiaires du cycle persistant reflètent les étapes du moteur, sans pause entre chaque état intermédiaire | découper l'appel moteur par étape (refactor du moteur V1 en machine à états pas-à-pas) — work possible sans changer les contrats |
+| L12 | **Retour arrière cycle = version précédente la plus récente** | `annulerParRollback` choisit automatiquement la cible | ne convient pas si plusieurs versions intermédiaires doivent être ignorées explicitement | exposer `versVersionId` dans la commande admin de rollback-cycle |
+
+**Ce qui n'est PAS une limitation** : l'unification (registre + gateway + garde) est complète en code et tests ; l'autonomie contrôlée (5 niveaux, gates, anti-auto-élévation) est complète ; la persistance/reprise/idempotence est testée. Les items L1-L2 relèvent de l'infrastructure de production, non du code.
