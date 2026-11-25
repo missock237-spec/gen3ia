@@ -1,0 +1,66 @@
+{
+ "date": "2026-11-25T17:02:40.794773+00:00",
+ "job": "478451",
+ "graine": 20261126,
+ "sources": {
+  "openai/gsm8k": "https://huggingface.co/datasets/openai/gsm8k (MIT) — sha256 ea82612ea9582142387730c793eb67d3b12849002bc0b7fa6f8efafa7351419d",
+  "allenai/ai2_arc": "https://huggingface.co/datasets/allenai/ai2_arc (CC-BY-SA-4.0)",
+  "allenai/sciq": "https://huggingface.co/datasets/allenai/sciq (MIT)",
+  "google/fleurs": "https://huggingface.co/datasets/google/fleurs (CC-BY-4.0) — fr_fr validation, voix naturelle réelle",
+  "sayakpaul/ucf101-subset": "https://huggingface.co/datasets/sayakpaul/ucf101-subset (vidéos réelles)",
+  "kaggle flower-color-images": "https://www.kaggle.com/datasets/olgabelitskaya/flower-color-images (photos réelles)",
+  "kaggle mapping-color-space": "https://www.kaggle.com/datasets/danela/mapping-color-space-to-100-color-names (nommage pro)"
+ },
+ "resultats": {
+  "math": {
+   "nouvelles": 2000,
+   "reformulations": 600,
+   "total": 10075,
+   "queue_conservee": 600,
+   "source": "openai/gsm8k train (MIT)"
+  },
+  "sciences": {
+   "arc_normalisees": 1500,
+   "sciq_reelles": 1600,
+   "reformulations": 500,
+   "total": 6970
+  },
+  "couleurs": {
+   "nouveaux": 340,
+   "table_kaggle": 100,
+   "photos_reelles": 40,
+   "total": 20440
+  },
+  "parole": {
+   "nouveaux": 289,
+   "audios_reels": 30,
+   "total": 589
+  },
+  "vision": {
+   "nouveaux": 70,
+   "videos_reelles": 10,
+   "frames_reelles": 10,
+   "total": 3070
+  },
+  "raisonnement": {
+   "nouvelles": 500,
+   "total": 20500
+  },
+  "multimodal": 50,
+  "math_professionnel": 10077,
+  "sciences_professionnel": 6970,
+  "couleurs_v5": 20440,
+  "parole_professionnelle": 589,
+  "vision_professionnel": 3070,
+  "raisonnement_professionnel": 20500
+ },
+ "files_sha256": {
+  "datasets/math_professionnel/train.jsonl": "ff1cf4bc6cf320547784872fc75b3e3f61285efccb530acf1475ec1625217f1a",
+  "datasets/sciences_professionnel/train.jsonl": "2c9a3e61edf2edfa1d266c2e386e3edde78f0374a8fabb158b187bc5235f18f4",
+  "datasets/couleurs_v5/train.jsonl": "6510da9ae96cb0a5497f0c6fa0347381721a7a86f4c6cc12eeeefae67bdbbc11",
+  "datasets/parole_professionnelle/train.jsonl": "87490e093090668f1852f39680ec7b891a66d54ec1099760b344ade535bea8d1",
+  "datasets/vision_professionnel/train.jsonl": "051395e7daf15a4a788cfe892649f4c09bf1e93d1caad10bb4d66ace43b61ada",
+  "datasets/raisonnement_professionnel/train.jsonl": "afee38aae32de440bb4f4f941cb34b41ecce33688264f95e11099638df94b5a6",
+  "datasets/multimodal/train.jsonl": "2832f395a517ab56d569bf5d3dec4bdfc71719cbeed4c90aa68a513e67126549"
+ }
+}

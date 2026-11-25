@@ -170,12 +170,16 @@ function evaluerCortex(): Record<string, unknown> {
   const cortex = new CortexLangagierGen3();
   cortex.apprendre(CORPUS_GEN3);
 
-  // Ingestion des paires v5 (même logique que connaissances-pro.ts)
+  // Ingestion des paires v5 (même logique que connaissances-pro.ts) — quotas
+  // PRO2 (job 478451, relance) : absorbent les datasets professionnels réels
+  // (GSM8K normalisé, ARC normalisé, SciQ réel, FLEURS fr réel, UCF101 réel,
+  // Kaggle colorNames, reformulations propriétaires) tout en restant sous le
+  // plafond MAX_PAIRES_PERSONNALISEES = 20 000 du cortex.
   const SOURCES = [
-    ["couleurs_v5", 2000], ["math_professionnel", 2000],
-    ["sciences_professionnel", 1400], ["raisonnement_professionnel", 1600],
-    ["vision_professionnel", 600], ["texte_professionnel", 400],
-    ["parole_professionnelle", 150],
+    ["couleurs_v5", 4000], ["math_professionnel", 4000],
+    ["sciences_professionnel", 3600], ["raisonnement_professionnel", 2100],
+    ["vision_professionnel", 800], ["texte_professionnel", 400],
+    ["parole_professionnelle", 400],
   ] as const;
   let pairesTotales = 0;
   for (const [dossier, quota] of SOURCES) {
@@ -202,9 +206,11 @@ function evaluerCortex(): Record<string, unknown> {
   // (l'ingestion ci-dessus a pris les PREMIÈRES — jamais vues en apprentissage)
   const tests: Record<string, Array<{ dataset: string; question: string; motsClesReponse: string[] }>> = {
     couleurs_v5: [], math_professionnel: [], sciences_professionnel: [],
+    parole_professionnelle: [], vision_professionnel: [],
   };
   const REGLES: Record<string, number> = {
     couleurs_v5: 300, math_professionnel: 300, sciences_professionnel: 300,
+    parole_professionnelle: 100, vision_professionnel: 100,
   };
   for (const [dossier, n] of Object.entries(REGLES)) {
     const chemin = join(process.cwd(), "datasets", dossier, "train.jsonl");
