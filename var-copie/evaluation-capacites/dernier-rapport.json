@@ -1,0 +1,150 @@
+{
+ "dateIso": "2026-11-25T06:51:26.765Z",
+ "capacites": [
+  {
+   "capacite": "semantique",
+   "score": 1,
+   "epreuves": [
+    {
+     "nom": "paraphrase-synonymique",
+     "reussie": true,
+     "mesure": "score=0.5 groupes=2"
+    },
+    {
+     "nom": "negation-opposee",
+     "reussie": true,
+     "mesure": "score=0.3"
+    },
+    {
+     "nom": "identite",
+     "reussie": true,
+     "mesure": "score=0.97"
+    },
+    {
+     "nom": "typage-questions",
+     "reussie": true,
+     "mesure": "types=9"
+    }
+   ],
+   "dureeMs": 2
+  },
+  {
+   "capacite": "generation-native",
+   "score": 1,
+   "epreuves": [
+    {
+     "nom": "non-verbatim",
+     "reussie": true,
+     "mesure": "longueur=181"
+    },
+    {
+     "nom": "fidelite-aux-faits",
+     "reussie": true,
+     "mesure": "patron=definition"
+    },
+    {
+     "nom": "refus-sans-faits",
+     "reussie": true,
+     "mesure": "null attendu"
+    }
+   ],
+   "dureeMs": 0
+  },
+  {
+   "capacite": "raisonnement",
+   "score": 1,
+   "epreuves": [
+    {
+     "nom": "chainage-2-niveaux",
+     "reussie": true,
+     "mesure": "conclusions=2"
+    },
+    {
+     "nom": "transitivite-isa",
+     "reussie": true,
+     "mesure": "isa=1"
+    },
+    {
+     "nom": "contradiction-antonymique",
+     "reussie": true,
+     "mesure": "contradictions=1"
+    }
+   ],
+   "dureeMs": 1
+  },
+  {
+   "capacite": "memoire",
+   "score": 1,
+   "epreuves": [
+    {
+     "nom": "rappel-associatif",
+     "reussie": true,
+     "mesure": "rappels=2"
+    },
+    {
+     "nom": "persistance",
+     "reussie": true,
+     "mesure": "tailles=4/4"
+    },
+    {
+     "nom": "bornes-importance",
+     "reussie": true,
+     "mesure": "importance=1"
+    }
+   ],
+   "dureeMs": 8
+  },
+  {
+   "capacite": "unification",
+   "score": 1,
+   "epreuves": [
+    {
+     "nom": "paires-reelles",
+     "reussie": true,
+     "mesure": "ajoutees=2"
+    },
+    {
+     "nom": "snn-mesure",
+     "reussie": true,
+     "mesure": "accTrain=0"
+    },
+    {
+     "nom": "rpia-discriminabilite",
+     "reussie": true,
+     "mesure": "disc=0.0487"
+    }
+   ],
+   "dureeMs": 1592
+  },
+  {
+   "capacite": "multimodal",
+   "score": 1,
+   "epreuves": [
+    {
+     "nom": "image-comprise",
+     "reussie": true,
+     "mesure": "lum=82 dom=200"
+    },
+    {
+     "nom": "audio-tonal",
+     "reussie": true,
+     "mesure": "rms=0.432 centre=300Hz"
+    },
+    {
+     "nom": "video-smil",
+     "reussie": true,
+     "mesure": "anim=1"
+    },
+    {
+     "nom": "refus-honnete-mp4",
+     "reussie": true,
+     "mesure": "throw attendu"
+    }
+   ],
+   "dureeMs": 136
+  }
+ ],
+ "scoreGlobal": 1,
+ "dureeTotaleMs": 1739,
+ "optimisations": []
+}

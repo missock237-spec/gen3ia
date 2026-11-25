@@ -27,7 +27,8 @@
     "check:a11y": "node scripts/a11y_prod.mjs",
     "sdk:build": "node services/sdk/build.mjs",
     "sdk:pack": "npm pack ./services/sdk --pack-destination public/sdk",
-    "sdk:test": "vitest run services/sdk/test"
+    "sdk:test": "vitest run services/sdk/test",
+    "brain:eval": "NODE_OPTIONS=--conditions=react-server tsx scripts/eval-cerveau.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1164.0",
