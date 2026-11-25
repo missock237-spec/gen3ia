@@ -1,0 +1,62 @@
+{
+ "seed": 42,
+ "dataset": {
+  "total": 542,
+  "train": 380,
+  "validation": 81,
+  "test": 81,
+  "labels": 8,
+  "parLabel": {
+   "INTENTION_GENERALE": 120,
+   "SELECTIONNER_ET_EXECUTER_SKILL": 15,
+   "INITIALISER_APPEL": 81,
+   "GENERER_IMAGE": 120,
+   "EXECUTER_OUTIL_OS": 38,
+   "GENERER_AUDIO": 120,
+   "GENERER_VIDEO": 20,
+   "TERMINER_APPEL": 28
+  }
+ },
+ "hashSplits": "5f3f64178c52c1aa5dfb3d23a68deacb",
+ "baselineTest": 0.185,
+ "accuracies": {
+  "train": 0.25,
+  "validation": 0.259,
+  "test": 0.222
+ },
+ "generalisation": 0.037,
+ "dureeMs": 58952,
+ "ram": {
+  "avantMo": 45,
+  "apresMo": 168
+ },
+ "version": {
+  "version": "2026-11-25T16-33-54-950Z-experience-semantique-seed42",
+  "dateIso": "2026-11-25T16:33:54.951Z",
+  "etiquette": "experience-semantique-seed42",
+  "sha256": "0532355ed345929163ebffc041157c2b7968d675c7eec0a55f97f9f6f6dd5635",
+  "octets": 42026,
+  "info": {
+   "seed": 42,
+   "epoques": 8,
+   "hashSplits": "5f3f64178c52c1aa5dfb3d23a68deacb",
+   "accuracies": {
+    "train": 0.25,
+    "validation": 0.25925925925925924,
+    "test": 0.2222222222222222
+   },
+   "baselineTest": 0.18518518518518517,
+   "dataset": {
+    "INTENTION_GENERALE": 120,
+    "SELECTIONNER_ET_EXECUTER_SKILL": 15,
+    "INITIALISER_APPEL": 81,
+    "GENERER_IMAGE": 120,
+    "EXECUTER_OUTIL_OS": 38,
+    "GENERER_AUDIO": 120,
+    "GENERER_VIDEO": 20,
+    "TERMINER_APPEL": 28
+   }
+  }
+ },
+ "epoques": 8
+}

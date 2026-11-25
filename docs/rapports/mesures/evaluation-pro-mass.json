@@ -1,0 +1,56 @@
+{
+ "date": "2026-11-25T17:04:12.905Z",
+ "job": "478451",
+ "pairesApprises": 12766,
+ "dureeMs": 82628,
+ "note": "Questions EXTERNES : GSM8K test (split officiel jamais ingéré), SciQ validation+test (jamais ingérées), couleurs fraîches (graine), multimodal réel (mémorisation d'assets)",
+ "resultats": {
+  "math": {
+   "questionsReelles": 1319,
+   "hitRecouvrement": 0.0243,
+   "exactitudeReponseFinale": 0.0015,
+   "questionsAvecFinale": 1319,
+   "parDataset": {
+    "math_gsm8k_test": 0.024
+   }
+  },
+  "sciences": {
+   "questionsReelles": 2000,
+   "hitRecouvrement": 0.117,
+   "parDataset": {
+    "sciences_sciq_validation": 0.113,
+    "sciences_sciq_test": 0.121
+   }
+  },
+  "couleurs": {
+   "questionsReelles": 10000,
+   "hitRecouvrement": 0.222,
+   "parDataset": {
+    "couleurs_mass": 0.222
+   }
+  },
+  "paroleGeneralisation": {
+   "questionsReelles": 150,
+   "hitRecouvrement": 0,
+   "parDataset": {
+    "parole_fleurs_test": 0
+   }
+  },
+  "paroleMemorisation": {
+   "questionsReelles": 10,
+   "hitRecouvrement": 1,
+   "parDataset": {
+    "parole_fleurs_memorise": 1
+   }
+  },
+  "multimodal": {
+   "questionsReelles": 20,
+   "hitRecouvrement": 0.25,
+   "parDataset": {
+    "multimodal_reel_audio": 0,
+    "multimodal_reel_video": 1,
+    "multimodal_reel_image": 0
+   }
+  }
+ }
+}

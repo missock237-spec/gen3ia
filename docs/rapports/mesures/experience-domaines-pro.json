@@ -1,0 +1,21 @@
+{
+ "date": "2026-11-25T16:54:05.675Z",
+ "job": "478451",
+ "graine": 20261126,
+ "dataset": {
+  "total": 1531,
+  "train": 1073,
+  "validation": 229,
+  "test": 229
+ },
+ "hashSplits": "1765051efa801f9d9075eb08e8b1face",
+ "baselineTest": 0.22707423580786026,
+ "accuracies": {
+  "train": 0.19,
+  "validation": 0.21397379912663755,
+  "test": 0.22707423580786026
+ },
+ "generalisation": 0,
+ "epoques": 15,
+ "version": "2026-11-25T16-54-05-674Z-experience-domaines-pro"
+}
