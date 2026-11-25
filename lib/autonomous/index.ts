@@ -64,6 +64,20 @@ export async function demarrerCoeurAutonome(): Promise<ResultatArmement> {
       coeur.enregistrerModule(agentCollecteur({ registre, file }));
       coeur.enregistrerModule(agentTraitement({ file, memoire, registre, dossierCore: dossier }));
       modules.push("acquisition", "traitement");
+
+      // LOT 5+6 (mission finalisation) : apprentissage continu branché au
+      // cerveau RÉEL (adaptations seulement si réellement prises en charge,
+      // pré/post + garde anti-oubli) + compétences en sandbox isolée.
+      if (process.env.AUTO_CONTINU !== "0") {
+        const { agentApprentissageContinu } = await import("./modules/agent-apprentissage");
+        coeur.enregistrerModule(agentApprentissageContinu({ memoire, tousLesCycles: 4 }));
+        modules.push("apprentissage-continu");
+      }
+      if (process.env.AUTO_SKILLS !== "0") {
+        const { agentCompetences } = await import("./modules/agent-competences");
+        coeur.enregistrerModule(agentCompetences({ memoire, dossierCore: dossier, tousLesCycles: 6 }));
+        modules.push("competences");
+      }
     }
 
     const reprise = coeur.demarrer();

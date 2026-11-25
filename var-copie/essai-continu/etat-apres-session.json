@@ -1,0 +1,75 @@
+{
+ "version": 1,
+ "demarreLe": "2026-11-25T05:28:02.858Z",
+ "cycle": 2,
+ "persisteLe": "2026-11-25T05:37:03.000Z",
+ "modules": {
+  "sante-cerveau": {
+   "id": "sante-cerveau",
+   "nom": "Agent santé du cerveau",
+   "role": "11. MONITORING & EVOLUTION — fraîcheur de la persistance du cerveau",
+   "statut": "actif",
+   "ticks": 2,
+   "succes": 0,
+   "echecs": 2,
+   "echecsConsecutifs": 2,
+   "dernieresErreurs": [
+    "2026-11-25T05:33:02.920Z — Persistance du cerveau PARTIELLE : 0 artefact(s) présents (absents : neural/brain-v1.json, neural/cortex-v2.bin) — dernier enregistrement il y a 0 min.",
+    "2026-11-25T05:28:02.892Z — Persistance du cerveau PARTIELLE : 0 artefact(s) présents (absents : neural/brain-v1.json, neural/cortex-v2.bin) — dernier enregistrement il y a 0 min."
+   ],
+   "dernierTickLe": "2026-11-25T05:33:02.920Z",
+   "dernierMessage": "Persistance du cerveau PARTIELLE : 0 artefact(s) présents (absents : neural/brain-v1.json, neural/cortex-v2.bin) — dernier enregistrement il y a 0 min."
+  },
+  "acquisition": {
+   "id": "acquisition",
+   "nom": "Agent d'acquisition autonome",
+   "role": "01. DATA ACQUISITION — collecte publique bornée, cycles 5 min",
+   "statut": "actif",
+   "ticks": 1,
+   "succes": 0,
+   "echecs": 1,
+   "echecsConsecutifs": 1,
+   "dernieresErreurs": [
+    "2026-11-25T05:28:03.108Z — Collecte wikipedia-fr échouée : HTTP 429 — source conservée, débit respecté."
+   ],
+   "dernierTickLe": "2026-11-25T05:28:03.108Z",
+   "dernierMessage": "Collecte wikipedia-fr échouée : HTTP 429 — source conservée, débit respecté."
+  },
+  "traitement": {
+   "id": "traitement",
+   "nom": "Agent de traitement du pipeline",
+   "role": "03-06. PIPELINE + INTELLIGENCE + VÉRIFICATION + MÉMOIRE",
+   "statut": "actif",
+   "ticks": 1,
+   "succes": 0,
+   "echecs": 0,
+   "echecsConsecutifs": 0,
+   "dernieresErreurs": [],
+   "dernierTickLe": "2026-11-25T05:33:02.920Z",
+   "dernierMessage": "Aucun lot en attente — la file est à jour."
+  },
+  "apprentissage-continu": {
+   "id": "apprentissage-continu",
+   "nom": "Agent d'apprentissage continu",
+   "role": "07. CONTINUAL LEARNING — sondes mémoire + adaptation bornée gardée",
+   "statut": "actif",
+   "ticks": 0,
+   "succes": 0,
+   "echecs": 0,
+   "echecsConsecutifs": 0,
+   "dernieresErreurs": []
+  },
+  "competences": {
+   "id": "competences",
+   "nom": "Agent de développement des compétences",
+   "role": "08. SKILL DEVELOPMENT — exercices isolés, validation tout-vert",
+   "statut": "actif",
+   "ticks": 0,
+   "succes": 0,
+   "echecs": 0,
+   "echecsConsecutifs": 0,
+   "dernieresErreurs": []
+  }
+ },
+ "tachesOuvertes": []
+}

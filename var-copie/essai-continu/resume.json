@@ -1,0 +1,15 @@
+{
+ "dureeCibleHeures": 0.15,
+ "dureeCumuleeHeures": 0.13,
+ "cyclesCumules": 2,
+ "lotsCollectes": 0,
+ "integres": 0,
+ "quarantaines": 0,
+ "rejetes": 0,
+ "echecs": 0,
+ "adaptationsAppliquees": 0,
+ "adaptationsAnnulees": 0,
+ "competencesValidees": 0,
+ "erreurs": [],
+ "verdict": "INTERROMPU_AVANT_CIBLE"
+}

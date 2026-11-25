@@ -5,6 +5,10 @@ import { requireUser } from "@/lib/security/authenticated-request";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
 import { clientIp } from "@/lib/security/rate-limit";
 import { rateLimitDistributed } from "@/lib/cache/redis";
+// ANTI-HALLUCINATION AUTONOME (Lot 07) : vérification de la réponse contre
+// la mémoire vérifiée du cerveau — citations de provenance réelles + signal
+// d'incertitude honnête. Fail-soft : jamais casser le chat.
+import { annoterMessageAssistant } from "@/lib/autonomous/anti-hallucination/verificateur-chat";
 // Garde de charge (durcissement production) : un tour IA coûteux retient
 // mémoire + fournisseurs — au-delà du plafond de tours simultanés, 429
 // honnête avec Retry-After plutôt que dégradation de TOUT le monde.
@@ -138,7 +142,17 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
             origineClient: resolveOrigineClient(request),
           }),
       });
-      return NextResponse.json({ ...result, billing });
+      // ANTI-HALLUCINATION AUTONOME (Lot 07) : la réponse est vérifiée
+      // contre la mémoire vérifiée du cerveau AVANT sérialisation —
+      // citations de provenance réelles + signal d'incertitude honnête.
+      // Fail-soft : un incident laisse la réponse inchangée.
+      const resultatAnnote = {
+        ...result,
+        assistantMessage: await annoterMessageAssistant(
+          result.assistantMessage as unknown as Parameters<typeof annoterMessageAssistant>[0],
+        ),
+      };
+      return NextResponse.json({ ...resultatAnnote, billing });
     } finally {
       jeton.release();
     }

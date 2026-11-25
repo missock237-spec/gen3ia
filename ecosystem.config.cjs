@@ -43,5 +43,36 @@ module.exports = {
       // l'amorçage — voir l'entête de ce script pour la liste des variables.
       env_file: ".env.genapi",
     },
+    {
+      // GEN3IA AUTONOMOUS BRAIN (Lot 02, mission « finalisation
+      // opérationnelle ») : le serveur Next.js PERMANENT héberge le cerveau
+      // central — armé par l'instrumentation au boot (pas de serverless).
+      // Cycles 5 min (collecte → pipeline → vérification → mémoire →
+      // apprentissage continu → compétences), état persisté var/autonomous,
+      // reprise des tâches orphelines au redémarrage (RETRY→QUEUED).
+      name: "gen3ia",
+      script: "node_modules/next/dist/bin/next",
+      args: "start",
+      // FORK — UN SEUL process : le cerveau central est unique (Règles
+      // architecturales) ; la concurrence interne est bornée par le core
+      // (maxTicksConcurrents, RAM 2 cœurs).
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      // Garde de mémoire : recyclage au-delà de 900 Mo (les caps du core et
+      // du pipeline bornent l'empreinte réelle).
+      max_memory_restart: "900M",
+      // Laisse le tick en cours finir + persister l'état avant l'arrêt.
+      kill_timeout: 10_000,
+      env: {
+        NODE_ENV: "production",
+        PORT: "3000",
+        // Interrupteurs du cerveau autonome (documentés .env.example) :
+        AUTO_CORE: "1", // cœur central armé (cycles 5 min)
+        AUTO_COLLECTE: "1", // acquisition + pipeline
+        AUTO_CONTINU: "1", // apprentissage continu branché au cerveau réel
+        AUTO_SKILLS: "1", // développement des compétences en sandbox
+      },
+    },
   ],
 };

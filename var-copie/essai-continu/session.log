@@ -1,0 +1,26 @@
+[essai-continu] reprise : 0 cycle(s) cumulé(s), 0 h de fonctionnement antérieur — cible 0.15 h cumulées.
+[essai-continu] armement : Cœur autonome armé — modules : sante-cerveau, acquisition, traitement, apprentissage-continu, competences (cycle 5 min) — 0 tâche(s) interrompue(s) reprise(s) de l'état persisté.
+[essai-continu] cycle 1 — 0.02 h cumulées (reste 0.13 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — santé : degrade
+[essai-continu] cycle 1 — 0.03 h cumulées (reste 0.12 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — santé : degrade
+[essai-continu] cycle 1 — 0.05 h cumulées (reste 0.10 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — santé : degrade
+[essai-continu] cycle 1 — 0.07 h cumulées (reste 0.08 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — santé : degrade
+[essai-continu] cycle 2 — 0.08 h cumulées (reste 0.07 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — santé : degrade
+[essai-continu] cycle 2 — 0.1 h cumulées (reste 0.05 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — santé : degrade
+[essai-continu] cycle 2 — 0.12 h cumulées (reste 0.03 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — santé : degrade
+[essai-continu] cycle 2 — 0.13 h cumulées (reste 0.02 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — santé : degrade
+[essai-continu] résumé final : {
+ "dureeCibleHeures": 0.15,
+ "dureeCumuleeHeures": 0.13,
+ "cyclesCumules": 2,
+ "lotsCollectes": 0,
+ "integres": 0,
+ "quarantaines": 0,
+ "rejetes": 0,
+ "echecs": 0,
+ "adaptationsAppliquees": 0,
+ "adaptationsAnnulees": 0,
+ "competencesValidees": 0,
+ "erreurs": [],
+ "verdict": "INTERROMPU_AVANT_CIBLE"
+}
+ESSAI EXIT: 0

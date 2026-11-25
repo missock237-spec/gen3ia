@@ -267,7 +267,9 @@ export async function developperCompetences(
       }
       options.registre.enregistrer(competence);
   }
-  options.registre.persister();
+  // Persistance conditionnelle : écrire seulement si quelque chose a été
+  // développé (un registre vide n'écrase pas l'état persistant existant).
+  if (identifiees + validees + echecs > 0) options.registre.persister();
   return { identifiees, validees, echecs, messages };
 }
 

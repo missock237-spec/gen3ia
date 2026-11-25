@@ -131,7 +131,16 @@ export function agentCollecteur(options: OptionsCollecteur): ModuleAgent {
       const tache = ctx.taches.creer({ module: "acquisition", cycle: ctx.cycle, type: `collecte:${source.id}` });
       if (tache) ctx.taches.demarrer(tache.id);
 
-      const resultat = await fetcher(source.url, { timeoutMs, maxOctets, userAgent: USER_AGENT });
+      // Défense : un fetcher qui LÈVE (réseau, bug) ne casse jamais le tick —
+      // l'exception devient une collecte échouée honnête (source conservée,
+      // débit respecté, trace complète) — le core n'a pas à suspendre.
+      let resultat: Awaited<ReturnType<Fetcher>>;
+      try {
+        resultat = await fetcher(source.url, { timeoutMs, maxOctets, userAgent: USER_AGENT });
+      } catch (erreur) {
+        const message = erreur instanceof Error ? erreur.message : String(erreur);
+        resultat = { ok: false, statut: null, contentType: "", contenu: "", erreur: `exception collecte : ${message}`.slice(0, 300) };
+      }
       // Le registre est persisté après CHAQUE tentative (collecte ou erreur) :
       // tour de rôle et erreurs survivent au redémarrage (traçabilité).
       const persisterRegistre = (): void => {
