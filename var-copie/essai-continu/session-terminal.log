@@ -1,0 +1,32 @@
+[essai-continu] reprise : 0 cycle(s) cumulé(s), 0 h de fonctionnement antérieur — cible 0.18 h cumulées.
+[essai-continu] armement : Cœur autonome armé — modules : sante-cerveau, acquisition, traitement, apprentissage-continu, competences (cycle 5 min) — 0 tâche(s) interrompue(s) reprise(s) de l'état persisté.
+[essai-continu] cycle 1 — 0.02 h cumulées (reste 0.16 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 140 Mo (pic 140) — charge 0.97 — santé : degrade
+[essai-continu] cycle 1 — 0.03 h cumulées (reste 0.15 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 125 Mo (pic 140) — charge 1.11 — santé : degrade
+[essai-continu] cycle 1 — 0.05 h cumulées (reste 0.13 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 125 Mo (pic 140) — charge 0.96 — santé : degrade
+[essai-continu] cycle 1 — 0.07 h cumulées (reste 0.11 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 124 Mo (pic 140) — charge 0.99 — santé : degrade
+[essai-continu] cycle 2 — 0.08 h cumulées (reste 0.10 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 126 Mo (pic 140) — charge 1 — santé : degrade
+[essai-continu] cycle 2 — 0.1 h cumulées (reste 0.08 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 126 Mo (pic 140) — charge 1 — santé : degrade
+[essai-continu] cycle 2 — 0.12 h cumulées (reste 0.06 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 126 Mo (pic 140) — charge 1.3 — santé : degrade
+[essai-continu] cycle 2 — 0.13 h cumulées (reste 0.05 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 126 Mo (pic 140) — charge 1.52 — santé : degrade
+[essai-continu] cycle 2 — 0.15 h cumulées (reste 0.03 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 126 Mo (pic 140) — charge 1.28 — santé : degrade
+[essai-continu] cycle 3 — 0.17 h cumulées (reste 0.01 h) — file : 0 lot(s), mémoire : 0 connaissance(s) — RAM 126 Mo (pic 140) — charge 1.37 — santé : degrade
+[essai-continu] résumé final : {
+ "dureeCibleHeures": 0.18,
+ "dureeCumuleeHeures": 0.18,
+ "cyclesCumules": 3,
+ "lotsCollectes": 0,
+ "integres": 0,
+ "quarantaines": 0,
+ "rejetes": 0,
+ "echecs": 0,
+ "adaptationsAppliquees": 0,
+ "adaptationsAnnulees": 0,
+ "competencesValidees": 0,
+ "erreurs": [],
+ "ramPicMo": 140,
+ "ramDerniereMo": 126,
+ "chargeDerniere": 1.37,
+ "observations": 10,
+ "verdict": "DUREE_CIBLE_ATTEINTE"
+}
+ESSAI EXIT: 0
