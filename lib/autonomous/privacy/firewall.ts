@@ -104,7 +104,13 @@ export function isolationCoherente(): boolean {
  */
 export function detecterCheminPrive(cheminOuUrl: string): boolean {
   try {
-    const normalise = normalize(cheminOuUrl).split(sep).join("/").toLowerCase();
+    // Durcissement (constaté en test) : les séparateurs Windows (\) sont
+    // ramenés à / AVANT normalisation — une revendication de chemin privé
+    // écrite à la Windows ne doit pas contourner la détection.
+    const normalise = normalize(cheminOuUrl.split("\\").join("/"))
+      .split(sep)
+      .join("/")
+      .toLowerCase();
     return PREFIXES_UTILISATEURS.some((u) => normalise.includes(u));
   } catch {
     return true; // indétectable → refus fail-closed
