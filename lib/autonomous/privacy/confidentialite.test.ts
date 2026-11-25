@@ -14,7 +14,7 @@
  *  - garde structurel de cohérence des listes.
  */
 
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -80,7 +80,7 @@ describe("RÈGLE 4 — les données privées n'entrent JAMAIS dans l'entraîneme
   });
 
   it("lireSiAutorise lit uniquement l'espace autorisé", () => {
-    const ok = lireSiAutorise("connaissances/lot-ok.json", core, (p) => require("node:fs").readFileSync(p, "utf8"));
+    const ok = lireSiAutorise("connaissances/lot-ok.json", core, (p) => readFileSync(p, "utf8"));
     expect(ok.autorise).toBe(true);
     expect(JSON.parse(ok.contenu ?? "{}")).toEqual({ source: "publique" });
   });
