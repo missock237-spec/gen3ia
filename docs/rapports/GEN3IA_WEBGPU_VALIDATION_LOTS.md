@@ -23,7 +23,7 @@
 
 ## 3. Ce qui est VÉRIFIÉ vs ce qui RESTE (honnêteté — règle absolue mission)
 
-**Vérifié dans ce tour** : TypeScript propre, 33/33 tests unitaires, preuves d'exécution par compteurs (hybride réel), fallback systématique testé (échec GPU → CPU, résultat suspect → CPU vérifié), build de production lancé (résultat noté dans le journal du tour).
+**Vérifié dans ce tour** : TypeScript propre, 33/33 tests unitaires, preuves d'exécution par compteurs (hybride réel), fallback systématique testé (échec GPU → CPU, résultat suspect → CPU vérifié), build de production lancé mais NON TERMINÉ dans la fenêtre du tour (processus coupé au recyclage du sandbox) — à relancer avec `npm run build` avant toute validation Phase 12.
 
 **Reste à faire (continuable au prochain message)** :
 1. **Phases 6-8** : optimisation des shaders WGSL existants (réutiliser pipeline/buffer pool dans `moteur-webgpu.ts`), unification énergétique complète (`energy/`), vérification ONNX honnête (le runtime `onnxruntime-node` a échoué à télécharger ses binaires CUDA dans CE sandbox → EP CPU uniquement ici ; « installer onnxruntime-web » ≠ exécution GPU — test d'inférence réelle à fournir).
