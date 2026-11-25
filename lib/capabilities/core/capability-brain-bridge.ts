@@ -18,6 +18,7 @@ import "server-only";
 
 import type { ContexteTick, ModuleAgent, RapportModule } from "@/lib/autonomous/core/types";
 import { obtenirGestionnaireCapacites, type GestionnaireOptions } from "./capability-manager";
+import { produireDecisions } from "./capability-decision";
 import { santeGlobale } from "../monitoring/capability-health";
 import { analyserEchecs, ouvrirIncident } from "../monitoring/failure-analyzer";
 import { performanceGlobale } from "../monitoring/performance-monitor";
@@ -104,15 +105,19 @@ export async function rapportPourCerveau(options: GestionnaireOptions = {}): Pro
 }
 
 /**
- * MODULE-AGENT « capacites-uce » : un tick = collecte bornée du rapport + un
- * événement pour le cerveau. Contrat ModuleAgent : ne lève JAMAIS, retourne
- * vite (aucun appel de découverte réseau ici — lecture locale uniquement).
+ * MODULE-AGENT « capacites-uce » : un tick = collecte bornée du rapport +
+ * SYNTHÈSE DES DÉCISIONS DU CERVEAU (V1.1 Phase 4 : le pont n'est plus un
+ * simple transmetteur — le moteur de décision du cerveau central transforme
+ * les données mesurées en CapabilityDecision persistées et événements) +
+ * événements pour les autres modules. Contrat ModuleAgent : ne lève JAMAIS,
+ * retourne vite (aucun appel de découverte réseau ici — lecture locale
+ * uniquement ; la synthèse de décisions est déterministe et locale).
  */
 export function agentCapacitesUce(options: GestionnaireOptions = {}): ModuleAgent {
   return {
     id: "capacites-uce",
     nom: "Pont UCE ↔ cerveau",
-    role: "08. SUPERVISION DES CAPACITÉS (rapport de données au cerveau central)",
+    role: "08. SUPERVISION DES CAPACITÉS (rapport de données + décisions du cerveau central)",
     intervalleMs: 300_000,
     async tick(ctx: ContexteTick): Promise<RapportModule> {
       try {
@@ -128,12 +133,32 @@ export function agentCapacitesUce(options: GestionnaireOptions = {}): ModuleAgen
             recommandations: rapport.recommandations.slice(0, 5),
           },
         });
+
+        // V1.1 Phase 4 — le cerveau central DÉCIDE (synthèse déterministe sur
+        // données mesurées, évaluée contre la politique d'autonomie). Les
+        // besoins non satisfaits remontés par les autres modules sont inclus.
+        const besoinsRecus = ctx.evenementsRecus
+          .filter((e) => e.sujet === "besoin-capacite" && typeof e.charge?.besoin === "string")
+          .map((e) => String(e.charge?.besoin).slice(0, 160));
+        const decisions = await produireDecisions({ rapport, besoinsNonSatisfaits: besoinsRecus }, options);
+        const autorisees = decisions.filter((d) => d.verdictPolitique.autorise);
+        if (autorisees.length > 0) {
+          ctx.emettreEvenement({
+            de: "capacites-uce",
+            sujet: "uce-decisions",
+            charge: {
+              decisions: autorisees.slice(0, 10).map((d) => ({ decisionId: d.decisionId, action: d.action, cible: d.targetCapability ?? null, priorite: d.priorite, approbationRequise: d.constraints.requiresApproval })),
+            },
+          });
+        }
+
         return {
           statut: "succes",
-          message: `rapport UCE au cerveau : ${rapport.outils.totalEnregistres}/${rapport.outils.totalAnnonces} outils enregistrés, ${rapport.defaillantes.length} défaillante(s), ${rapport.echecs.incidentsOuverts} incident(s) ouvert(s)`,
+          message: `rapport UCE au cerveau : ${rapport.outils.totalEnregistres}/${rapport.outils.totalAnnonces} outils enregistrés, ${rapport.defaillantes.length} défaillante(s), ${rapport.echecs.incidentsOuverts} incident(s) ouvert(s) — ${decisions.length} décision(s) du cerveau (${autorisees.length} autorisée(s))`,
           details: {
             parStatut: rapport.outils.parStatut,
             executionsAnalysees: rapport.echecs.executionsAnalysees,
+            decisionsProduites: decisions.map((d) => ({ id: d.decisionId, action: d.action, statut: d.statut })),
           },
         };
       } catch (erreur) {
