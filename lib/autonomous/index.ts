@@ -78,6 +78,16 @@ export async function demarrerCoeurAutonome(): Promise<ResultatArmement> {
         coeur.enregistrerModule(agentCompetences({ memoire, dossierCore: dossier, tousLesCycles: 6 }));
         modules.push("competences");
       }
+
+      // UCE (Universal Capability Engine) : module-agent « capacites-uce » —
+      // collecte bornée du rapport de capacités pour le cerveau, incidents et
+      // recommandations ; AUCUNE décision, aucune intégration automatique
+      // (désactivable AUTO_CAPABILITIES=0).
+      if (process.env.AUTO_CAPABILITIES !== "0") {
+        const { agentCapacitesUce } = await import("../capabilities/core/capability-brain-bridge");
+        coeur.enregistrerModule(agentCapacitesUce({ dossier }));
+        modules.push("capacites-uce");
+      }
     }
 
     const reprise = coeur.demarrer();

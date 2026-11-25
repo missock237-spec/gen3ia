@@ -39,6 +39,7 @@ export const COLLECTIONS_UCE = {
   rollbacks: "cap_rollbacks",
   resources: "cap_resources",
   dependencies: "cap_dependencies",
+  missions: "cap_missions",
 } as const;
 
 export type CollectionUce = keyof typeof COLLECTIONS_UCE;

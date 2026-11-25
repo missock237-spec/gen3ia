@@ -83,7 +83,7 @@ async function versionPython(): Promise<string | undefined> {
 }
 
 /** Sonde GPU réelle : nvidia-smi présent ? Sinon absent (jamais inventé). */
-async function sonderGpu(): Promise<{ present: boolean; nom?: string }> {
+export async function sonderGpu(): Promise<{ present: boolean; nom?: string }> {
   try {
     const { stdout } = await execFichier("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], { timeout: 4_000 });
     const nom = stdout.split("\n")[0]?.trim();
