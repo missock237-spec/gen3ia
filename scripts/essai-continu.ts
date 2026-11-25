@@ -19,6 +19,7 @@
 
 import { existsSync, mkdirSync, readFileSync, appendFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import os from "node:os";
 
 const DOSSIER = process.env.ESSAI_DOSSIER ?? "var/autonomous/essai-continu";
 const CHECKPOINT = join(DOSSIER, "checkpoint.json");
@@ -37,6 +38,11 @@ interface Checkpoint {
   erreurs: Array<{ cycle: number; message: string }>;
   demarrageLe: string;
   tempsFonctionnementMs: number;
+  /** Endurance (WS 1) — consommation matérielle réelle mesurée. */
+  ramPicMo: number;
+  ramDerniereMo: number;
+  chargeDerniere: number;
+  observations: number;
 }
 
 /** Reprise : charge le checkpoint existant (aucune perte entre redémarrages). */
@@ -54,6 +60,10 @@ function chargerCheckpoint(): Checkpoint {
     erreurs: [],
     demarrageLe: new Date().toISOString(),
     tempsFonctionnementMs: 0,
+    ramPicMo: 0,
+    ramDerniereMo: 0,
+    chargeDerniere: 0,
+    observations: 0,
   };
   if (!existsSync(CHECKPOINT)) return vide;
   try {
@@ -129,11 +139,17 @@ async function main(): Promise<void> {
     cp.rejetes = compte.REJECTED;
     cp.echecs = compte.FAILED;
     cp.competencesValidees = competences.validees().length;
+    // Endurance : RSS réel du process + charge système (mesures honnêtes).
+    const rssMo = Math.round(process.memoryUsage().rss / 1_048_576);
+    cp.ramDerniereMo = rssMo;
+    if (rssMo > cp.ramPicMo) cp.ramPicMo = rssMo;
+    cp.chargeDerniere = Math.round(os.loadavg()[0] * 100) / 100;
+    cp.observations += 1;
     rapportCycle();
     persisterCheckpoint(cp);
     const hRestantes = heuresCible - (cp.tempsFonctionnementMs / 3_600_000);
     console.log(
-      `[essai-continu] cycle ${coeur.cycleCourant()} — ${Math.round((cp.tempsFonctionnementMs / 3_600_000) * 100) / 100} h cumulées (reste ${Math.max(0, hRestantes).toFixed(2)} h) — file : ${file.taille()} lot(s), mémoire : ${memoire.taille()} connaissance(s) — santé : ${coeur.etat().statut}`,
+      `[essai-continu] cycle ${coeur.cycleCourant()} — ${Math.round((cp.tempsFonctionnementMs / 3_600_000) * 100) / 100} h cumulées (reste ${Math.max(0, hRestantes).toFixed(2)} h) — file : ${file.taille()} lot(s), mémoire : ${memoire.taille()} connaissance(s) — RAM ${rssMo} Mo (pic ${cp.ramPicMo}) — charge ${cp.chargeDerniere} — santé : ${coeur.etat().statut}`,
     );
   }, periode);
 
@@ -154,6 +170,10 @@ async function main(): Promise<void> {
       adaptationsAnnulees: cp.adaptationsAnnulees,
       competencesValidees: cp.competencesValidees,
       erreurs: cp.erreurs.slice(-10),
+      ramPicMo: cp.ramPicMo,
+      ramDerniereMo: cp.ramDerniereMo,
+      chargeDerniere: cp.chargeDerniere,
+      observations: cp.observations,
       verdict: cp.tempsFonctionnementMs >= dureeCibleMs ? "DUREE_CIBLE_ATTEINTE" : "INTERROMPU_AVANT_CIBLE",
     };
     writeFileSync(join(DOSSIER, "resume.json"), JSON.stringify(resume, null, 1), "utf8");

@@ -1,0 +1,19 @@
+{
+ "dureeCibleHeures": 0.18,
+ "dureeCumuleeHeures": 0.18,
+ "cyclesCumules": 3,
+ "lotsCollectes": 0,
+ "integres": 0,
+ "quarantaines": 0,
+ "rejetes": 0,
+ "echecs": 0,
+ "adaptationsAppliquees": 0,
+ "adaptationsAnnulees": 0,
+ "competencesValidees": 0,
+ "erreurs": [],
+ "ramPicMo": 140,
+ "ramDerniereMo": 126,
+ "chargeDerniere": 1.37,
+ "observations": 10,
+ "verdict": "DUREE_CIBLE_ATTEINTE"
+}
