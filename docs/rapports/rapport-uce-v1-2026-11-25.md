@@ -102,8 +102,8 @@ Moteur : N runs sandbox (2-20), latence p50/p95/min/max mesurée côté enfant, 
 ## 8. Rapport des tests
 
 - **8 suites UCE** (`lib/capabilities/tests/`) : discovery, benchmark, compatibility, execution, security, learning, verification, integration — **40 tests, 40 verts** (exécution finale mesurée 3,6 s).
-- **Baseline pré-UCE** : 7 648 tests verts (693 fichiers), 2 sautés ; 1 erreur hors-tests (worker SIGKILL pression mémoire du sandbox, fichier passant seul).
-- **Suite complète post-UCE** : exécutée en fin de branche (résultat consigné en fin de rapport).
+- **Baseline pré-UCE** : 7 648 tests verts (693 fichiers), 2 sautés ; 1 erreur hors-tests (worker SIGKILL pression mémoire du sandbox sur `api-endpoints-dead-code-guard`, fichier passant seul — vérifié).
+- **Suite complète post-UCE** : **7 687 tests verts (700 fichiers)**, +39 vs baseline. **1 échec réel détecté et corrigé** : le garde `secret-hygiene` a signalé un motif de token HF RÉEL hérité d'un exemple dans 2 fichiers de tests UCE → tokens remplacés par des faux (32 chars), commit amendé **avant tout push** (vérification `git log -S` = 0 occurrence) ; re-exécution hygiene + suites UCE : 12/12 verts. Le garde d'hygiène a fonctionné exactement comme prévu.
 - **Typecheck** : 0 erreur sur tout le dépôt. **ESLint** : 0 erreur sur `lib/capabilities`, `app/api/admin/capabilities`, `app/admin/capabilities`.
 - **Tests de défaillance couverts** : API injoignable (mock réseau coupé → statut indisponible honnête), dépendance incompatible (node >=99 → incompatible), timeout/mémoire (diagnostics du debugger), échec d'intégration (tests rouges → promotion refusée), rollback (v2 défaillante → retour v1 réel).
 
