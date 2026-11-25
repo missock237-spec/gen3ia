@@ -1,6 +1,6 @@
 import "server-only";
 
-import { GEN3IA_TOOLS } from "@/lib/tools/registry";
+import { entreesNativesSynchrones } from "./core/capability-registry";
 import { getInstalledExtensionCapabilities } from "@/lib/extensions/agent-bridge";
 import { listEnabledCustomApis } from "@/lib/integrations/custom-apis/repository";
 import { listUserServers } from "@/lib/integrations/mcp/service";
@@ -43,14 +43,17 @@ export interface CapabilityCatalog {
 }
 
 function nativeCapabilities(): CapabilityEntry[] {
-  return GEN3IA_TOOLS.map((tool) => ({
-    id: tool.name,
+  // V1.1 Phase 2 — la partie native du catalogue DÉCLARATIF est GÉNÉRÉE
+  // depuis le registre central de référence (source unique) : plus aucune
+  // reconstruction parallèle depuis GEN3IA_TOOLS.
+  return entreesNativesSynchrones().map((entree) => ({
+    id: entree.name,
     kind: "tool" as const,
-    name: tool.name,
-    description: tool.description,
-    risk: tool.risk,
-    sideEffect: tool.sideEffect,
-    permission: tool.permission,
+    name: entree.name,
+    description: entree.description,
+    risk: entree.risque,
+    sideEffect: entree.sideEffect,
+    permission: entree.permissions[0],
     source: "gen3ia",
   }));
 }

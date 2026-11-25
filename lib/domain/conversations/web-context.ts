@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { executeTool } from "@/lib/tools/executor";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 import type { ExecutionPolicy } from "@/lib/security/execution-policy";
 
 /**
@@ -85,7 +85,7 @@ export async function loadWebPageContext(
   const pages: WebPageContext[] = [];
   for (const url of urls) {
     try {
-      const result = await executeTool({
+      const result = await executerOutilViaGateway({ origine: "conversation",
         userId: options.userId,
         executionId: randomUUID(),
         projectId: options.projectId,

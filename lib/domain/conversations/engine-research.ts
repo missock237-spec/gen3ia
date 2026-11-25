@@ -15,7 +15,7 @@ import "server-only";
 /* Honnêteté : chaque axe sans résultat est DIT (section « Limites »),  */
 /* aucune source n'est jamais inventée, le plan est annoncé tel quel.   */
 
-import { executeTool } from "@/lib/tools/executor";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 import { safeEmitter } from "./stream-events";
 import { withTimeout } from "./engine-turn";
 import type { ConversationTurnResult } from "./engine-turn";
@@ -174,7 +174,7 @@ export async function runResearchTurn(ctx: Omit<TurnContext, "intent">): Promise
     });
     try {
       const resultat = await withTimeout(
-        executeTool({
+        executerOutilViaGateway({ origine: "conversation",
           userId: ctx.userId,
           executionId: `research-${ctx.conversationId}-${index + 1}`,
           projectId: ctx.projectId,
@@ -219,7 +219,7 @@ export async function runResearchTurn(ctx: Omit<TurnContext, "intent">): Promise
     });
     try {
       const ouverture = await withTimeout(
-        executeTool({
+        executerOutilViaGateway({ origine: "conversation",
           userId: ctx.userId,
           executionId: `research-open-${ctx.conversationId}-${index + 1}`,
           projectId: ctx.projectId,

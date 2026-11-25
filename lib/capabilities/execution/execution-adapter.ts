@@ -9,6 +9,7 @@
 
 import "server-only";
 
+import type { ExecutionPolicy } from "@/lib/security/execution-policy";
 import type { ContexteExecutionUce } from "./execution-context";
 
 export interface SortieAdaptateur {
@@ -43,6 +44,8 @@ export const adaptateurOutilNatif: AdaptateurExecution = {
       projectId: demande.projectId,
       toolName: (demande.input as { toolName?: string } | undefined)?.toolName ?? "",
       input: (demande.input as { input?: unknown } | undefined)?.input ?? {},
+      signal: ctx.signal,
+      policy: (demande.input as { policy?: ExecutionPolicy } | undefined)?.policy,
     });
     return {
       ok: resultat.success,

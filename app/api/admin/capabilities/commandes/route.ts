@@ -8,6 +8,9 @@ import { benchmarker } from "@/lib/capabilities/evaluation/benchmark-engine";
 import { effectuerRollback } from "@/lib/capabilities/versioning/rollback-manager";
 import { refuserSiSecret } from "@/lib/capabilities/security/secrets-protection";
 import { promouvoirVersion } from "@/lib/capabilities/versioning/version-manager";
+import { definirNiveauAutonomie, NIVEAUX_AUTONOMIE } from "@/lib/capabilities/autonomy/autonomy-policy-engine";
+import { obtenirOrchestrateurCycle } from "@/lib/capabilities/core/cycle-persistant";
+import { obtenirRegistreCentral } from "@/lib/capabilities/core/capability-registry";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -25,7 +28,14 @@ interface CorpsCommande {
     | "rollback"
     | "promouvoir-version"
     | "suspendre-evolutions"
-    | "reprendre-evolutions";
+    | "reprendre-evolutions"
+    // V1.1 Phase 13 — supervision de l'autonomie :
+    | "niveau-autonomie"
+    | "annuler-cycle"
+    | "reprendre-cycle"
+    | "relancer-cycle"
+    | "reprendre-cycles-interrompus"
+    | "rollback-cycle";
   requete?: string;
   capabilityId?: string;
   script?: string;
@@ -33,6 +43,8 @@ interface CorpsCommande {
   versVersionId?: string;
   raison?: string;
   versionId?: string;
+  cycleId?: string;
+  niveau?: number;
 }
 
 /**
@@ -97,6 +109,21 @@ export async function POST(request: NextRequest) {
         if (!corps.capabilityId) {
           return NextResponse.json(errorBody(new Error("capabilityId requis"), "capabilityId requis"), { status: 400 });
         }
+        const registre = obtenirRegistreCentral();
+        // Outils NATIFS : contrôle d'activation du registre central (V1.1
+        // Phase 2 — une capacité désactivée n'est plus exécutable, contrôle
+        // branché dans le gateway). Capacités UCE : machine à états.
+        if (corps.capabilityId.startsWith("natif:")) {
+          const par = (corps.autorisePar ?? "").trim();
+          if (par.length < 4) {
+            return NextResponse.json(errorBody(new Error("autorisePar requis (identifiant humain)"), "autorisePar requis (identifiant humain)"), { status: 400 });
+          }
+          const raison = (corps.raison ?? `${corps.action} par l'admin`).slice(0, 300);
+          const res = corps.action === "desactiver-capacite"
+            ? await registre.desactiver(corps.capabilityId, { raison, par })
+            : await registre.reactiver(corps.capabilityId, { raison, par });
+          return NextResponse.json({ ok: res.ok, raison: res.raison });
+        }
         const vers = corps.action === "activer-capacite" ? "evaluee" : "suspendue";
         const res = await gestionnaire.transitionner(corps.capabilityId, vers, {});
         return NextResponse.json({ ok: res.ok, raison: res.raison });
@@ -144,6 +171,47 @@ export async function POST(request: NextRequest) {
       case "reprendre-evolutions": {
         await fs.rm(path.join(process.cwd(), "var", "capabilities", "evolutions-suspendues.json"), { force: true });
         return NextResponse.json({ ok: true, suspendues: false });
+      }
+
+      // ------------------------------------------------------------------
+      // V1.1 Phase 13 — supervision de l'autonomie
+      // ------------------------------------------------------------------
+      case "niveau-autonomie": {
+        const niveau = corps.niveau;
+        if (typeof niveau !== "number" || !NIVEAUX_AUTONOMIE.includes(niveau as 1 | 2 | 3 | 4 | 5)) {
+          return NextResponse.json(errorBody(new Error("niveau invalide (1-5)"), "niveau invalide (1-5)"), { status: 400 });
+        }
+        const res = await definirNiveauAutonomie(niveau as 1 | 2 | 3 | 4 | 5, { par: (corps.autorisePar ?? "").trim(), raison: (corps.raison ?? "").trim() });
+        return NextResponse.json({ ok: res.ok, raison: res.raison });
+      }
+
+      case "annuler-cycle": {
+        if (!corps.cycleId) return NextResponse.json(errorBody(new Error("cycleId requis"), "cycleId requis"), { status: 400 });
+        const res = await obtenirOrchestrateurCycle().annuler(corps.cycleId, { raison: (corps.raison ?? "annulation admin").slice(0, 300), par: (corps.autorisePar ?? "").trim() });
+        return NextResponse.json({ ok: res.ok, raison: res.raison });
+      }
+
+      case "reprendre-cycle": {
+        if (!corps.cycleId) return NextResponse.json(errorBody(new Error("cycleId requis"), "cycleId requis"), { status: 400 });
+        const res = await obtenirOrchestrateurCycle().reprendre(corps.cycleId, { autorisePar: (corps.autorisePar ?? "").trim() || undefined });
+        return NextResponse.json({ ok: res.ok, raison: res.raison, etat: res.cycle.etat, approbationRequise: res.approbationRequise ?? false });
+      }
+
+      case "relancer-cycle": {
+        if (!corps.cycleId) return NextResponse.json(errorBody(new Error("cycleId requis"), "cycleId requis"), { status: 400 });
+        const res = await obtenirOrchestrateurCycle().relancer(corps.cycleId);
+        return NextResponse.json({ ok: res.ok, raison: res.raison, etat: res.cycle.etat });
+      }
+
+      case "reprendre-cycles-interrompus": {
+        const res = await obtenirOrchestrateurCycle().reprendreCyclesInterrompus();
+        return NextResponse.json({ ok: true, raison: res.message, cycles: res.cycles.map((c) => ({ id: c.id, etat: c.etat })) });
+      }
+
+      case "rollback-cycle": {
+        if (!corps.cycleId) return NextResponse.json(errorBody(new Error("cycleId requis"), "cycleId requis"), { status: 400 });
+        const res = await obtenirOrchestrateurCycle().annulerParRollback(corps.cycleId, { raison: (corps.raison ?? "rollback admin").slice(0, 300), par: (corps.autorisePar ?? "").trim() });
+        return NextResponse.json({ ok: res.ok, raison: res.raison });
       }
 
       default:

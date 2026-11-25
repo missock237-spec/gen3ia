@@ -223,6 +223,21 @@ export const EXECUTION_STATUSES = [
 ] as const;
 export type ExecutionStatus = (typeof EXECUTION_STATUSES)[number];
 
+/** Contexte d'approbation attaché à une exécution (HITL / politique / auto). */
+export interface ApprovalContext {
+  approvalId?: string;
+  /** Identifiant humain ou règle de politique ayant autorisé l'appel. */
+  autorisePar?: string;
+  niveau: "hitl" | "politique" | "auto";
+}
+
+/** Limites de ressources demandées pour cette exécution (mission Phase 3). */
+export interface ResourceLimits {
+  maxDurationMs?: number;
+  maxMemoryMb?: number;
+  maxOutputBytes?: number;
+}
+
 export interface CapabilityExecutionRequest {
   executionId: string;
   userId: string;
@@ -232,6 +247,17 @@ export interface CapabilityExecutionRequest {
   /** Surface appelante (chat, api, agent, admin, cycle-uce). */
   origine: string;
   deadlineMs?: number;
+  // ---- contexte d'exécution normalisé V1.1 (mission Phase 3) ----
+  /** Agent appelant (chemin agents), sinon undefined. */
+  agentId?: string;
+  /** Session conversationnelle ou workflow à l'origine de l'appel. */
+  sessionId?: string;
+  /** Identifiant de traçabilité transversal (corrélation journaux). */
+  traceId?: string;
+  /** Contexte d'approbation (HITL déjà posé en amont, politique, auto). */
+  approvalContext?: ApprovalContext;
+  /** Limites de ressources explicites (durée/mémoire/sortie). */
+  resourceLimits?: ResourceLimits;
 }
 
 export interface PermissionDecisionRecord {
@@ -359,7 +385,25 @@ export const executionRequestSchema = z.object({
   capabilityId: z.string().min(1).max(300),
   input: z.unknown(),
   origine: z.string().min(1).max(60),
-  deadlineMs: z.number().int().min(1_000).max(120_000).optional(),
+  deadlineMs: z.number().int().min(1_000).max(600_000).optional(),
+  // Contexte normalisé V1.1 — optionnel et borné (compatibilité totale V1).
+  agentId: z.string().max(200).optional(),
+  sessionId: z.string().max(200).optional(),
+  traceId: z.string().max(200).optional(),
+  approvalContext: z
+    .object({
+      approvalId: z.string().max(200).optional(),
+      autorisePar: z.string().max(200).optional(),
+      niveau: z.enum(["hitl", "politique", "auto"]),
+    })
+    .optional(),
+  resourceLimits: z
+    .object({
+      maxDurationMs: z.number().int().min(1_000).max(600_000).optional(),
+      maxMemoryMb: z.number().int().min(64).max(4_096).optional(),
+      maxOutputBytes: z.number().int().min(1_024).max(10_000_000).optional(),
+    })
+    .optional(),
 });
 
 /** Identifiants de capability : origine:source:nom (borné, sans espace). */

@@ -12,7 +12,7 @@ import { createAgentRecord, deleteAgentForUser, listAgentsForUser, toSummary, up
 import { AgentRecordSchema } from "@/lib/agents/schema";
 import { resolveAndHarden } from "@/lib/agents/tool-resolver";
 import { appendMessage } from "@/lib/chat/repository";
-import { executeTool } from "@/lib/tools/executor";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 import { runChatTurn } from "./engine-chat";
 import type { TurnBase } from "./engine-chat";
 import type { TurnIntent } from "./engine-intent";
@@ -38,7 +38,7 @@ async function executerOutilService(
   input: Record<string, unknown>,
 ): Promise<{ ok: true; output: unknown } | { ok: false; error: string }> {
   try {
-    const result = await executeTool({
+    const result = await executerOutilViaGateway({ origine: "conversation",
       userId: ctx.userId,
       executionId: `conv_${ctx.conversationId}`,
       projectId: ctx.projectId,

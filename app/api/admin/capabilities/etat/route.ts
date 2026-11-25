@@ -9,6 +9,11 @@ import { analyserEchecs } from "@/lib/capabilities/monitoring/failure-analyzer";
 import { usageParCapacite } from "@/lib/capabilities/monitoring/resource-monitor";
 import { lister } from "@/lib/capabilities/storage/capability-repository";
 import { historiqueRollbacks } from "@/lib/capabilities/versioning/rollback-manager";
+import { niveauAutonomieActuel } from "@/lib/capabilities/autonomy/autonomy-policy-engine";
+import { insuffisancesRecentes } from "@/lib/capabilities/autonomy/capability-gap-analyzer";
+import { decisionsRecentes } from "@/lib/capabilities/core/capability-decision";
+import { plansRecents } from "@/lib/capabilities/autonomy/capability-improvement-planner";
+import { cyclesRecents } from "@/lib/capabilities/core/cycle-persistant";
 import type { CapabilityRollback, CapabilityVersion } from "@/lib/capabilities/core/capability-contract";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -62,6 +67,22 @@ export async function GET(request: NextRequest) {
     evolutionsSuspendues = false;
   }
 
+  // V1.1 Phase 13 — AUTONOMIE : insuffisances, décisions du cerveau, plans,
+  // cycles persistants (chiffres MESURÉS, aucun indicateur simulé).
+  const [politique, insuffisances, decisions, plans, cycles, executions] = await Promise.all([
+    niveauAutonomieActuel(),
+    insuffisancesRecentes(undefined, 100),
+    decisionsRecentes(undefined, 100),
+    plansRecents(undefined, 100),
+    cyclesRecents(undefined, 100),
+    lister<{ id: string; status: string }>("executions", undefined, 500),
+  ]);
+  const ETATS_TERMINAUX = new Set(["completed", "failed", "cancelled", "rolled_back"]);
+  const cyclesEnCours = cycles.filter((c) => !ETATS_TERMINAUX.has(c.etat)).length;
+  const cyclesTermines = cycles.filter((c) => c.etat === "completed").length;
+  const cyclesEchoues = cycles.filter((c) => c.etat === "failed" || c.etat === "cancelled" || c.etat === "rolled_back").length;
+  const tentativesBloquees = executions.filter((e) => e.status === "refusee").length;
+
   return NextResponse.json({
     date: new Date().toISOString(),
     total: stats.total,
@@ -81,6 +102,29 @@ export async function GET(request: NextRequest) {
     versionsRecentes: versions.slice(0, 12).map((v) => ({ id: v.id, capabilityId: v.capabilityId, version: v.version, statut: v.statut, creeLe: v.creeLe })),
     rollbacks: (rollbacks as CapabilityRollback[]).slice(0, 10),
     evolutionsSuspendues,
+    autonomie: {
+      niveau: politique.niveau,
+      niveauPosePar: politique.par ?? null,
+      insuffisancesDetectees: insuffisances.length,
+      insuffisancesRecentes: insuffisances.slice(0, 10).map((i) => ({ id: i.id, categorie: i.categorie, description: i.description.slice(0, 120), priorite: i.priorite, detecteeLe: i.detecteeLe })),
+      decisions: {
+        total: decisions.length,
+        parStatut: decisions.reduce<Record<string, number>>((acc, d) => ({ ...acc, [d.statut]: (acc[d.statut] ?? 0) + 1 }), {}),
+        recentes: decisions.slice(0, 10).map((d) => ({ decisionId: d.decisionId, action: d.action, objective: d.objective.slice(0, 120), statut: d.statut, priorite: d.priorite, approbationRequise: d.constraints.requiresApproval, produiteLe: d.produiteLe })),
+      },
+      plans: {
+        total: plans.length,
+        parStatut: plans.reduce<Record<string, number>>((acc, p) => ({ ...acc, [p.statut]: (acc[p.statut] ?? 0) + 1 }), {}),
+        recents: plans.slice(0, 10).map((p) => ({ id: p.id, action: p.action, objectif: p.objectif.slice(0, 120), statut: p.statut, niveauRisque: p.niveauRisque })),
+      },
+      cycles: {
+        enCours: cyclesEnCours,
+        termines: cyclesTermines,
+        echoues: cyclesEchoues,
+        recents: cycles.slice(0, 10).map((c) => ({ id: c.id, etat: c.etat, besoin: c.besoin.slice(0, 100), tentatives: c.tentatives, causeEchec: c.causeEchec?.slice(0, 120) ?? null, majLe: c.majLe })),
+      },
+    },
+    tentativesBloquees,
     limites: [
       "les chiffres reflètent les mesures persistées localement (repli) et Firestore quand disponible",
       "aucune intégration n'est automatique : le statut « proposee » exige une autorisation humaine",

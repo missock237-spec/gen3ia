@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { estTacheRecherchable, evalueDifficulte } from "@/lib/ai/raisonnement-profond";
-import { executeTool } from "@/lib/tools/executor";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 import type { ExecutionPolicy } from "@/lib/security/execution-policy";
 
 /**
@@ -53,7 +53,7 @@ export async function loadSystematicResearchContext(
   if (!tourExigeRechercheSystematique(message)) return "";
   const evaluation = evalueDifficulte(message);
   try {
-    const result = await executeTool({
+    const result = await executerOutilViaGateway({ origine: "conversation",
       userId: options.userId,
       executionId: randomUUID(),
       projectId: options.projectId,

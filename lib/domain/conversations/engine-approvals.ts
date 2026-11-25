@@ -7,7 +7,7 @@ import "server-only";
 import type { ConversationApproval, ConversationArtifact, ConversationRun, RunStatus, RunStep } from "./types";
 import { recordRunOutcome } from "@/lib/ai/auto-improvement";
 import { finalizeRun, makeStep, updateRunSteps } from "@/lib/domain/runs/repository";
-import { executeTool } from "@/lib/tools/executor";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 import { TOOL_OUTPUT_ARTIFACTS, artifactFromToolOutput } from "./engine-plan";
 import { CONVERSATION_EXECUTION_POLICY, condenseToolOutput } from "./engine-tools";
 
@@ -39,7 +39,7 @@ export async function executeApprovedStep(params: {
   steps[stepIndex] = step;
   await updateRunSteps(params.userId, run.id, steps);
 
-  const result = await executeTool({
+  const result = await executerOutilViaGateway({ origine: "conversation",
     userId: params.userId,
     executionId: run.id,
     projectId: run.projectId,

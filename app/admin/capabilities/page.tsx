@@ -33,6 +33,29 @@ interface EtatCapacites {
   versionsRecentes: Array<{ id: string; capabilityId: string; version: string; statut: string; creeLe: string }>;
   rollbacks: Array<{ id: string; capabilityId: string; depuisVersion: string; versVersion: string; raison: string; effectueLe: string }>;
   evolutionsSuspendues: boolean;
+  tentativesBloquees: number;
+  autonomie: {
+    niveau: number;
+    niveauPosePar: string | null;
+    insuffisancesDetectees: number;
+    insuffisancesRecentes: Array<{ id: string; categorie: string; description: string; priorite: string; detecteeLe: string }>;
+    decisions: {
+      total: number;
+      parStatut: Record<string, number>;
+      recentes: Array<{ decisionId: string; action: string; objective: string; statut: string; priorite: string; approbationRequise: boolean; produiteLe: string }>;
+    };
+    plans: {
+      total: number;
+      parStatut: Record<string, number>;
+      recents: Array<{ id: string; action: string; objectif: string; statut: string; niveauRisque: string }>;
+    };
+    cycles: {
+      enCours: number;
+      termines: number;
+      echoues: number;
+      recents: Array<{ id: string; etat: string; besoin: string; tentatives: number; causeEchec: string | null; majLe: string }>;
+    };
+  };
   limites: string[];
 }
 
@@ -43,6 +66,8 @@ export default function AdminCapabilitiesPage() {
   const [messageCommande, setMessageCommande] = useState("");
   const [occupe, setOccupe] = useState(false);
   const [requete, setRequete] = useState("");
+  const [adminId, setAdminId] = useState("");
+  const [cycleId, setCycleId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,7 +124,6 @@ export default function AdminCapabilitiesPage() {
   const integrees = etat.parStatut.integree ?? 0;
   const validees = etat.parStatut.validee ?? 0;
   const proposees = etat.parStatut.proposee ?? 0;
-
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -111,6 +135,7 @@ export default function AdminCapabilitiesPage() {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={etat.evolutionsSuspendues ? "stopped" : "healthy"} label={etat.evolutionsSuspendues ? "ÉVOLUTIONS SUSPENDUES" : "ÉVOLUTIONS ACTIVES"} />
+          <StatusBadge status={etat.autonomie.niveau >= 4 ? "warn" : "healthy"} label={`AUTONOMIE NIV. ${etat.autonomie.niveau}${etat.autonomie.niveauPosePar ? ` (${etat.autonomie.niveauPosePar})` : ""}`} />
           <button type="button" onClick={() => void load()} className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted" disabled={occupe}>
             Rafraîchir
           </button>
@@ -124,6 +149,52 @@ export default function AdminCapabilitiesPage() {
         <MetricCard label="Indisponibles" value={String(etat.indisponibles)} />
         <MetricCard label="À autoriser" value={String(proposees)} />
         <MetricCard label="Incidents ouverts" value={String(etat.incidentsOuverts)} />
+      </section>
+
+      {/* V1.1 Phase 13 — SUPERVISION DE L'AUTONOMIE (chiffres mesurés) */}
+      <section className="space-y-3">
+        <h2 className="font-medium">Autonomie du cycle d&apos;évolution</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <MetricCard label="Insuffisances détectées" value={String(etat.autonomie.insuffisancesDetectees)} />
+          <MetricCard label="Décisions du cerveau" value={String(etat.autonomie.decisions.total)} />
+          <MetricCard label="Plans d&apos;amélioration" value={String(etat.autonomie.plans.total)} />
+          <MetricCard label="Cycles en cours" value={String(etat.autonomie.cycles.enCours)} />
+          <MetricCard label="Cycles terminés" value={String(etat.autonomie.cycles.termines)} />
+          <MetricCard label="Cycles échoués / annulés" value={String(etat.autonomie.cycles.echoues)} />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border p-4">
+            <h3 className="mb-2 font-medium">Cycles persistants récents</h3>
+            {etat.autonomie.cycles.recents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun cycle d&apos;évolution enregistré.</p>
+            ) : (
+              <ul className="space-y-1.5 text-sm">
+                {etat.autonomie.cycles.recents.map((c) => (
+                  <li key={c.id} className="flex justify-between gap-2">
+                    <span className="truncate">{c.id} <span className="text-muted-foreground">« {c.besoin.slice(0, 60)} »</span></span>
+                    <span className="text-muted-foreground">{c.etat} · {c.tentatives} essai(s){c.causeEchec ? ` · ${c.causeEchec.slice(0, 50)}` : ""}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-lg border p-4">
+            <h3 className="mb-2 font-medium">Décisions récentes du cerveau central</h3>
+            {etat.autonomie.decisions.recentes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucune décision produite.</p>
+            ) : (
+              <ul className="space-y-1.5 text-sm">
+                {etat.autonomie.decisions.recentes.map((d) => (
+                  <li key={d.decisionId} className="flex justify-between gap-2">
+                    <span className="truncate">{d.action} — {d.objective.slice(0, 70)}</span>
+                    <span className="text-muted-foreground">{d.statut} · {d.priorite}{d.approbationRequise ? " · gated" : ""}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">Tentatives d&apos;exécution bloquées (refus du gateway) : {etat.tentativesBloquees} · le niveau d&apos;autonomie ne peut être posé que par un identifiant humain (le système ne modifie jamais ses propres règles de sécurité).</p>
       </section>
 
       <section className="rounded-lg border p-4 space-y-3">
@@ -164,6 +235,82 @@ export default function AdminCapabilitiesPage() {
         <p className="text-xs text-muted-foreground">
           Toute intégration exige une autorisation explicite (gate humain) : les capacités « proposées » ci-dessous ne sont PAS exécutables tant qu&apos;elles n&apos;ont pas été autorisées via l&apos;API de commandes.
         </p>
+      </section>
+
+      {/* V1.1 Phase 13 — CONTRÔLES DE L'AUTONOMIE (suspendre/reprendre/annuler/
+          autoriser/désactiver/rollback — chaque action porte un identifiant
+          humain obligatoire pour les opérations gated) */}
+      <section className="rounded-lg border p-4 space-y-3">
+        <h2 className="font-medium">Contrôles de l&apos;autonomie</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={adminId}
+            onChange={(e) => setAdminId(e.target.value)}
+            placeholder="votre identifiant (ex. admin-xxx) — exigé pour les opérations gated"
+            className="min-w-56 flex-1 rounded-md border px-3 py-1.5 text-sm"
+          />
+          <input
+            value={cycleId}
+            onChange={(e) => setCycleId(e.target.value)}
+            placeholder="id de cycle (ex. cycle_abc123)"
+            className="min-w-56 flex-1 rounded-md border px-3 py-1.5 text-sm"
+          />
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+            disabled={occupe || cycleId.trim().length < 6}
+            onClick={() => void commande({ action: "annuler-cycle", cycleId, autorisePar: adminId, raison: "annulation depuis le dashboard" }, "annulation du cycle")}
+          >
+            Annuler le cycle
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+            disabled={occupe || cycleId.trim().length < 6 || adminId.trim().length < 4}
+            onClick={() => void commande({ action: "reprendre-cycle", cycleId, autorisePar: adminId }, "reprise du cycle")}
+          >
+            Reprendre / autoriser
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+            disabled={occupe || cycleId.trim().length < 6}
+            onClick={() => void commande({ action: "relancer-cycle", cycleId }, "relance du cycle")}
+          >
+            Relancer (retry)
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+            disabled={occupe || cycleId.trim().length < 6 || adminId.trim().length < 4}
+            onClick={() => void commande({ action: "rollback-cycle", cycleId, autorisePar: adminId, raison: "rollback depuis le dashboard" }, "rollback du cycle")}
+          >
+            Rollback du cycle
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+            disabled={occupe}
+            onClick={() => void commande({ action: "reprendre-cycles-interrompus" }, "reprise des cycles interrompus")}
+          >
+            Reprendre cycles interrompus
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Niveau d&apos;autonomie :</span>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`rounded-md border px-2.5 py-1 text-sm ${etat.autonomie.niveau === n ? "bg-muted font-medium" : "hover:bg-muted"}`}
+              disabled={occupe || adminId.trim().length < 4}
+              onClick={() => void commande({ action: "niveau-autonomie", niveau: n, autorisePar: adminId, raison: `passage au niveau ${n} depuis le dashboard` }, `niveau ${n}`)}
+            >
+              {n}
+            </button>
+          ))}
+          <span className="text-xs text-muted-foreground">1 observation · 2 recherche · 3 expérimentation · 4 intégration contrôlée · 5 optimisation encadrée</span>
+        </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">

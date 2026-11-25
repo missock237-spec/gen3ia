@@ -31,22 +31,22 @@ vi.mock("@/lib/security/agent-policy", () => ({
   })),
 }));
 
-vi.mock("@/lib/tools", () => ({
-  executeTool: vi.fn(),
+vi.mock("@/lib/capabilities/execution/pont-legacy", () => ({
+  executerOutilViaGateway: vi.fn(),
 }));
 
 import { protectRoute } from "@/lib/security/route-guard";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { executeThroughGateway } from "@/lib/execution/execution-gateway";
 import { createAgentPolicy } from "@/lib/security/agent-policy";
-import { executeTool } from "@/lib/tools";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 import { POST } from "./route";
 
 const mockedProtect = vi.mocked(protectRoute);
 const mockedEnforce = vi.mocked(enforceRateLimit);
 const mockedGateway = vi.mocked(executeThroughGateway);
 const mockedCreatePolicy = vi.mocked(createAgentPolicy);
-const mockedExecuteTool = vi.mocked(executeTool);
+const mockedExecuteTool = vi.mocked(executerOutilViaGateway);
 
 function postRequest(body: unknown): NextRequest {
   return new NextRequest("https://gen3ia.local/api/tools/execute", {
