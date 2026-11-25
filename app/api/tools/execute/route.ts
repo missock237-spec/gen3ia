@@ -22,8 +22,8 @@ import type {
 } from "@/lib/security/execution-policy";
 
 import {
-  executeTool,
-} from "@/lib/tools";
+  executerOutilViaGateway,
+} from "@/lib/capabilities/execution/pont-legacy";
 
 import {
   randomUUID,
@@ -230,7 +230,7 @@ export async function POST(
 
         execute: async () => {
           const toolResult =
-            await executeTool({
+            await executerOutilViaGateway({ origine: "api-tools",
               userId,
 
               executionId: resolvedExecutionId,

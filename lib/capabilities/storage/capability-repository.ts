@@ -40,6 +40,14 @@ export const COLLECTIONS_UCE = {
   resources: "cap_resources",
   dependencies: "cap_dependencies",
   missions: "cap_missions",
+  // — UCE V1.1 : registre central (activations), décisions du cerveau,
+  //   insuffisances, plans d'amélioration, cycles persistants, verrous —
+  registry: "cap_registry",
+  decisions: "cap_decisions",
+  gaps: "cap_gaps",
+  plans: "cap_plans",
+  cycles: "cap_cycles",
+  locks: "cap_locks",
 } as const;
 
 export type CollectionUce = keyof typeof COLLECTIONS_UCE;

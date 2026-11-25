@@ -1,4 +1,4 @@
-import { executeTool } from "@/lib/tools";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 import { ExecutionPolicy, DEFAULT_EXECUTION_POLICY } from "@/lib/security/execution-policy";
 import { authorizeTool } from "@/lib/security/tool-permissions";
 import { assertSafeToolInput, assertSafeToolOutput } from "@/lib/security/guardrails";
@@ -170,7 +170,7 @@ export async function executeToolSecurely(options: SecureToolExecutionOptions): 
       const onAbort = () => controller.abort();
       options.signal?.addEventListener("abort", onAbort, { once: true });
       try {
-        const toolResult = await executeTool({ userId: options.userId, executionId: options.executionId, toolName: options.toolName, input: options.input, signal: controller.signal, policy, projectId: options.projectId });
+        const toolResult = await executerOutilViaGateway({ origine: "agent-runtime", userId: options.userId, executionId: options.executionId, toolName: options.toolName, input: options.input, signal: controller.signal, policy, projectId: options.projectId });
         if (!toolResult.success) throw new Error(toolResult.error ?? `Tool ${options.toolName} failed`);
         result = toolResult.output;
       } finally {

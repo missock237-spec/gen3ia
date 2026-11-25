@@ -24,7 +24,7 @@ import { parseConnectorMissing, uniqueToolkits } from "@/lib/integrations/compos
 import { AUTO_APPROVAL_AUDIT_REASON, isAutoApprovable } from "@/lib/security/authorization-mode";
 import { isExternalAppConnected } from "@/lib/security/connected-apps";
 import { isR2Configured, uploadToR2 } from "@/lib/storage/r2";
-import { executeTool } from "@/lib/tools/executor";
+import { executerOutilViaGateway } from "@/lib/capabilities/execution/pont-legacy";
 
 // RECHERCHE WEB TEMPS RÉEL (vérification propriétaire 2026-11-11) : la
 // sortie RÉELLE de l'outil web.search rejoint le canal knowledge de la
@@ -729,7 +729,7 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
         }
         toolInput = completed.plan;
       }
-      const result = await executeTool({
+      const result = await executerOutilViaGateway({ origine: "conversation",
         userId: ctx.userId,
         executionId: run.id,
         projectId: ctx.projectId,

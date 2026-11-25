@@ -55,7 +55,7 @@ export async function verifierResultat(demande: DemandeVerification): Promise<Ex
   if (demande.spec.nonVide !== false && sortieTexte.trim().length === 0) {
     verifie = false;
     raisons.push("sortie vide");
-  } else {
+  } else if (demande.spec.nonVide !== false) {
     methodes.push("non-vide");
   }
 
@@ -116,9 +116,16 @@ export async function verifierResultat(demande: DemandeVerification): Promise<Ex
   }
 
   if (methodes.length === 0) {
-    // Aucune preuve spécifique demandée : vérification minimale = non-vide.
-    methodes.push("non-vide");
-    raisons.push("vérification minimale (sortie non vide) — aucune preuve forte demandée");
+    // Aucune preuve spécifique demandée (ex. pont legacy) : le niveau réel
+    // de preuve est déclaré honnêtement — jamais étiqueté « non-vide »
+    // pour une sortie vide.
+    if (sortieTexte.trim().length === 0) {
+      methodes.push("aucune-preuve");
+      raisons.push("aucune preuve demandée et sortie vide — succès brut transmis SANS confirmation forte");
+    } else {
+      methodes.push("non-vide");
+      raisons.push("vérification minimale (sortie non vide) — aucune preuve forte demandée");
+    }
   }
 
   return {
