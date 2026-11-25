@@ -10,7 +10,9 @@
  * Règle : jamais de capacité inventée — une sonde échouée = indisponible.
  */
 
-import type { CapacitesMateriel } from "./compute-types";
+import os from "node:os";
+
+import type { CapacitesCpu, CapacitesMateriel } from "./compute-types";
 
 let cache: CapacitesMateriel | null = null;
 
@@ -77,4 +79,46 @@ export function reinitialiserDetection(): void {
 /** Cap CPU — toujours disponible (mission : jamais de tâche perdue). */
 export function cpuDisponible(): boolean {
   return true;
+}
+
+/**
+ * Détection CPU RÉELLE (mission Phase 2 — A) : cœurs logiques et mémoire
+ * uniquement lorsque l'environnement les expose — sinon valeurs honnêtes
+ * (1 cœur, mémoire inconnue), jamais d'estimation déguisée en mesure.
+ */
+export function detecterCapacitesCpu(): CapacitesCpu {
+  const contraintes: string[] = [];
+  let cœursLogiques = 1;
+  let memoireDisponibleOctets: number | undefined;
+
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.hardwareConcurrency === "number") {
+      cœursLogiques = navigator.hardwareConcurrency;
+    } else if (typeof navigator === "undefined") {
+      cœursLogiques = os.cpus().length;
+    } else {
+      contraintes.push("cœurs logiques non exposés par cet environnement — valeur 1 honnête");
+    }
+  } catch {
+    contraintes.push("sonde de cœurs échouée — valeur 1 honnête");
+  }
+
+  try {
+    const proc = process as NodeJS.Process & { memoryUsage?: () => { rss: number } };
+    if (typeof proc?.memoryUsage === "function") {
+      memoireDisponibleOctets = proc.memoryUsage().rss;
+      contraintes.push("mémoire = RSS du process Node (pas la machine complète)");
+    }
+  } catch {
+    contraintes.push("mémoire non mesurable dans cet environnement");
+  }
+
+  if (typeof navigator !== "undefined") {
+    contraintes.push("environnement navigateur : mémoire processeur non exposée (privacy) — allocation limitée par la policy");
+  }
+  if (process.env.NEXT_RUNTIME === "edge") {
+    contraintes.push("runtime Edge/serverless : pas de thread long, pas de GPU");
+  }
+
+  return { cœursLogiques, memoireDisponibleOctets, contraintes, cpuDisponible: true };
 }

@@ -50,6 +50,17 @@ export interface CapacitesMateriel {
   environnement: "node" | "navigateur" | "serveur";
 }
 
+/** Capacités CPU réellement mesurables (mission Phase 2 — A). */
+export interface CapacitesCpu {
+  /** Cœurs logiques si l'environnement les expose, sinon 1 (honnête). */
+  cœursLogiques: number;
+  /** Mémoire du process lorsque mesurable (octets), sinon undefined. */
+  memoireDisponibleOctets?: number;
+  /** Contraintes d'environnement déclarées (serverless, navigateur…). */
+  contraintes: string[];
+  cpuDisponible: boolean;
+}
+
 /** Décision MOTIVÉE du router (traçable, auditable). */
 export interface DecisionCalcul {
   moteur: MoteurCalcul;

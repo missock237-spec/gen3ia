@@ -87,8 +87,9 @@ describe("politique : jamais WebGPU « parce que disponible »", () => {
   });
 
   it("mémoire au-delà de la limite déclarée : CPU (jamais de fiction)", () => {
-    const grosse = { ...tache(2_000_000), memoireOctets: 2 * 1024 * 1024 * 1024 };
-    const d = evaluerTache(grosse, CAPS_GPU_SIMULE);
+    // 256 Mo : sous la prudence (512 Mo) mais au-delà du maxBufferSize simulé (128 Mo).
+    const capsLimite: CapacitesMateriel = { ...CAPS_GPU_SIMULE, maxBufferSizeOctets: 128 * 1024 * 1024 };
+    const d = evaluerTache({ ...tache(2_000_000), memoireOctets: 256 * 1024 * 1024 }, capsLimite);
     expect(d.moteur).toBe("cpu");
     expect(d.raison).toContain("maxBufferSize");
   });
@@ -118,7 +119,7 @@ describe("fallback CPU systématique (mission : aucune tâche perdue)", () => {
       moteurDemande: "webgpu",
       executerGpu: async () => Number.NaN,
       executerCpu: async () => 42,
-      verifier: (v) => Number.isFinite(v),
+      verifierResultat: (v) => Number.isFinite(v),
     });
     expect(res.fallback).toBe(true);
     expect(res.resultat).toBe(42);

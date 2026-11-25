@@ -36,7 +36,7 @@ export class RegistreMetrics {
   instantane(): InstantaneMetrics {
     const durees = this.mesures.map((m) => m.dureeMs).sort((a, b) => a - b);
     const moyenne = durees.length ? durees.reduce((a, b) => a + b, 0) / durees.length : 0;
-    const quantile = (q: number) => (durees.length ? durees[Math.min(durees.length - 1, Math.floor(q * durees.length))] : 0);
+    const quantile = (q: number) => (durees.length ? durees[Math.max(0, Math.min(durees.length - 1, Math.ceil(q * durees.length) - 1))] : 0);
     return {
       parMoteur: { ...this.parMoteur },
       fallbacks: this.fallbacks,
