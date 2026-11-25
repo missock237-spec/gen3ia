@@ -1,0 +1,396 @@
+{
+  "scenario": "UCE V1.1 — scénarios de validation mission §Phase 11",
+  "dateIso": "2026-11-25T19:54:59.274Z",
+  "dureeMs": 1375,
+  "scenarios": [
+    "A-découverte",
+    "B-construction",
+    "C-amélioration",
+    "D-échec",
+    "E-intégration",
+    "F-redémarrage",
+    "G-sécurité"
+  ],
+  "preuves": [
+    {
+      "scenario": "SETUP",
+      "nom": "politique-autonomie",
+      "ok": true,
+      "detail": "niveau d'autonomie posé à 4 (intégration contrôlée : intégrations préparées et proposées, autorisation exigée pour les opérations sensibles) par admin-scenario-ucesuite",
+      "preuve": {
+        "niveau": 4
+      }
+    },
+    {
+      "scenario": "A",
+      "nom": "identification-manque",
+      "ok": true,
+      "detail": "fonctionnalite-absente : fonctionnalité absente : consulter la météo actuelle d'une ville pour un rapport",
+      "preuve": {
+        "description": "fonctionnalité absente : consulter la météo actuelle d'une ville pour un rapport",
+        "categorie": "fonctionnalite-absente",
+        "priorite": "haute",
+        "justification": "demande remontée sans capacité existante capable de la couvrir (registre central consulté)",
+        "mesureReference": "registre central : aucune entrée couvrant ce besoin ; 0 exécution réussie associée",
+        "objectifMesurable": "≥ 3 candidates découvertes et comparées sur mesures réelles",
+        "ressourcesEstimees": "un cycle de découverte multi-sources + évaluation + benchmark sandbox",
+        "source": "besoins",
+        "id": "gap_4cd81fc2ab11ad80",
+        "detecteeLe": "2026-11-25T19:54:57.954Z",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "scenario": "A",
+      "nom": "decision-cerveau",
+      "ok": true,
+      "detail": "décision dec_931acce38f21f470 (action discover, approbation: false)",
+      "preuve": {
+        "decisionId": "dec_931acce38f21f470",
+        "objective": "couvrir le besoin non satisfait : consulter la météo actuelle d'une ville pour un rapport",
+        "action": "discover",
+        "constraints": {
+          "maxDurationMs": 300000,
+          "requiresApproval": false
+        },
+        "rationale": "besoin utilisateur/agent sans capacité existante identifiée (registre + échecs consultés)",
+        "expectedOutcome": "au moins trois candidates découvertes, comparées sur mesures réelles",
+        "statut": "produite",
+        "priorite": "haute",
+        "verdictPolitique": {
+          "autorise": true,
+          "approbationRequise": false,
+          "raison": "« discover » autorisée au niveau 4 (aucune modification de production)"
+        },
+        "produiteLe": "2026-11-25T19:54:57.960Z",
+        "produitePar": "cerveau-central",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "scenario": "A",
+      "nom": "recherche-3-solutions",
+      "ok": true,
+      "detail": "3 candidates : wikipedia-api, open-meteo, duckduckgo-ia",
+      "preuve": [
+        "wikipedia-api",
+        "open-meteo",
+        "duckduckgo-ia"
+      ]
+    },
+    {
+      "scenario": "A",
+      "nom": "compatibilite",
+      "ok": true,
+      "detail": "wikipedia-api=compatible, open-meteo=compatible, duckduckgo-ia=compatible",
+      "preuve": [
+        "wikipedia-api=compatible",
+        "open-meteo=compatible",
+        "duckduckgo-ia=compatible"
+      ]
+    },
+    {
+      "scenario": "A",
+      "nom": "comparaison-selection",
+      "ok": true,
+      "detail": "classement mesuré : open-meteo=25ms < duckduckgo-ia=27ms < wikipedia-api=33ms — sélection open-meteo (score 97/100)",
+      "preuve": {
+        "classement": [
+          {
+            "nom": "open-meteo",
+            "ms": 25,
+            "verdict": "fiable"
+          },
+          {
+            "nom": "duckduckgo-ia",
+            "ms": 27,
+            "verdict": "fiable"
+          },
+          {
+            "nom": "wikipedia-api",
+            "ms": 33,
+            "verdict": "fiable"
+          }
+        ],
+        "score": 97
+      }
+    },
+    {
+      "scenario": "B",
+      "nom": "verdict-politique",
+      "ok": true,
+      "detail": "action build : autorisée avec approbation obligatoire (« build » exige une approbation avant intégration en production (niveau 4 < 5 ou risque non faible / politique non pré-a)",
+      "preuve": {
+        "autorise": true,
+        "approbationRequise": true,
+        "niveau": 4,
+        "raison": "« build » exige une approbation avant intégration en production (niveau 4 < 5 ou risque non faible / politique non pré-approuvée)"
+      }
+    },
+    {
+      "scenario": "B",
+      "nom": "construction-sandbox",
+      "ok": true,
+      "detail": "outil construit (1 essai(s) sandbox réel(s)), étapes: identification-fonctionnalite:ok, constructibilite-interne:ok, generation-code:ok, solutions-existantes:ok, tests-sandbox:ok, correction:ok, documentation:ok, preparation-integration:ok, soumission-validation:ok",
+      "preuve": {
+        "etapes": [
+          {
+            "etape": 1,
+            "nom": "identification-fonctionnalite",
+            "ok": true,
+            "detail": "fonctionnalité : convertisseur-temperature"
+          },
+          {
+            "etape": 2,
+            "nom": "constructibilite-interne",
+            "ok": true,
+            "detail": "archétype choisi : calcul-deterministe"
+          },
+          {
+            "etape": 5,
+            "nom": "generation-code",
+            "ok": true,
+            "detail": "module 1607 caractères + test 1733 caractères (déterministe)"
+          },
+          {
+            "etape": 3,
+            "nom": "solutions-existantes",
+            "ok": true,
+            "detail": "déléguée au cerveau central (universal-discovery) — le builder ne réinvente pas ce qui existe"
+          },
+          {
+            "etape": 6,
+            "nom": "tests-sandbox",
+            "ok": true,
+            "detail": "succès réel après 1 essai(s) — jeux d'essai succès ET refus validés"
+          },
+          {
+            "etape": 7,
+            "nom": "correction",
+            "ok": true,
+            "detail": "aucune correction nécessaire"
+          },
+          {
+            "etape": 8,
+            "nom": "documentation",
+            "ok": true,
+            "detail": "859 caractères de documentation factuelle"
+          },
+          {
+            "etape": 9,
+            "nom": "preparation-integration",
+            "ok": true,
+            "detail": "version staged + permission gated persistées (aucune activation)"
+          },
+          {
+            "etape": 10,
+            "nom": "soumission-validation",
+            "ok": true,
+            "detail": "proposition en attente d'autorisation humaine (admin) — jamais déployée directement"
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "B",
+      "nom": "sortie-max-proposee",
+      "ok": true,
+      "detail": "statut final « proposee » — JAMAIS intégrée sans autorisation (gate mission)",
+      "preuve": {
+        "statut": "proposee"
+      }
+    },
+    {
+      "scenario": "C",
+      "nom": "plan-optimisation",
+      "ok": true,
+      "detail": "plan plan_4b58d1fb8b880352 (action optimiser, 3 étapes)",
+      "preuve": {
+        "insuffisanceId": "gap_scenarioC",
+        "objectif": "p95 après < p95 avant",
+        "action": "optimiser",
+        "etapes": [
+          {
+            "nom": "profil des causes",
+            "description": "catégorisation des échecs/lenteurs mesurées",
+            "moteur": "failure-analyzer"
+          },
+          {
+            "nom": "modification bornée",
+            "description": "optimisation de l'adaptateur/paramètres, jamais du cœur",
+            "moteur": "builder"
+          },
+          {
+            "nom": "comparaison avant/après",
+            "description": "mêmes benchmarks, détection de régression (garde −0.02)",
+            "moteur": "benchmark-engine"
+          }
+        ],
+        "dependances": [],
+        "coutEstime": "gratuit (sandbox local + registres publics lecture seule)",
+        "ressourcesRequises": [
+          "sandbox",
+          "sandbox isolée 2 CPU / RAM bornée"
+        ],
+        "niveauRisque": "moyen",
+        "testsNecessaires": [
+          "benchmark sandbox reproductible (≥ 3 runs)",
+          "tests de non-régression sur la version stable"
+        ],
+        "criteresReussite": [
+          "p95 après < p95 avant",
+          "aucune régression détectée (garde −0.02)",
+          "vérification indépendante du résultat avant confirmation"
+        ],
+        "strategieRetourArriere": "aucun effet de production : tout reste en sandbox jusqu'à l'autorisation ; restauration = abandon du plan",
+        "id": "plan_4b58d1fb8b880352",
+        "verdictPolitique": {
+          "autorise": true,
+          "approbationRequise": true,
+          "raison": "« improve » exige une approbation avant intégration en production (niveau 4 < 5 ou risque non faible / politique non pré-approuvée)"
+        },
+        "statut": "propose",
+        "creeLe": "2026-11-25T19:54:58.479Z",
+        "schemaVersion": 1
+      }
+    },
+    {
+      "scenario": "C",
+      "nom": "comparaison-avant-apres",
+      "ok": true,
+      "detail": "avant p50=30 ms → après p50=27 ms (gain mesuré 10 %, verdicts fiable/fiable)",
+      "preuve": {
+        "avant": {
+          "runs": 3,
+          "succes": 3,
+          "tauxSucces": 1,
+          "latenceMoyenneMs": 30,
+          "latenceP95Ms": 31,
+          "latenceMinMs": 29,
+          "latenceMaxMs": 31,
+          "graine": 498306
+        },
+        "apres": {
+          "runs": 3,
+          "succes": 3,
+          "tauxSucces": 1,
+          "latenceMoyenneMs": 27,
+          "latenceP95Ms": 27,
+          "latenceMinMs": 26,
+          "latenceMaxMs": 27,
+          "graine": 498398
+        },
+        "gain": 10
+      }
+    },
+    {
+      "scenario": "D",
+      "nom": "echec-bloque-stable-conservee",
+      "ok": true,
+      "detail": "v2 défaillante → promotion REFUSÉE (promotion refusée : 1 test(s) en échec (non-regression)) — v1-stable ACTIVE (conservée)",
+      "preuve": {
+        "versions": [
+          {
+            "version": "v2-defaillante",
+            "statut": "staged"
+          },
+          {
+            "version": "v1-stable",
+            "statut": "active"
+          }
+        ],
+        "promotionV2": "promotion refusée : 1 test(s) en échec (non-regression)"
+      }
+    },
+    {
+      "scenario": "E",
+      "nom": "refus-sans-autorisation",
+      "ok": true,
+      "detail": "exécution SANS autorisation → refusee (découverte ≠ autorisée)",
+      "preuve": {
+        "statut": "refusee"
+      }
+    },
+    {
+      "scenario": "E",
+      "nom": "integration-chat-verifiee",
+      "ok": true,
+      "detail": "capacité autorisée puis intégrée — exécution gateway origine chat → succes, preuve rejoue-indépendant, somme=42",
+      "preuve": {
+        "statut": "succes",
+        "methode": "rejoue-indépendant"
+      }
+    },
+    {
+      "scenario": "F",
+      "nom": "cycle-interrompu-seede",
+      "ok": true,
+      "detail": "cycle persisté à l'état « testing » (simule un crash en vol)",
+      "preuve": {
+        "etat": "testing"
+      }
+    },
+    {
+      "scenario": "F",
+      "nom": "reprise-etat-conservé",
+      "ok": true,
+      "detail": "après « redémarrage » : état testing restauré depuis la persistance, 3 entrée(s) d'historique, trace de reprise présente",
+      "preuve": {
+        "historique": [
+          "pending→analyzing",
+          "analyzing→testing",
+          "testing→testing"
+        ]
+      }
+    },
+    {
+      "scenario": "F",
+      "nom": "aucune-double-execution",
+      "ok": true,
+      "detail": "double exécution refusée : verrou détenu par autre-executeur-F jusqu'à 2026-11-25T19:55:59.271Z — double exécution refusée",
+      "preuve": {
+        "refus": "verrou détenu par autre-executeur-F jusqu'à 2026-11-25T19:55:59.271Z — double exécution refusée",
+        "premiereExec": "moteur d'évolution arrêté : cycle arrêté : sans benchmark réel, aucune intégrati"
+      }
+    },
+    {
+      "scenario": "G",
+      "nom": "contenu-externe-donnee",
+      "ok": true,
+      "detail": "1 décision(s) — aucune action d'autorité déclenchée par le document (actions : discover)",
+      "preuve": [
+        {
+          "action": "discover",
+          "cible": null
+        }
+      ]
+    },
+    {
+      "scenario": "G",
+      "nom": "decouverte-jamais-executable",
+      "ok": true,
+      "detail": "exécution d'une capacité découverte non autorisée → refusee : capacité non intégrée : découvree ≠ autorisée. Passer par le cycle d'intégration UCE (autorisation humaine obl",
+      "preuve": {
+        "statut": "refusee"
+      }
+    },
+    {
+      "scenario": "G",
+      "nom": "secret-fail-closed",
+      "ok": true,
+      "detail": "contenu contenant un motif de secret → refus fail-closed (contenu refusé : motif de secret détecté (jamais persisté))",
+      "preuve": {
+        "autorise": false
+      }
+    }
+  ],
+  "total": 20,
+  "reussies": 20,
+  "scenariosComplets": true,
+  "limites": [
+    "capacités de test sans risque : catalogue API offline, sandbox locale, registres lecture seule",
+    "l'intégration reste bornée au registre UCE (aucun déploiement de production)",
+    "les benchmarks mesurent le scénario de test (sandbox), pas un appel réseau réel",
+    "le « redémarrage » du scénario F simule le crash par une nouvelle instance d'exécuteur (persistance réelle)"
+  ]
+}
