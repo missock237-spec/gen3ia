@@ -132,7 +132,6 @@ async function main(): Promise<void> {
       archeType: "calcul-deterministe",
       dossier: DOSSIER_ETAT,
     });
-    const testsSandbox = construction.etapes.filter((e) => e.nom.includes("sandbox") || e.nom.includes("test"));
     noter("B", "construction-sandbox", construction.succes, `outil construit (${construction.essaisSandbox} essai(s) sandbox réel(s)), étapes: ${construction.etapes.map((e) => `${e.nom}:${e.ok ? "ok" : "échec"}`).join(", ")}`, { etapes: construction.etapes });
 
     const statut = construction.capacite?.status ?? "absente";
@@ -144,7 +143,7 @@ async function main(): Promise<void> {
   // comparaison avant/après MESURÉE (même scénario, deux versions).
   // =========================================================================
   {
-    const manques = await analyserManques({ options: opts() });
+    await analyserManques({ options: opts() });
     // L'insuffisance de lenteur est PRODUITE par des mesures réelles : deux
     // scripts exécutés en sandbox (version lente = version optimisée).
     const scriptLent = "let s=0; for (let i=0;i<4_000_000;i++) s+=i%13; emettre({ ok: true, s, version: 'lente' });";
@@ -174,7 +173,7 @@ async function main(): Promise<void> {
       statutInitial: "integree",
     });
     const v1 = await publierVersion({ capabilityId, version: "v1-stable", changements: "version stable de référence", tests: [{ nom: "non-regression", ok: true, dureeMs: 12 }] }, opts());
-    const promotionV1 = v1.ok ? await promouvoirVersion(v1.version!.id, opts()) : { ok: false, raison: v1.raison };
+    if (v1.ok) await promouvoirVersion(v1.version!.id, opts());
     const v2 = await publierVersion({ capabilityId, version: "v2-defaillante", changements: "régression introduite exprès", tests: [{ nom: "non-regression", ok: false, dureeMs: 8 }] }, opts());
     const promotionV2 = v2.ok ? await promouvoirVersion(v2.version!.id, opts()) : { ok: false, raison: v2.raison };
     const integreBloquee = v2.ok && !promotionV2.ok;

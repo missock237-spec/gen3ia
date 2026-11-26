@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { MoteurWebGPUUnifie } from "./webgpu/webgpu-engine";
 import { etatMemoireGpu, libererMemoireGpu, reinitialiserMemoireGpu, reserverMemoireGpu } from "./webgpu/webgpu-memory-manager";
-import { statsPool, viderPools } from "./webgpu/webgpu-buffer-pool";
+import { viderPools } from "./webgpu/webgpu-buffer-pool";
 import { classifierErreur } from "./webgpu/webgpu-error-handler";
 import { routerTache } from "./compute-router";
 import { executerHybride } from "./compute-hybrid";

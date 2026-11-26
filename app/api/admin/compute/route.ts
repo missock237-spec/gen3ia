@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { requireAdmin } from "@/lib/security/admin-access";
 import { errorBody, errorStatus } from "@/lib/security/http-errors";
-import { obtenirComputeManager } from "@/lib/neural/compute/compute-manager";
 import { lireVueCalcul } from "@/lib/neural/compute/brain-bridge";
 import { etatSecurite } from "@/lib/neural/compute/compute-security";
 import { etatDeviceActuel, erreursGpuRecentes } from "@/lib/neural/compute/webgpu/webgpu-device";
@@ -28,7 +27,6 @@ export async function GET(request: NextRequest) {
   }
 
   const vue = await lireVueCalcul();
-  const manager = obtenirComputeManager();
   const sec = etatSecurite();
   const device = etatDeviceActuel();
 
