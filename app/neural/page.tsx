@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import ModulesGen3 from "@/components/neural/modules-gen3";
 import { NeuralConsole } from "@/components/neural/neural-console";
 
 export const metadata: Metadata = {
@@ -12,6 +13,9 @@ export default function NeuralPage() {
   return (
     <div className="min-h-full bg-[var(--g3-bg)] text-[var(--g3-text)]">
       <NeuralConsole />
+      <div className="mx-auto w-full max-w-6xl px-4 pb-8">
+        <ModulesGen3 />
+      </div>
     </div>
   );
 }
