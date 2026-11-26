@@ -79,10 +79,12 @@ export const LiveEngine = {
     return marquerDeconnexion(options.sessionId, options.participantId);
   },
 
-  /** Rejoint la session avec un rôle (propriétaire/admin/collab/observateur/agent). */
+  /** Rejoint la session avec un rôle — présence en direct immédiate (LOT 8-3). */
   async rejoindre(options: LiveEngineOptions & { sessionId: string; participantId: string; nom: string; role: RoleParticipant }) {
     const gestionnaire = creerGestionnaireSessions(options.store);
-    return gestionnaire.rejoindre({ sessionId: options.sessionId, participantId: options.participantId, nom: options.nom, role: options.role });
+    const participant = await gestionnaire.rejoindre({ sessionId: options.sessionId, participantId: options.participantId, nom: options.nom, role: options.role });
+    marquerPresence(options.sessionId, options.participantId);
+    return participant;
   },
 
   /** Vue d'ensemble (dashboard) : session + présence + permissions du mode. */

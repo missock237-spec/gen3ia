@@ -21,7 +21,10 @@ export interface BusEvenements {
 const globalBus = globalThis as typeof globalThis & { __gen3iaLiveBus?: BusEvenements };
 
 export function obtenirBusEvenements(store?: StoreEvenementsLive): BusEvenements {
-  if (globalBus.__gen3iaLiveBus && !store) return globalBus.__gen3iaLiveBus;
+  // UN SEUL bus par process : s'il existe déjà, il est retourné (le store
+  // de production est branché à la première demande) — sinon le bus créé
+  // (avec ou sans store) devient le singleton.
+  if (globalBus.__gen3iaLiveBus) return globalBus.__gen3iaLiveBus;
   const abonnements: Array<{ filtre: { types?: string[]; mode?: string }; abonne: Abonne }> = [];
   const bus: BusEvenements = {
     async publier(brut) {
@@ -53,7 +56,7 @@ export function obtenirBusEvenements(store?: StoreEvenementsLive): BusEvenements
       return store ? store.historique(sessionId, limite) : [];
     },
   };
-  if (!store) globalBus.__gen3iaLiveBus = bus; // bus singleton en production
+  globalBus.__gen3iaLiveBus = bus; // toujours singleton : un seul historique commun
   return bus;
 }
 
