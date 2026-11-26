@@ -1,0 +1,199 @@
+name: Auto-update Hyperlift (Spaceship)
+
+# =====================================================================
+# GEN3IA — déploiement continu sur l'hébergement Spaceship (Hyperlift)
+# via l'API publique officielle (docs.spaceship.dev, X-Api-Key /
+# X-Api-Secret). Toutes les étapes sont API : aucune page web, aucun
+# SSH — Cloudflare ne bloque rien ici.
+#
+# Séquence à chaque push main :
+#   1. Trouver l'application Hyperlift (secret HYPERLIFT_APP_ID, ou
+#      recherche par nom générique « gen3 » dans la liste des apps) ;
+#   2. Synchroniser l'environnement : le secret DOTENV_PRODUCTION
+#     (copie du .env.production du VPS) est compressé gzip + base64 et
+#     découpé en ≤ 1 variable GEN3IA_DOTENV_<X> (limite API : valeur
+#     ≤ 16 384 caractères, ≤ 20 variables) — l'entrypoint du conteneur
+#     le décode en .env.production que `next start` charge nativement ;
+#   3. POST /build (rebuild Hyperlift : npm ci + pull cd-latest au boot) ;
+#   4. Poll du statut (building → built/failed) + tail des build-logs ;
+#   5. Health check HTTPS public (/api/health) — run rouge si échec.
+#
+# Si l'application n'existe pas encore (compte vide) ou si les secrets
+# SPACESHIP_API_KEY/SPACESHIP_API_SECRET sont absents : NOTICE grise,
+# jamais de run rouge — la création initiale se fait une seule fois dans
+# le portail Spaceship (Cloudflare l'impose aux humains uniquement).
+# =====================================================================
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: hyperlift-auto-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  API_BASE: https://spaceship.dev/api/v1
+  APP_NAME_HINT: gen3
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Résoudre les secrets et l'application Hyperlift
+        id: resolve
+        env:
+          SPACESHIP_API_KEY: ${{ secrets.SPACESHIP_API_KEY }}
+          SPACESHIP_API_SECRET: ${{ secrets.SPACESHIP_API_SECRET }}
+          HYPERLIFT_APP_ID: ${{ secrets.HYPERLIFT_APP_ID }}
+        run: |
+          if [ -z "$SPACESHIP_API_KEY" ] || [ -z "$SPACESHIP_API_SECRET" ]; then
+            echo "notice=absent" >> "$GITHUB_OUTPUT"
+            echo "::notice::Secrets SPACESHIP_API_KEY / SPACESHIP_API_SECRET absents — mettre la clé API Spaceship (API Manager) pour armer l'auto-update Hyperlift."
+            exit 0
+          fi
+          if [ -n "$HYPERLIFT_APP_ID" ]; then
+            echo "app_id=$HYPERLIFT_APP_ID" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          APPS=$(curl -fsS --max-time 30 -H "X-Api-Key: $SPACESHIP_API_KEY" -H "X-Api-Secret: $SPACESHIP_API_SECRET" \
+            "$API_BASE/hyperlift/applications?take=100&skip=0")
+          APP_ID=$(printf '%s' "$APPS" | python3 -c "
+          import json, sys, re
+          d = json.load(sys.stdin)
+          items = d.get('items', [])
+          for a in items:
+              name = json.dumps(a.get('name', '')).lower()
+              if 'gen3' in name or 'gen3ia' in name:
+                  print(a.get('id', '')); break
+          ")
+          if [ -z "$APP_ID" ]; then
+            echo "notice=no-app" >> "$GITHUB_OUTPUT"
+            echo "::notice::Aucune application Hyperlift trouvée — créer l'app dans le portail Spaceship (repo gen3ia, Dockerfile racine, branche main) puis armer les secrets."
+            exit 0
+          fi
+          echo "app_id=$APP_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Préparer le bundle d'environnement (gzip + base64 → chunks ≤ 15 000)
+        id: dotenv
+        if: steps.resolve.outputs.notice == ''
+        env:
+          DOTENV_PRODUCTION: ${{ secrets.DOTENV_PRODUCTION }}
+        run: |
+          python3 << 'PYEOF'
+          import base64, gzip, os
+          raw = os.environ['DOTENV_PRODUCTION'].encode()
+          blob = base64.b64encode(gzip.compress(raw, 9)).decode()
+          N = 15000
+          chunks = [blob[i:i+N] for i in range(0, len(blob), N)]
+          suffixes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+          if len(chunks) > len(suffixes):
+              raise SystemExit('ERREUR: DOTENV_PRODUCTION trop volumineux pour la limite API')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              for sfx, ch in zip(suffixes, chunks):
+                  f.write(f"var_{sfx}={ch}\n")
+              f.write(f"n={len(chunks)}\n")
+          print(f"Bundle: {len(raw)} octets → {len(blob)} chars base64 → {len(chunks)} chunk(s)")
+          PYEOF
+
+      - name: Synchroniser l'environnement Hyperlift (PUT)
+        if: steps.resolve.outputs.notice == ''
+        env:
+          SPACESHIP_API_KEY: ${{ secrets.SPACESHIP_API_KEY }}
+          SPACESHIP_API_SECRET: ${{ secrets.SPACESHIP_API_SECRET }}
+          APP_ID: ${{ steps.resolve.outputs.app_id }}
+          DOTENV_PRODUCTION: ${{ secrets.DOTENV_PRODUCTION }}
+          N: ${{ steps.dotenv.outputs.n }}
+          VAR_A: ${{ steps.dotenv.outputs.var_A }}
+          VAR_B: ${{ steps.dotenv.outputs.var_B }}
+          VAR_C: ${{ steps.dotenv.outputs.var_C }}
+          VAR_D: ${{ steps.dotenv.outputs.var_D }}
+          VAR_E: ${{ steps.dotenv.outputs.var_E }}
+          VAR_F: ${{ steps.dotenv.outputs.var_F }}
+          VAR_G: ${{ steps.dotenv.outputs.var_G }}
+          VAR_H: ${{ steps.dotenv.outputs.var_H }}
+        run: |
+          python3 << 'PYEOF'
+          import json, os, urllib.request
+          n = int(os.environ['N'])
+          items = {}
+          for i, sfx in enumerate('ABCDEFGH'[:n]):
+              items[f'GEN3IA_DOTENV_{sfx}'] = os.environ[f'VAR_{sfx}']
+          body = json.dumps({'items': items}).encode()
+          req = urllib.request.Request(
+              f"{os.environ['API_BASE']}/hyperlift/applications/{os.environ['APP_ID']}/environment",
+              data=body, method='PUT',
+              headers={'X-Api-Key': os.environ['SPACESHIP_API_KEY'],
+                       'X-Api-Secret': os.environ['SPACESHIP_API_SECRET'],
+                       'Content-Type': 'application/json'})
+          with urllib.request.urlopen(req, timeout=60) as r:
+              print('environment PUT →', r.status, r.read()[:200].decode(errors='replace'))
+          PYEOF
+
+      - name: Déclencher le build Hyperlift (POST)
+        id: build
+        if: steps.resolve.outputs.notice == ''
+        env:
+          SPACESHIP_API_KEY: ${{ secrets.SPACESHIP_API_KEY }}
+          SPACESHIP_API_SECRET: ${{ secrets.SPACESHIP_API_SECRET }}
+          APP_ID: ${{ steps.resolve.outputs.app_id }}
+        run: |
+          HTTP=$(curl -fsS --max-time 60 -X POST \
+            -H "X-Api-Key: $SPACESHIP_API_KEY" -H "X-Api-Secret: $SPACESHIP_API_SECRET" \
+            "$API_BASE/hyperlift/applications/$APP_ID/build" -o /tmp/build.json -w "%{http_code}" \
+          ) || HTTP=000
+          echo "build POST → HTTP $HTTP"
+          [ "$HTTP" = "200" ] || { head -c 400 /tmp/build.json 2>/dev/null; exit 1; }
+
+      - name: Poll du statut de build (building → built/failed, ≤ 30 min)
+        if: steps.resolve.outputs.notice == ''
+        env:
+          SPACESHIP_API_KEY: ${{ secrets.SPACESHIP_API_KEY }}
+          SPACESHIP_API_SECRET: ${{ secrets.SPACESHIP_API_SECRET }}
+          APP_ID: ${{ steps.resolve.outputs.app_id }}
+        run: |
+          for i in $(seq 1 60); do
+            sleep 30
+            STATUS=$(curl -fsS --max-time 30 -H "X-Api-Key: $SPACESHIP_API_KEY" -H "X-Api-Secret: $SPACESHIP_API_SECRET" \
+              "$API_BASE/hyperlift/applications/$APP_ID" | python3 -c "import json,sys; print(json.load(sys.stdin).get('buildStatus', 'unknown'))" 2>/dev/null || echo "http-ko")
+            echo "[$i] buildStatus=$STATUS"
+            case "$STATUS" in
+              built) echo "::notice::Build Hyperlift terminé."; exit 0 ;;
+              failed) echo "::error::Build Hyperlift ÉCHOUÉ — voir les build-logs ci-dessous."; exit 1 ;;
+            esac
+          done
+          echo "::error::Timeout 30 min — build toujours $STATUS"
+          exit 1
+
+      - name: Build-logs (tail) en cas d'échec
+        if: failure() && steps.resolve.outputs.notice == ''
+        env:
+          SPACESHIP_API_KEY: ${{ secrets.SPACESHIP_API_KEY }}
+          SPACESHIP_API_SECRET: ${{ secrets.SPACESHIP_API_SECRET }}
+          APP_ID: ${{ steps.resolve.outputs.app_id }}
+        run: |
+          curl -fsS --max-time 30 -H "X-Api-Key: $SPACESHIP_API_KEY" -H "X-Api-Secret: $SPACESHIP_API_SECRET" \
+            "$API_BASE/hyperlift/applications/$APP_ID/build-logs?take=100&skip=0" \
+            | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          logs = d.get('items', d.get('logs', []))
+          for l in (logs if isinstance(logs, list) else [])[-80:]:
+              print(l.get('message', l.get('line', l)) if isinstance(l, dict) else l)
+          " | tail -60
+
+      - name: Health check public (/api/health)
+        if: steps.resolve.outputs.notice == ''
+        run: |
+          for i in $(seq 1 20); do
+            sleep 15
+            HTTP=$(curl -fsS --max-time 20 -o /tmp/h.json -w "%{http_code}" \
+              "https://gen3ia.online/api/health?cb=$RANDOM" 2>/dev/null || echo 000)
+            echo "essai $i : /api/health → HTTP $HTTP"
+            [ "$HTTP" = "200" ] && { head -c 200 /tmp/h.json; echo; echo "::notice::gen3ia en ligne et sain."; exit 0; }
+          done
+          echo "::error::Health check échoué après 5 min — vérifier le domaine attaché à l'app Hyperlift et le DNS de gen3ia.online"
+          exit 1
