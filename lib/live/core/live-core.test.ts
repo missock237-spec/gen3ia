@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { LiveEngine } from "./live-engine";
-import { obtenirBusEvenements, reinitialiserBus } from "./live-event-bus";
+import { obtenirBusEvenements } from "./live-event-bus";
 import { acquerirVerrou, libererVerrou, marquerDeconnexion, marquerPresence } from "./live-state-manager";
 import { creerGestionnaireSessions } from "./live-session-manager";
 import { createStoreMemoire, nouvelleSession } from "./live-core-types";
