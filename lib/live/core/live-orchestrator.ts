@@ -10,7 +10,7 @@
  */
 
 import { LiveEngine } from "./live-engine";
-import { acquerirVerrou, libererVerrou, reinitialiserEtatLive } from "./live-state-manager";
+import { libererVerrou, reinitialiserEtatLive } from "./live-state-manager";
 import { reinitialiserBus } from "./live-event-bus";
 import type { ModeLive, RoleParticipant, StoreSessionsLive } from "./live-core-types";
 
