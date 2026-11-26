@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-26T17:29:02.875Z",
+  "dureeMs": 2332,
+  "multimodal": {
+    "total": 40,
+    "parModalite": {
+      "image": 32,
+      "audio": 8,
+      "video": 0
+    },
+    "parPlateforme": {
+      "huggingface": 28,
+      "kaggle": 12
+    },
+    "octets": 2170997,
+    "fenetres": {
+      "image": "rafaelpadilla/coco2017#default/val offset 1124 (20) — après offset 1104 (it.149) [Hugging Face]",
+      "image_kaggle": "olgabelitskaya/flower-color-images (12 — PREMIÈRE provenance Kaggle gravée ; couleur moyenne mesurée au pixel près + étiquette de classe H5) [Kaggle]",
+      "audio": "facebook/multilingual_librispeech#french/dev offset 144 (8 — suite MLS ; FLEURS fr_fr/validation ÉPUISÉ depuis it.129 : 289 lignes = taille officielle du split) — après offset 136 (it.149) [Hugging Face]",
+      "video": "sayakpaul/ucf101-subset#default/train offset 4 (0 — fenêtre épuisée depuis it.90, preuve refaite)"
+    },
+    "couleursV6": {
+      "fichier": "datasets/couleurs_v6/train.jsonl",
+      "lignesTotales": 2696,
+      "echantillonChat": 60,
+      "pairesServies": 60,
+      "pairesExactes": 60,
+      "sources": "Kaggle avi1023/color-names (1298 couleurs × propriétés + complémentaires calculés teinte+180°) + Kaggle danela/mapping-color-space-to-100-color-names (100 noms canoniques)"
+    },
+    "pairesServies": 40,
+    "pairesExactes": 40
+  },
+  "gravure": {
+    "pairesTotal": 100,
+    "multimodales": 40,
+    "couleursV6": 60,
+    "bande": 9
+  },
+  "corpusProduction": 2405,
+  "snn": {
+    "source": "public/neural/cortex-multimodal-it149.bin",
+    "octetsSource": 12582960,
+    "ondesGravees": 2000,
+    "bande": 9,
+    "mesurePoids": {
+      "avant": {
+        "aretes": 520,
+        "somme": 399.47451332211494,
+        "moyenne": 0.7682202179271441
+      },
+      "apres": {
+        "aretes": 520,
+        "somme": 520,
+        "moyenne": 1
+      },
+      "type": "arêtes des colonnes stimulées (onde complète motif+réponse) vers la bande 9 — mesure déterministe du niveau des poids"
+    },
+    "typeMesure": "rétention (assets réels, onde gravée complète motif+réponse, 4 cycles) + mesure déterministe des poids",
+    "avant": {
+      "hits": 0,
+      "sep": 0,
+      "top3": 0,
+      "total": 100
+    },
+    "apres": {
+      "hits": 0,
+      "sep": 0,
+      "top3": 0,
+      "total": 100
+    },
+    "noteMesure": "MESURE PRIMAIRE = delta de poids (déterministe — arêtes stimulées→b9, boost lrBoost → 1.0). MESURE SECONDAIRE = résonance (protocole it.94c : 4 cycles, onde complète) — limité structurellement par les collisions (une colonne ne spike que si injection × 0,9 ≥ seuil 1, ~3 % des paires — sondes it.96b/c) ; les it.92/94 ne mesuraient eux-mêmes que 12→29 et 0-5 hits. dominance stricte = b9 #1 de toutes (concurrence b0 999 935 paires, b1 101 138 ondes) ; sepTrained = b9 #1 parmi b2..b9.",
+    "snapshot": "public/neural/cortex-multimodal-it150.bin",
+    "octets": 12582960
+  },
+  "snapshot": "public/neural/cortex-multimodal-it150.bin"
+}

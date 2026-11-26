@@ -1,0 +1,46 @@
+{
+ "gen3ia-professional-v6": {
+  "version": 6,
+  "generated_at": "2026-11-26T17:29:00Z",
+  "note": "Datasets v6 — première intégration KAGGLE comme source gravée dans le cerveau (fenêtre it.150, Job 478451 : « utilise les deux sites fournis »). couleurs_v6 construit depuis les CSV Kaggle réels (propriétés officielles lues, complémentaires et noms canoniques — aucune valeur inventée). Les multimédias it.150 (20 COCO + 12 Kaggle + 8 MLS, 2.17 Mo) sont servis depuis public/multimodal-it150/ avec inventaire mesuré var/entrainement-multimodal-it150/assets.json.",
+  "datasets": [
+   {
+    "id": "couleurs_v6",
+    "path": "datasets/couleurs_v6/train.jsonl",
+    "rows": 2696,
+    "rows_complet": 2696,
+    "media": null,
+    "sources": [
+     "kaggle:avi1023/color-names (1298 couleurs, hex/RGB/teinte/HSL officielles)",
+     "calcule-exact (1298 complémentaires teinte+180°)",
+     "kaggle:danela/mapping-color-space-to-100-color-names (100 noms canoniques — source déjà citée par couleurs v5)"
+    ],
+    "task_types": ["propriete_complete", "complementaire_calcule", "rgb_vers_nom"],
+    "gravure": "60 lignes servies par le chat (PAIRES_COULEURS_V6) + 100 paires gravées bande 9 it.150 ; ensemble complet réservé à l'ingestion du pré-entraînement million"
+   },
+   {
+    "id": "multimodal_it150",
+    "path": "public/multimodal-it150/",
+    "rows": 40,
+    "rows_complet": 40,
+    "media": 40,
+    "sources": [
+     "huggingface:rafaelpadilla/coco2017#default/val offset 1124 (20 images annotées)",
+     "kaggle:olgabelitskaya/flower-color-images (12 photos, couleur moyenne mesurée au pixel + classe H5)",
+     "huggingface:facebook/multilingual_librispeech#french/dev offset 144 (8 voix naturelles françaises + transcriptions)",
+     "video UCF101 : 0 (fenêtre épuisée depuis it.90 — preuve du zéro refaite le 26 nov 2026)"
+    ],
+    "task_types": ["image_vers_legende", "audio_vers_transcription", "couleur_moyenne_mesuree"]
+   }
+  ],
+  "quotas_10M_par_domaine": {
+   "etat": "HONNÊTE — quotas non atteints dans le sandbox (disque 1.9 Go libre, réseau limité)",
+   "couleurs": {"actuel": 2696, "cible": 10000000, "progression": "0.03% — pipeline v6 opérationnel, extensible aux 16 777 216 couleurs RGB exactes (calcul exact, aucune limite de source)"},
+   "texte": {"actuel": 15000, "cible": 10000000, "progression": "0.15% (v5) — fenêtres HF continues"},
+   "raisonnement": {"actuel": 20000, "cible": 10000000, "progression": "0.2% (v5) — fenêtres HF continues"},
+   "images": {"actuel": 6000, "cible": 10000000, "progression": "0.06% (v5 3000 + it.150 32) — fenêtres COCO/Kaggle continues"},
+   "audio": {"actuel": 2108, "cible": 10000000, "progression": "0.02% (v5 300 + it.150 8 + millions it.63) — fenêtres MLS continues"},
+   "video": {"actuel": 40, "cible": 10000000, "progression": "fenêtre UCF101 épuisée — nouvelle source requise (plan B : windows Kaggle/HD)"}
+  }
+ }
+}

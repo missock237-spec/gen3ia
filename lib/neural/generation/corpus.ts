@@ -232,6 +232,13 @@ import { PAIRES_MULTIMODAL_IT148 } from "./multimodal-it148";
 // fr_fr/validation ÉPUISÉ depuis it.129, UCF101 épuisée — preuves du zéro) :
 // 28 assets réels mesurés, 28 paires id↔légende/transcription servies.
 import { PAIRES_MULTIMODAL_IT149 } from "./multimodal-it149";
+// it.150 — PREMIÈRE fenêtre combinant les DEUX plateformes fournies (Job
+// 478451) : COCO-2017 offset 1124 (HF) + 12 photos Kaggle flower-color-images
+// (première provenance Kaggle gravée, couleurs moyennes MESURÉES au pixel
+// près) + MLS french/dev offset 144 (HF) + 0 vidéo UCF101 (preuve du zéro)
+// + échantillon PAIRES_COULEURS_V6 (60 lignes réelles Kaggle — ensemble
+// complet : datasets/couleurs_v6/train.jsonl, 2 696 lignes).
+import { PAIRES_COULEURS_V6, PAIRES_MULTIMODAL_IT150 } from "./multimodal-it150";
 // Carte de mémoire d'emplacement (demande propriétaire : « assure-toi qu'il
 // a bien mémorisé où [les datasets] se trouvent dans sa mémoire ») — paires
 // générées depuis le disque (vérité terrain), régénérées à chaque itération.
@@ -1271,6 +1278,8 @@ export const CORPUS_GEN3: readonly PaireLangage[] = [
   // MLS french/dev offset 136 — suite MLS après l'offset 128 d'it.148) :
   // 28 paires servies par le cortex langagier.
   ...PAIRES_MULTIMODAL_IT149,
+  ...PAIRES_MULTIMODAL_IT150,
+  ...PAIRES_COULEURS_V6,
   // Carte de mémoire d'emplacement : où vivent les datasets et la mémoire
   // gravée (4 paires générées depuis le disque).
   ...PAIRES_CARTE_MEMOIRE,
