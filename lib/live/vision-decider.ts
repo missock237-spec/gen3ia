@@ -193,7 +193,7 @@ export async function decideLiveAction(
     deplacement?: string;
     contexte?: string;
     interpretation?: string;
-    ocr?: { disponible: boolean; raison?: string };
+    ocr?: { disponible: boolean; moteur?: string; raison?: string; textes?: unknown[]; elementsInterface?: unknown[] };
   } | null = null;
   try {
     const engineVision = creerVisionEngine(String(session.id));
