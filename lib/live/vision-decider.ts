@@ -207,7 +207,7 @@ export async function decideLiveAction(
         contexte: desc.temporalite.contexte,
         interpretation: desc.interpretation,
         confiance: { score: Math.round(desc.confiance.score * 100) / 100, facteurs: desc.confiance.facteurs },
-        ocr: { disponible: desc.ocr.disponible, moteur: desc.ocr.moteur ?? null, raison: desc.ocr.raisonIndisponibilite ?? null, textes: desc.ocr.textes ?? [], elementsInterface: desc.ocr.elementsInterface ?? [] },
+        ocr: { disponible: desc.ocr.disponible, moteur: desc.ocr.moteur, raison: desc.ocr.raisonIndisponibilite, textes: desc.ocr.textes ?? [], elementsInterface: desc.ocr.elementsInterface ?? [] },
       };
     } else {
       const derniere = engineVision.contexte().slice(-1)[0];
