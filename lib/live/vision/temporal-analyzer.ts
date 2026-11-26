@@ -42,6 +42,7 @@ export function analyserTemporalite(frames: readonly FrameAnalysable[]): Analyse
       framesConservees: frames.length,
       zones: [],
       direction: "immobile",
+      deplacement: "aucun",
       amplitude: 0,
       contexte: frames.length === 1 ? "une seule frame retenue : aucun point de comparaison temporelle" : "aucune frame : contexte vide",
     };
