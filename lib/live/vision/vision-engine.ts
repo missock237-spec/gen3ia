@@ -23,6 +23,8 @@ export interface DescriptionVisuelle {
   mesuresImage?: { luminanceMoyenne: number; contraste: number; densiteBords: number };
   /** Interprétation bornée — uniquement à partir des mesures ci-dessus. */
   interpretation: string;
+  /** Confiance globale de l'observation [0..1] + facteurs (mission LOT 3-11). */
+  confiance: { score: number; facteurs: string[] };
 }
 
 export interface VisionEngine {
@@ -72,7 +74,38 @@ export function creerVisionEngine(sessionId: string, options: { seuilChangement?
         temporalite.contexte,
         ocr.disponible ? "" : "texte non lu (OCR local indisponible — déclaré, jamais inventé)",
       ].filter(Boolean).join(" — ");
-      return { frame, scene, temporalite, ocr, mesuresImage, interpretation };
+
+      // CONFIANCE des observations (mission LOT 3-11) — règles
+      // déterministes, chaque facteur est déclaré :
+      //  · accord hash/diff : les deux signaux de changement sont cohérents
+      //    → +1 ; incohérence (hash bouge sans diff de pixels) → pénalité ;
+      //  · scène : bandes type texte détectées → meilleure lisibilité
+      //    structurelle ; aucune → structure minimale ;
+      //  · OCR : la confiance du moteur branched est plafonnante (une
+      //    lecture douteuse ne peut pas donner une observation sûre).
+      const facteurs: string[] = [];
+      let score = 0.9;
+      const accord = (frame.distanceHash >= 6) === (frame.proportionChangee >= 0.02) || frame.raison === "premiere-frame";
+      if (accord) facteurs.push("signaux de changement cohérents (hash et diff)");
+      else {
+        score -= 0.3;
+        facteurs.push("incohérence hash/diff (bruit ou artefact de compression)");
+      }
+      const bandesTexte = scene.bandes.filter((b) => b.probableTexte).length;
+      if (bandesTexte > 0) {
+        facteurs.push(`${bandesTexte} bande(s) d'activité type texte détectée(s)`);
+      } else {
+        score -= 0.1;
+        facteurs.push("aucune structure type texte — scène minimale ou vide");
+      }
+      if (ocr.disponible && typeof ocr.confiance === "number") {
+        score = Math.min(score, ocr.confiance);
+        facteurs.push(`OCR « ${ocr.moteur} » confiance ${(ocr.confiance * 100).toFixed(0)} % — plafonne l'observation`);
+      } else if (!ocr.disponible) {
+        facteurs.push("texte non lu : le score ne prétend pas une compréhension du texte");
+      }
+      const confiance = { score: Math.max(0, Math.min(1, score)), facteurs };
+      return { frame, scene, temporalite, ocr, mesuresImage, interpretation, confiance };
     },
     contexte: () => buffer.frames(),
     reinitialiser: () => {

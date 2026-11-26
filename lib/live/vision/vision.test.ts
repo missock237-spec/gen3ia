@@ -5,7 +5,7 @@ import sharp from "sharp";
 import { analyserFrame, creerFrameBuffer, fabriqueGrilleSharp } from "./frame-selector";
 import { analyserScene } from "./scene-analyzer";
 import { analyserTemporalite } from "./temporal-analyzer";
-import { lireTexte, verifierMoteurOcrLocal } from "./ocr-engine";
+import { definirMoteurOcrLocal, lireTexte, moteurOcrActif, reinitialiserMoteurOcr } from "./ocr-engine";
 import { creerVisionEngine } from "./vision-engine";
 
 /**
@@ -110,14 +110,50 @@ describe("temporal analyzer : zones et direction du changement mesurées", () =>
   });
 });
 
-describe("OCR : honnêteté absolue (mission : jamais de lecture fabriquée)", () => {
-  it("moteur local absent déclaré avec raison, lecture indisponible", async () => {
-    const moteur = verifierMoteurOcrLocal();
-    expect(moteur.disponible).toBe(false);
-    expect(moteur.raison).toContain("interdits");
+describe("OCR : adaptateur remplaçable (règle 11) + honnêteté absolue", () => {
+  it("sans moteur branché : indisponible avec raison explicite, jamais de texte fabriqué", async () => {
+    reinitialiserMoteurOcr();
+    expect(moteurOcrActif()).toBeNull();
     const res = await lireTexte(await jpegFondNoir(true, null));
     expect(res.disponible).toBe(false);
+    expect(res.raisonIndisponibilite).toContain("interdits");
     expect(res.textes).toBeUndefined();
+  });
+
+  it("moteur invalide rejeté ; moteur branché → vraie lecture transmise avec confiance plafonnée", async () => {
+    expect(() => definirMoteurOcrLocal({ nom: "", lireTexte: async () => ({ textes: [], confiance: 1 }) })).toThrow("invalide");
+    const reconnus: string[] = [];
+    definirMoteurOcrLocal({
+      nom: "moteur-test-local",
+      lireTexte: async (jpeg) => {
+        reconnus.push(jpeg.length.toString());
+        return {
+          textes: [{ contenu: "Enregistrer", zone: { x: 10, y: 20, largeur: 80, hauteur: 24 }, confiance: 0.92 }],
+          elementsInterface: [{ type: "bouton", texte: "Enregistrer", zone: { x: 10, y: 20, largeur: 80, hauteur: 24 }, confiance: 0.92 }],
+          confiance: 0.9,
+        };
+      },
+    });
+    expect(moteurOcrActif()?.nom).toBe("moteur-test-local");
+    const res = await lireTexte(await jpegFondNoir(true, null));
+    expect(res.disponible).toBe(true);
+    expect(res.moteur).toBe("moteur-test-local");
+    expect(res.textes?.[0].contenu).toBe("Enregistrer");
+    expect(res.confiance).toBe(0.9);
+    expect(reconnus).toHaveLength(1);
+    reinitialiserMoteurOcr();
+  });
+
+  it("échec du moteur branché : indisponible avec raison (jamais de demi-lecture)", async () => {
+    definirMoteurOcrLocal({
+      nom: "moteur-cassé",
+      lireTexte: async () => { throw new Error("wasm non initialisé"); },
+    });
+    const res = await lireTexte(await jpegFondNoir(true, null));
+    expect(res.disponible).toBe(false);
+    expect(res.raisonIndisponibilite).toContain("moteur-cassé");
+    expect(res.raisonIndisponibilite).toContain("wasm non initialisé");
+    reinitialiserMoteurOcr();
   });
 });
 
@@ -127,6 +163,8 @@ describe("vision engine : pipeline complet (sélection → analyse → contexte)
     const d1 = await engine.traiter(await jpegFondNoir(true, { x: 20 }));
     expect(d1).not.toBeNull();
     expect(d1!.scene.bandes.length).toBe(12);
+    expect(d1!.confiance.score).toBeGreaterThan(0.5); // première frame cohérente
+    expect(d1!.confiance.facteurs.length).toBeGreaterThan(1);
     expect(d1!.ocr.disponible).toBe(false);
     expect(d1!.interpretation).toContain("non lu");
 

@@ -1,36 +1,99 @@
 /**
- * OCR ENGINE — honnêteté ABSOLUE (mission GEN3IA LIVE Phase 3-B) : aucun
- * moteur OCR local n'existe dans ce dépôt et les services IA externes sont
- * INTERDITS (règle plateforme, commit 95c1dc3). Ce module déclare la
- * capacité indisponible avec sa raison, et fournit l'interface exacte pour
- * brancher un moteur local (tesseract-wasm local, modèle ONNX embarqué)
- * le jour où une dépendance locale est ajoutée au dépôt — jamais de fausse
- * lecture de texte : retourner du texte inventé est interdit.
+ * OCR ENGINE — adaptateur remplaçable (règle 11 mission : « Toute
+ * dépendance externe doit être encapsulée dans un adaptateur remplaçable »).
+ * HONNÊTETÉ ABSOLUE (mission LOT 3 : « Les capacités non implémentées
+ * doivent être signalées explicitement ») :
+ *  · Aucun moteur OCR n'est fourni par ce dépôt (aucun modèle .onnx
+ *    embarqué) et les services IA externes sont interdits (règle
+ *    plateforme 95c1dc3) : tant qu'aucun moteur local n'est branché via
+ *    definirMoteurOcrLocal(), lireTexte() retourne « indisponible avec
+ *    raison » — JAMAIS de texte inventé.
+ *  · Brancher un moteur réel (ex. tesseract-wasm empaqueté avec ses
+ *    données de langue dans le dépôt) se fait par cette interface SANS
+ *    toucher au reste de la chaîne vision → cerveau.
  */
 
+export interface ZoneOcr {
+  x: number;
+  y: number;
+  largeur: number;
+  hauteur: number;
+}
+
+export interface TexteOcr {
+  contenu: string;
+  zone: ZoneOcr;
+  /** Confiance du moteur OCR [0..1] — transmise telle quelle au cerveau. */
+  confiance: number;
+}
+
+export interface ElementInterfaceOcr {
+  type: "bouton" | "menu" | "champ" | "message-erreur";
+  texte: string;
+  zone: ZoneOcr;
+  confiance: number;
+}
+
 export interface ResultatOcr {
+  /** true seulement si un moteur local est branché ET a réellement lu. */
   disponible: boolean;
+  moteur?: string;
   raisonIndisponibilite?: string;
-  /** Textes lus (uniquement si un moteur local est branché). */
-  textes?: Array<{ contenu: string; zone: { x: number; y: number; largeur: number; hauteur: number }; confiance: number }>;
-  /** Boutons/menus reconnus (Phase 3-B) — uniquement via OCR local. */
-  elementsInterface?: Array<{ type: "bouton" | "menu" | "champ" | "message-erreur"; texte: string }>;
+  textes?: TexteOcr[];
+  elementsInterface?: ElementInterfaceOcr[];
+  /** Confiance globale de la lecture [0..1] (le moteur la déclare). */
+  confiance?: number;
 }
 
-const RaisonInconnue = "aucun moteur OCR local dans le dépôt (aucun modèle .onnx, aucun tesseract local) — les services IA externes sont interdits par la règle plateforme (95c1dc3) : le texte des écrans N'EST PAS lu tant qu'aucun moteur local n'est ajouté";
-
-/** Vérifie la présence d'un moteur OCR local (aucune promesse non tenue). */
-export function verifierMoteurOcrLocal(): { disponible: boolean; raison?: string } {
-  return { disponible: false, raison: RaisonInconnue };
+/** Contrat exact que tout moteur OCR local doit implémenter (remplaçable). */
+export interface MoteurOcrLocal {
+  /** Nom identifiable (journalisation et honnêteté des rapports). */
+  readonly nom: string;
+  lireTexte(jpeg: Buffer): Promise<{ textes: TexteOcr[]; elementsInterface?: ElementInterfaceOcr[]; confiance: number }>;
 }
 
-/** Lecture OCR : indisponible tant qu'aucun moteur local n'est branché. */
-export async function lireTexte(_jpeg: Buffer): Promise<ResultatOcr> {
-  void _jpeg;
-  return { disponible: false, raisonIndisponibilite: RaisonInconnue };
+const RAISON_ABSENCE =
+  "aucun moteur OCR local branché — le dépôt n'embede aucun modèle OCR et les services IA externes sont interdits (règle plateforme 95c1dc3) : le texte des écrans n'est PAS lu tant qu'aucun moteur local n'est défini via definirMoteurOcrLocal()";
+
+const globalOcr = globalThis as typeof globalThis & { __gen3iaLiveMoteurOcr?: MoteurOcrLocal };
+
+/** Branche un moteur local (remplaçable — règle 11). Rejet d'un moteur invalide. */
+export function definirMoteurOcrLocal(moteur: MoteurOcrLocal): void {
+  if (!moteur || typeof moteur.nom !== "string" || !moteur.nom || typeof moteur.lireTexte !== "function") {
+    throw new Error("moteur OCR invalide : 'nom' (chaîne non vide) et 'lireTexte(jpeg)' sont requis");
+  }
+  globalOcr.__gen3iaLiveMoteurOcr = moteur;
 }
 
-/** Enregistre un moteur local (prototypage futur — requis avant tout usage). */
-export function brancherMoteurOcrLocal(_moteur: { lireTexte: (jpeg: Buffer) => Promise<ResultatOcr> }): never {
-  throw new Error("aucun moteur OCR local n'est fourni par ce dépôt — ajouter une dépendance locale (ex. tesseract-wasm empaqueté) avant de brancher ; jamais de faux texte");
+export function reinitialiserMoteurOcr(): void {
+  delete globalOcr.__gen3iaLiveMoteurOcr;
+}
+
+export function moteurOcrActif(): { nom: string } | null {
+  const m = globalOcr.__gen3iaLiveMoteurOcr;
+  return m ? { nom: m.nom } : null;
+}
+
+/** Lecture OCR : moteur branché → vraie lecture ; sinon indisponible avec raison. */
+export async function lireTexte(jpeg: Buffer): Promise<ResultatOcr> {
+  const moteur = globalOcr.__gen3iaLiveMoteurOcr;
+  if (!moteur) {
+    return { disponible: false, raisonIndisponibilite: RAISON_ABSENCE };
+  }
+  try {
+    const lecture = await moteur.lireTexte(jpeg);
+    return {
+      disponible: true,
+      moteur: moteur.nom,
+      textes: lecture.textes,
+      elementsInterface: lecture.elementsInterface,
+      confiance: Math.max(0, Math.min(1, lecture.confiance)),
+    };
+  } catch (erreur) {
+    return {
+      disponible: false,
+      moteur: moteur.nom,
+      raisonIndisponibilite: `le moteur OCR branché « ${moteur.nom} » a échoué : ${erreur instanceof Error ? erreur.message : String(erreur)}`,
+    };
+  }
 }
