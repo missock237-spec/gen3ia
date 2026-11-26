@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { generate } from "@/lib/ai/router";
+import { analyserScene } from "./vision/scene-analyzer";
+import { analyserTemporalite } from "./vision/temporal-analyzer";
+import { creerVisionEngine } from "./vision/vision-engine";
 import type { LiveAction, LiveSession } from "./types";
 
 /**
@@ -178,10 +181,51 @@ export async function decideLiveAction(
 
   const structure = analyzeFrameStructure(jpeg);
 
+  // PONT VISION RÉELLE (mission GEN3IA LIVE Phase 3) : la frame est passée
+  // au moteur vision local (pixels décodés via sharp) — sélection par
+  // changement, scène structurelle, temporalité, OCR déclaré. Toute erreur
+  // de décodage dégrade PROPREMENT vers la perception structurelle seule
+  // (jamais de perception simulée).
+  let vision: {
+    statut: string;
+    proportionChangeePct?: number;
+    bandesTypeTexte?: number;
+    deplacement?: string;
+    contexte?: string;
+    interpretation?: string;
+    ocr?: { disponible: boolean; raison?: string };
+  } | null = null;
+  try {
+    const engineVision = creerVisionEngine(String(session.id));
+    const desc = await engineVision.traiter(jpeg);
+    if (desc) {
+      vision = {
+        statut: desc.frame.raison,
+        proportionChangeePct: Math.round(desc.frame.proportionChangee * 1000) / 10,
+        bandesTypeTexte: desc.scene.bandes.filter((b) => b.probableTexte).length,
+        deplacement: desc.temporalite.deplacement,
+        contexte: desc.temporalite.contexte,
+        interpretation: desc.interpretation,
+        ocr: { disponible: desc.ocr.disponible, raison: desc.ocr.raisonIndisponibilite },
+      };
+    } else {
+      const derniere = engineVision.contexte().slice(-1)[0];
+      vision = {
+        statut: "identique-ignoree",
+        contexte: "écran inchangé depuis la dernière frame analysée — aucune nouvelle analyse requise",
+        interpretation: derniere ? analyserScene(derniere).interpretation : undefined,
+        deplacement: derniere ? analyserTemporalite(engineVision.contexte()).deplacement : undefined,
+      };
+    }
+  } catch {
+    vision = null; // décodage indisponible → perception structurelle seule
+  }
+
   const payload = JSON.stringify({
     objective: session.objective,
     mode: session.mode ?? "browser",
     viewport: { width, height },
+    visionPixels: vision,
     frameStructure: {
       realDimensions: structure.dimensions,
       bytes: structure.bytes,
@@ -224,7 +268,7 @@ export async function decideLiveAction(
         `Le moteur interne n'interprète pas les pixels — il ne peut ni décrire le contenu de l'écran ni localiser des éléments. ` +
         `Objectif enregistré : « ${session.objective.slice(0, 160)} ». La session reste active ; utilisez Arrêter pour clore.`,
       action: null,
-      perception: "structural-degraded",
+      perception: vision ? "visual-structural" : "structural-degraded",
     };
   }
 
