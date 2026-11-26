@@ -19,7 +19,10 @@ function fabriquerPairFactice(options: { etatIceInitial?: string } = {}) {
     iceConnectionState: options.etatIceInitial ?? "new",
     connectionState: "new",
     addTrack(track) {
-      const sender: { kind: string; setParameters?: (p: unknown) => Promise<void> } = { kind: track.kind };
+      const sender: { kind: string; setParameters?: (p: unknown) => Promise<void> } = {
+        kind: track.kind,
+        setParameters: async (p) => { void p; }, // supporté par défaut ; test peut le retirer
+      };
       senders.push(sender);
       return sender;
     },
@@ -61,7 +64,6 @@ describe("WebRTC manager avec peer factice (fabrique injectée)", () => {
   it("ouverture : offre créée et publiée, candidat ICE relayé, débit limité si supporté", async () => {
     const signals: string[] = [];
     const { pair, senders } = fabriquerPairFactice();
-    senders[0].setParameters = async (p) => { void p; }; // navigateur supportant setParameters
     const res = await ouvrirPair({
       sessionId: "s1",
       config: { iceServers: [{ urls: "stun:stun.example.org" }] },
