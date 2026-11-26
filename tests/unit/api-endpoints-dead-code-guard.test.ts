@@ -324,6 +324,15 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
   /** Consommés par des clients hors dépôt app : SDK public, extension
    *  navigateur, bridge d'entraînement, scripts d'exploitation souverains. */
   "api-publique-sdk": [
+    /* Job 478451 — surface REST publique genAPI v2 (PHASES 2-6, commit
+     * 8f26af3) : chat, jobs asynchrones 5 états (gen3_job_*), statut,
+     * annulation propriétaire. Clients : SDK/programmables authentifiés
+     * par la gateway genAPI (clés d'application, permissions par service,
+     * quotas, journal) — AUCUNE UI navigateur prévue par design. */
+    "/v2/chat",
+    "/v2/jobs",
+    "/v2/jobs/[jobId]",
+    "/v2/jobs/[jobId]/cancel",
     "/public/sdk/download",
     "/v1/capabilities",
     "/v1/chat",
