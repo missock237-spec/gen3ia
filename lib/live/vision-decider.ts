@@ -193,6 +193,7 @@ export async function decideLiveAction(
     deplacement?: string;
     contexte?: string;
     interpretation?: string;
+    confiance?: { score: number; facteurs: string[] };
     ocr?: { disponible: boolean; moteur?: string; raison?: string; textes?: unknown[]; elementsInterface?: unknown[] };
   } | null = null;
   try {
