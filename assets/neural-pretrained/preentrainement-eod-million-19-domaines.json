@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-31T09:49:57.730Z",
+  "date": "2026-11-26T18:33:36.564Z",
   "methode": "EOD (it.57) — analyse des ondes, traitement colonnaire, consolidation plastique + bus inter-régions — mécanique inchangée, échelle million",
   "contexte": "it.63 — demande propriétaire : « réalisé encore un pré-entraînement de gen3 avec plus de 1 million de données et de dataset dans chaque domaine »",
   "environnement": "local-sandbox",
@@ -17,13 +17,13 @@
     "motifPlan": "Pilot mesuré : l'entraînement SÉQUENTIEL par blocs à l'échelle million effondre les bandes dominées (bandes 2/6/7 : sonde de trace ×0,46–0,63) par spirale de punition compétitive ×0.95 ; l'interclassement maintient toutes les bandes en renfort régulier — analyse conservée comme résultat du pilot."
   },
   "sources": {
-    "depot": 86939,
+    "depot": 81589,
     "huggingface": 1005,
     "proceduraux": 19095000,
-    "totalSession": 19182944,
+    "totalSession": 19177594,
     "note": "Corpus procédural déterministe (graine 20261031, bijection mixte-radix — unicité garantie) : vocabulaire de domaine issu de la charte de vocation réelle (taches/motsCles/outils), gabarits FR/EN génériques — synthétique, étiqueté comme tel (même approche que training/gen3-domain-datasets)."
   },
-  "totalEchantillons": 19182944,
+  "totalEchantillons": 19177594,
   "bilan": {
     "donneesParDomaine": {
       "ok": 19,
@@ -33,7 +33,7 @@
     "porteursRenforces": {
       "ok": 19,
       "total": 19,
-      "renfortsTotaux": 9615431899,
+      "renfortsTotaux": 9612724885,
       "critere": "porteur de la bande du domaine émis dans le bus inter-régions et renforcé (renforts mesurés ≈ 505 M/domaine)"
     },
     "stabiliteBandes": {
@@ -66,8 +66,8 @@
       "annulations": 505136105,
       "sondeTrace": {
         "avant": 3.485054,
-        "apres": 2.853043,
-        "gain": 0.818651
+        "apres": 2.807925,
+        "gain": 0.805705
       },
       "sondeVocabulaire": {
         "avant": 3.405505,
@@ -104,8 +104,8 @@
       "annulations": 503752137,
       "sondeTrace": {
         "avant": 3.551678,
-        "apres": 2.844639,
-        "gain": 0.800928
+        "apres": 2.796855,
+        "gain": 0.787474
       },
       "sondeVocabulaire": {
         "avant": 1.941327,
@@ -142,8 +142,8 @@
       "annulations": 508512492,
       "sondeTrace": {
         "avant": 3.136608,
-        "apres": 3.044885,
-        "gain": 0.970757
+        "apres": 3.085014,
+        "gain": 0.983551
       },
       "sondeVocabulaire": {
         "avant": 3.443969,
@@ -180,8 +180,8 @@
       "annulations": 505563826,
       "sondeTrace": {
         "avant": 3.204654,
-        "apres": 3.037923,
-        "gain": 0.947972
+        "apres": 3.087248,
+        "gain": 0.963364
       },
       "sondeVocabulaire": {
         "avant": 3.015774,
@@ -218,8 +218,8 @@
       "annulations": 509988013,
       "sondeTrace": {
         "avant": 3.004882,
-        "apres": 3.400142,
-        "gain": 1.131539
+        "apres": 3.367559,
+        "gain": 1.120696
       },
       "sondeVocabulaire": {
         "avant": 2.624098,
@@ -256,8 +256,8 @@
       "annulations": 503519989,
       "sondeTrace": {
         "avant": 2.806226,
-        "apres": 3.35158,
-        "gain": 1.194337
+        "apres": 3.354195,
+        "gain": 1.195269
       },
       "sondeVocabulaire": {
         "avant": 2.500697,
@@ -288,14 +288,14 @@
         "total": 1011200
       },
       "echantillons": 1011200,
-      "resonanceMoyenne": 0.00007738315231367833,
+      "resonanceMoyenne": 0.00007738423312985496,
       "paquetsEmis": 1013704,
-      "renforts": 506852002,
-      "annulations": 506851998,
+      "renforts": 506852005,
+      "annulations": 506851995,
       "sondeTrace": {
         "avant": 3.659729,
-        "apres": 3.318403,
-        "gain": 0.906735
+        "apres": 3.315733,
+        "gain": 0.906005
       },
       "sondeVocabulaire": {
         "avant": 4.13909,
@@ -331,8 +331,8 @@
       "annulations": 505233875,
       "sondeTrace": {
         "avant": 3.578597,
-        "apres": 3.316391,
-        "gain": 0.926729
+        "apres": 3.313822,
+        "gain": 0.926011
       },
       "sondeVocabulaire": {
         "avant": 2.906243,
@@ -367,8 +367,8 @@
       "annulations": 509555907,
       "sondeTrace": {
         "avant": 2.779647,
-        "apres": 3.312549,
-        "gain": 1.191716
+        "apres": 3.306718,
+        "gain": 1.189618
       },
       "sondeVocabulaire": {
         "avant": 4.893244,
@@ -403,8 +403,8 @@
       "annulations": 504788519,
       "sondeTrace": {
         "avant": 2.945097,
-        "apres": 3.35649,
-        "gain": 1.139688
+        "apres": 3.362426,
+        "gain": 1.141703
       },
       "sondeVocabulaire": {
         "avant": 3.255008,
@@ -441,8 +441,8 @@
       "annulations": 504332724,
       "sondeTrace": {
         "avant": 2.821577,
-        "apres": 3.307938,
-        "gain": 1.172372
+        "apres": 3.308682,
+        "gain": 1.172636
       },
       "sondeVocabulaire": {
         "avant": 3.729331,
@@ -467,20 +467,20 @@
       "bande": 0,
       "porteurFrequence": 0.25,
       "sources": {
-        "depot": 21249,
+        "depot": 15899,
         "hf": 0,
         "genere": 1005000,
-        "total": 1026249
+        "total": 1020899
       },
-      "echantillons": 1026249,
-      "resonanceMoyenne": 0.00006837389241509277,
-      "paquetsEmis": 1028465,
-      "renforts": 514232497,
-      "annulations": 514232503,
+      "echantillons": 1020899,
+      "resonanceMoyenne": 0.00006696162817228268,
+      "paquetsEmis": 1023051,
+      "renforts": 511525480,
+      "annulations": 511525520,
       "sondeTrace": {
-        "avant": 3.16494,
-        "apres": 3.772793,
-        "gain": 1.192058
+        "avant": 3.37726,
+        "apres": 3.723545,
+        "gain": 1.102534
       },
       "sondeVocabulaire": {
         "avant": 2.913345,
@@ -495,7 +495,7 @@
       "depotFichiers": [
         "datasets/music/train.jsonl:7300",
         "datasets/video/train.jsonl:8349",
-        "datasets/multimodal/train.jsonl:5400",
+        "datasets/multimodal/train.jsonl:50",
         "datasets/image_generation/sample.jsonl:200"
       ],
       "hfErreurs": []
@@ -518,8 +518,8 @@
       "annulations": 504529669,
       "sondeTrace": {
         "avant": 3.177858,
-        "apres": 3.121659,
-        "gain": 0.982315
+        "apres": 3.161874,
+        "gain": 0.99497
       },
       "sondeVocabulaire": {
         "avant": 3.685007,
@@ -554,8 +554,8 @@
       "annulations": 504995078,
       "sondeTrace": {
         "avant": 2.8891,
-        "apres": 3.281873,
-        "gain": 1.13595
+        "apres": 3.232585,
+        "gain": 1.11889
       },
       "sondeVocabulaire": {
         "avant": 2.716659,
@@ -590,8 +590,8 @@
       "annulations": 505316020,
       "sondeTrace": {
         "avant": 3.261386,
-        "apres": 3.426854,
-        "gain": 1.050735
+        "apres": 3.434073,
+        "gain": 1.052949
       },
       "sondeVocabulaire": {
         "avant": 3.993362,
@@ -628,8 +628,8 @@
       "annulations": 503659373,
       "sondeTrace": {
         "avant": 3.198982,
-        "apres": 3.42546,
-        "gain": 1.070797
+        "apres": 3.400944,
+        "gain": 1.063133
       },
       "sondeVocabulaire": {
         "avant": 3.769882,
@@ -662,8 +662,8 @@
       "annulations": 505983883,
       "sondeTrace": {
         "avant": 2.978918,
-        "apres": 3.404065,
-        "gain": 1.142719
+        "apres": 3.40707,
+        "gain": 1.143727
       },
       "sondeVocabulaire": {
         "avant": 4.133563,
@@ -699,8 +699,8 @@
       "annulations": 505295948,
       "sondeTrace": {
         "avant": 3.190362,
-        "apres": 3.339359,
-        "gain": 1.046702
+        "apres": 3.335682,
+        "gain": 1.045549
       },
       "sondeVocabulaire": {
         "avant": 3.01428,
@@ -737,8 +737,8 @@
       "annulations": 504184042,
       "sondeTrace": {
         "avant": 2.555047,
-        "apres": 3.303604,
-        "gain": 1.292972
+        "apres": 3.30271,
+        "gain": 1.292622
       },
       "sondeVocabulaire": {
         "avant": 3.23922,
@@ -774,14 +774,14 @@
     }
   },
   "metabolisme": {
-    "evaluees": 2163696665,
-    "reposes": 60342160366567,
-    "transmissions": 1736519328,
-    "ms": 256340.829
+    "evaluees": 2162492808,
+    "reposes": 60325331925624,
+    "transmissions": 1735760292,
+    "ms": 303385.687
   },
-  "dureeMs": 21213,
+  "dureeMs": 144835,
   "dureeSession": {
-    "dernierePhaseMs": 21213,
+    "dernierePhaseMs": 144835,
     "note": "Session étendue exécutée par appels successifs avec reprise par checkpoints (var/neural-million/ — un point de contrôle écrit à chaque fin de round). dureeMs = durée de la dernière phase (sondes + rapport) ; la consolidation des 19 domaines s'étale sur la wall-clock totale de la session, horodatée en console."
   },
   "limitesHonnetes": [
