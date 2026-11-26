@@ -49,7 +49,7 @@ const DecisionSchema = z.object({
 export type LiveDecision = z.infer<typeof DecisionSchema>;
 
 /** Niveau de perception réellement disponible pour la décision. */
-export type LivePerception = "structural-guided" | "structural-degraded";
+export type LivePerception = "structural-guided" | "structural-degraded" | "visual-structural" | "visual-stable";
 
 const MAX_FRAME_BYTES = 1_500_000;
 
