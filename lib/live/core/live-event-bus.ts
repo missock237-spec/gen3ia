@@ -10,6 +10,8 @@ import { randomUUID } from "node:crypto";
 
 import type { EvenementLive, ModeLive, StoreEvenementsLive } from "./live-core-types";
 
+export type { EvenementLive, ModeLive, StoreEvenementsLive }; // réexport consommateurs du bus
+
 type Abonne = (evenement: EvenementLive) => void;
 
 export interface BusEvenements {

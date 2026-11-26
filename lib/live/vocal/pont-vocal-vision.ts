@@ -33,7 +33,7 @@ export function creerCerveauVocalContextualise(params: {
   sessionId: string;
 }): CerveauVocal & { derniereDescription(): DescriptionVisuelle | null } {
   const bus = obtenirBusEvenements(params.storeEvenements);
-  let derniere: DescriptionVisuelle | null = null;
+  const derniere: DescriptionVisuelle | null = null;
   return {
     derniereDescription: () => derniere,
     async repondre(texteUtilisateur: string, contexteExterne?: string) {
