@@ -44,11 +44,11 @@
 
 ## 3. Trajectoire adoptée (phases GTIS)
 
-### Phase 1 — Unification de l'orchestration (prochaine priorité)
-- [ ] Brancher `planifierRun`/`cloreRun` (UCE-013) sur le pipeline RÉEL `lib/mlops/pipeline.ts` + `app/api/neural/train` : chaque job de la vraie file déclare un run (scoreAvant mesuré) et le clôt (scoreApres mesuré, anti-régression -0.02, leçon enregistrée) — le gestionnaire dormait, la file tourne.
-- [ ] États unifiés partagés job.ts ↔ UCE-013 (une seule nomenclature, un seul registre de persistance).
-- [ ] Reprise après interruption : checkpoint par job (job.ts a l'état ; ajouter reprise idempotente).
-- **Validation exigée** : un run réel bout-en-bout (planifier → entraîner → clôturer) avec mesures avant/après dans le rapport.
+### Phase 1 — Unification de l'orchestration (LIVRÉE 2026-11-28)
+- [x] Brancher `planifierRun`/`cloreRun` (UCE-013) sur le moteur RÉEL `lib/neural/training/job.ts` (`lancerEntrainement`) : chaque job déclare maintenant un run (scoreAvant mesuré avant toute passe) et le clôt (scoreApres mesuré, anti-régression -0.02, leçon enregistrée) — le pipeline MLOps (`lib/mlops/pipeline.ts`) et `/api/neural/train` héritent du branchement par le même point d'entrée. **Vérifié** : `scripts/valide-phase1-orchestration.mts`, 6/6 PASS, delta réel +2.79 (rapport `docs/rapports/rapport-gtis-phase1-orchestration-2026-11-28.md`).
+- [x] États unifiés partagés job.ts ↔ UCE-013 (`statutJobVersRun` — une seule nomenclature, un seul registre de persistance `cap_resources`).
+- [x] Reprise après interruption : un job interrompu ne persiste RIEN (sauvegarde du cerveau en fin de job seulement) → reprise idempotente par nouveau job depuis l'état persisté ; les runs `en_cours` orphelins sont clôturés honnêtement par `cloreRunsOrphelins()` (jamais de run qui stagne).
+- **Validation exigée** : FAITE — un run réel bout-en-bout (planifier → entraîner → clôturer) avec mesures avant/après : `var-copie/phase1-gtis-orchestration.json` + tests `tests/unit/phase1-gtis-orchestration.test.ts` (11 invariants).
 
 ### Phase 2 — Fiabilisation des datasets
 - [ ] Provenance par échantillon (source, licence, date) dans `datasets/PRO_MANIFEST.json` + vérification à l'ingestion.

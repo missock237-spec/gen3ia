@@ -1,0 +1,130 @@
+{
+  "mesureLe": "2026-11-27T17:22:54.403Z",
+  "job": {
+    "id": "30d69211-57c0-49e4-a063-131b64db5049",
+    "statut": "termine",
+    "erreur": null,
+    "dureeS": 6
+  },
+  "runUce": {
+    "id": "run_texte_mwz91y93_lste",
+    "statut": "termine",
+    "scoreAvant": 28.6163,
+    "scoreApres": 31.4084,
+    "delta": 2.7921000000000014,
+    "cause": null,
+    "datasets": [
+      "public/llms-full.txt",
+      "public/llms.txt"
+    ],
+    "demarreLe": "2026-11-27T17:22:48.629Z",
+    "termineLe": "2026-11-27T17:22:53.632Z"
+  },
+  "verification": [
+    {
+      "theme": "salutation",
+      "avant": 45.1426,
+      "apres": 47.3846,
+      "questions": 4
+    },
+    {
+      "theme": "identite",
+      "avant": 28.9062,
+      "apres": 30.291,
+      "questions": 4
+    },
+    {
+      "theme": "capacites",
+      "avant": 26.5589,
+      "apres": 27.9114,
+      "questions": 4
+    },
+    {
+      "theme": "etat",
+      "avant": 29.8546,
+      "apres": 31.3666,
+      "questions": 4
+    },
+    {
+      "theme": "entrainement",
+      "avant": 29.0775,
+      "apres": 30.4637,
+      "questions": 4
+    },
+    {
+      "theme": "systeme_neural",
+      "avant": 25.6318,
+      "apres": 26.9306,
+      "questions": 4
+    },
+    {
+      "theme": "plateforme",
+      "avant": 26.6213,
+      "apres": 27.9343,
+      "questions": 4
+    },
+    {
+      "theme": "medias",
+      "avant": 26.155,
+      "apres": 27.1752,
+      "questions": 4
+    },
+    {
+      "theme": "redaction",
+      "avant": 32.462,
+      "apres": 34.0732,
+      "questions": 4
+    },
+    {
+      "theme": "studio",
+      "avant": 29.2578,
+      "apres": 30.69,
+      "questions": 4
+    },
+    {
+      "theme": "outils",
+      "avant": 33.823,
+      "apres": 35.3751,
+      "questions": 4
+    },
+    {
+      "theme": "memoire",
+      "avant": 26.1232,
+      "apres": 27.3052,
+      "questions": 4
+    }
+  ],
+  "runsRegistre": 1,
+  "verdicts": [
+    {
+      "nom": "job réel terminé",
+      "ok": true,
+      "detail": "statut=termine"
+    },
+    {
+      "nom": "run déclaré et lié au job",
+      "ok": true,
+      "detail": "run=run_texte_mwz91y93_lste"
+    },
+    {
+      "nom": "scoreAvant mesuré (réel, > 0 après amorçage)",
+      "ok": true,
+      "detail": "scoreAvant=28.6163"
+    },
+    {
+      "nom": "scoreApres mesuré + delta cohérent",
+      "ok": true,
+      "detail": "scoreApres=31.4084 delta=2.7921000000000014"
+    },
+    {
+      "nom": "anti-régression respectée (delta >= -0.02)",
+      "ok": true,
+      "detail": "delta=2.7921000000000014"
+    },
+    {
+      "nom": "pas de run orphelin laissé en_cours",
+      "ok": true,
+      "detail": "en_cours restants=0"
+    }
+  ]
+}

@@ -16,11 +16,20 @@
  *     consommé par lib/mlops/pipeline.ts + app/api/neural/train|state|brain ;
  *   — la boucle auto-apprentissage lib/entrainement-auto/boucle.ts
  *     (évaluations mesurées accuracyTrain/Test, maîtrise par domaine).
- * Ce module est une infrastructure PRÊTE mais DORMANTE — son branchement
- * (chaque job réel déclare un run avec scoreAvant et le clôt avec scoreApres
- * mesuré) est la PHASE 1 de la feuille de route GTIS
- * (docs/architecture/feuille-de-route-gtis.md). Aucun run « planifie » ne
- * peut donc stagner en production : aucun run n'est créé sans moteur.
+ * PHASE 1 GTIS (2026-11-28) — BRANCHEMENT RÉEL : le moteur vrai du dépôt
+ * (lib/neural/training/job.ts → lancerEntrainement) déclare DÉSORMAIS un
+ * run pour chaque job qu'il lance (scoreAvant mesuré sur le cortex avant
+ * toute passe), le lie à son jobId, puis le clôt avec le scoreApres mesuré
+ * (anti-régression -0.02, leçon enregistrée) — ou le marque echec/annulé si
+ * le job échoue. Le pipeline MLOps (lib/mlops/pipeline.ts) et la route
+ * /api/neural/train héritent du branchement par le même point d'entrée.
+ * Nomenclature UNIQUE : statutJobVersRun() (GTIS Phase 1 — une seule
+ * correspondance job ↔ run, consommée par le branchement). Reprise après
+ * interruption : un job interrompu ne persiste RIEN (sauvegarde du cerveau
+ * en fin de job seulement) — le cerveau recharge l'état persisté et un
+ * NOUVEAU job reprend le travail de façon idempotente ; les runs
+ * « en_cours » orphelins (jobId disparu) sont clôturés honnêtement par
+ * cloreRunsOrphelins(), jamais laissés stagner.
  */
 
 import "server-only";
@@ -38,6 +47,8 @@ export type DomaineEntrainement = "texte" | "image" | "audio" | "video" | "multi
 export interface RunEntrainement {
   id: string;
   capabilityId?: string;
+  /** Identifiant du JOB RÉEL lié (lib/neural/training/job.ts — Phase 1 GTIS). */
+  jobId?: string;
   domaine: DomaineEntrainement;
   /** Fichiers dataset réels du dépôt (datasets/*.jsonl — manifeste PRO). */
   datasets: Array<{ chemin: string; tailleOctets?: number; sha256?: string }>;
@@ -69,14 +80,42 @@ export interface ResultatRun {
   cause?: string;
 }
 
+/**
+ * Racines de données RÉELLES du dépôt acceptées pour un run (GTIS Phase 1) :
+ *  - datasets/                    — jeux PRO manifestés (Job 478451) ;
+ *  - training/gen3-domain-datasets/data/ — échantillons des 19 domaines
+ *    (commis, externes HF/Kaggle, complets) réellement chargés par
+ *    lib/neural/training/domaines.ts ;
+ *  - public/llms*.txt             — corpus d'amorçage du cerveau (chargé
+ *    par lib/neural/training/dataset.ts).
+ * Tout autre chemin (y compris ../, racine du dépôt, fichiers publics non
+ * corpus) est rejeté — la garde de confinement reste fermée par défaut.
+ */
+const RACINES_DATASETS_AUTORISEES = [
+  "datasets",
+  path.join("training", "gen3-domain-datasets", "data"),
+];
+const MOTIF_CORPUS_PUBLIC = /^llms[^/\\]*\.txt$/;
+
+function cheminAutorise(chemin: string, cwd: string): boolean {
+  for (const racine of RACINES_DATASETS_AUTORISEES) {
+    if (chemin.startsWith(path.resolve(cwd, racine) + path.sep)) return true;
+  }
+  // Corpus d'amorçage : public/llms*.txt uniquement (nom vérifié).
+  if (chemin.startsWith(path.resolve(cwd, "public") + path.sep)) {
+    return MOTIF_CORPUS_PUBLIC.test(path.basename(chemin));
+  }
+  return false;
+}
+
 /** Vérifie que les datasets demandés EXISTENT réellement dans le dépôt. */
 export async function verifierDatasets(chemins: string[], cwd = process.cwd()): Promise<Array<{ chemin: string; existe: boolean; tailleOctets?: number; sha256?: string }>> {
   const { createHash } = await import("node:crypto");
   const resultats: Array<{ chemin: string; existe: boolean; tailleOctets?: number; sha256?: string }> = [];
   for (const cheminRelatif of chemins.slice(0, 20)) {
     const chemin = path.resolve(cwd, cheminRelatif);
-    // Garde de confinement : uniquement sous datasets/ du dépôt.
-    if (!chemin.startsWith(path.resolve(cwd, "datasets") + path.sep)) {
+    // Garde de confinement : uniquement les racines de données réelles du dépôt.
+    if (!cheminAutorise(chemin, cwd)) {
       resultats.push({ chemin: cheminRelatif, existe: false });
       continue;
     }
@@ -120,7 +159,7 @@ export async function planifierRun(demande: DemandeRun, options: RepositoryUceOp
   }
 
   const run: RunEntrainement = {
-    id: `run_${demande.domaine}_${Date.now().toString(36)}`,
+    id: `run_${demande.domaine}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
     capabilityId: demande.capabilityId,
     domaine: demande.domaine,
     datasets,
@@ -134,6 +173,110 @@ export async function planifierRun(demande: DemandeRun, options: RepositoryUceOp
 }
 
 /**
+ * Nomenclature UNIQUE job ↔ run (GTIS Phase 1) : le moteur réel
+ * (lib/neural/training/job.ts) parle en en_cours/termine/echec ; le run
+ * UCE-013 adopte le MÊME vocabulaire pour ces trois états (planifie et
+ * annule restent propres au gestionnaire : déclaration avant job, annulation
+ * sans exécution).
+ */
+export type StatutJobNeural = "en_cours" | "termine" | "echec";
+
+export function statutJobVersRun(statut: StatutJobNeural): StatutJobNeural {
+  if (statut === "en_cours") return "en_cours";
+  if (statut === "termine") return "termine";
+  return "echec";
+}
+
+/**
+ * PHASE 1 GTIS — lie un run à son JOB RÉEL qui démarre : planifie → en_cours
+ * avec jobId + horodatage. Idempotent : re-marquer le même run avec le même
+ * jobId est un no-op accepté (polling/reprise) ; un autre jobId est refusé
+ * (un run = un job).
+ */
+export async function demarrerRun(
+  runId: string,
+  jobId: string,
+  options: RepositoryUceOptions = {},
+): Promise<ResultatRun> {
+  const { recuperer } = await import("../storage/capability-repository");
+  const run = await recuperer<RunEntrainement>("resources", runId, options);
+  if (!run) return { ok: false, cause: `run « ${runId} » introuvable` };
+  if (run.statut === "termine" || run.statut === "echec" || run.statut === "annule") {
+    return { ok: false, cause: `run déjà clôturé (${run.statut}) : impossible de le démarrer` };
+  }
+  if (run.jobId && run.jobId !== jobId) {
+    return { ok: false, cause: `run déjà lié au job « ${run.jobId} » : un run = un job` };
+  }
+  run.jobId = jobId;
+  run.statut = "en_cours";
+  run.demarreLe = run.demarreLe ?? maintenantIso();
+  await sauvegarder("resources", run, options);
+  return { ok: true, run };
+}
+
+/**
+ * PHASE 1 GTIS — marque un run echec SANS scoreApres (job échoué avant toute
+ * mesure après : pas de delta fabrique — la cause réelle est enregistrée et
+ * la leçon consignée). Distinct de cloreRun (qui exige un scoreApres mesuré).
+ */
+export async function echouerRun(
+  runId: string,
+  cause: string,
+  options: RepositoryUceOptions = {},
+): Promise<ResultatRun> {
+  const { recuperer } = await import("../storage/capability-repository");
+  const run = await recuperer<RunEntrainement>("resources", runId, options);
+  if (!run) return { ok: false, cause: `run « ${runId} » introuvable` };
+  if (run.statut === "termine" || run.statut === "echec" || run.statut === "annule") {
+    return { ok: false, cause: `run déjà clôturé (${run.statut}) : pas de double clôture` };
+  }
+  run.statut = "echec";
+  run.cause = cause.slice(0, 400);
+  run.termineLe = maintenantIso();
+  await sauvegarder("resources", run, options);
+
+  await enregistrerLearning({
+    kind: "neural",
+    lecon: `run ${runId} ÉCHOUÉ : ${run.cause} — aucun paramètre adopté, reprise = nouveau job depuis l'état persisté du cerveau`,
+    avant: run.scoreAvant,
+    jeuTest: "mesure de référence avant job (scores par thème du corpus)",
+    capabilityId: run.capabilityId,
+    valide: false,
+    regressionDetectee: false,
+    dossier: options.dossier,
+  });
+
+  return { ok: true, run };
+}
+
+/**
+ * PHASE 1 GTIS — reprise idempotente : clôture honnêtement les runs
+ * « en_cours » dont le jobId n'est plus vivant (process interrompu — le job
+ * n'a jamais persisté le cerveau, donc AUCUN paramètre n'a été adopté). Les
+ * runs « planifie » sans job ne sont PAS touchés (fenêtre de déclaration
+ * légitime d'un job qui démarre).
+ */
+export async function cloreRunsOrphelins(
+  idsJobsVivants: string[],
+  options: RepositoryUceOptions = {},
+): Promise<{ orphelinsClos: string[] }> {
+  const vivants = new Set(idsJobsVivants.filter(Boolean));
+  const runs = await runsEntrainement(options);
+  const orphelinsClos: string[] = [];
+  for (const run of runs) {
+    if (run.statut !== "en_cours") continue;
+    if (run.jobId && vivants.has(run.jobId)) continue;
+    const resultat = await echouerRun(
+      run.id,
+      `run orphelin : job « ${run.jobId ?? "inconnu"} » disparu (process interrompu avant persistance) — reprise idempotente = nouveau job depuis l'état persisté`,
+      options,
+    );
+    if (resultat.ok) orphelinsClos.push(run.id);
+  }
+  return { orphelinsClos };
+}
+
+/**
  * Clôture un run avec le score APRÈS réel : termine le run, calcule le
  * delta, refuse la régression (delta < -0.02 → statut echec + trace) et
  * enregistre la leçon (versionnement des poids à la charge du moteur réel).
@@ -142,7 +285,7 @@ export async function cloreRun(runId: string, scoreApres: number, options: Repos
   const { recuperer } = await import("../storage/capability-repository");
   const run = await recuperer<RunEntrainement>("resources", runId, options);
   if (!run) return { ok: false, cause: `run « ${runId} » introuvable` };
-  if (run.statut !== "planifie" && run.statut !== "en_cours") {
+  if (run.statut === "termine" || run.statut === "echec" || run.statut === "annule") {
     return { ok: false, cause: `run déjà clôturé (${run.statut}) : pas de double clôture` };
   }
   const seuilDegradation = options.seuilDegradation ?? 0.02;

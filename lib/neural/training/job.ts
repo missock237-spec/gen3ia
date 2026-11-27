@@ -1,6 +1,8 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 import { getNeuralRuntime, sauvegarderCerveauRuntime } from "../runtime";
 import { NeuralTrainer } from "./trainer";
@@ -59,6 +61,20 @@ export interface NeuralTrainingJob {
   id: string;
   /** en_cours | termine | echec. */
   status: "en_cours" | "termine" | "echec";
+  /**
+   * PHASE 1 GTIS — run UCE-013 déclaré pour CE job (registre
+   * cap_resources) : scoreAvant mesuré avant toute passe, fichiers
+   * d'entrée réels du dépôt. Absent si le registre était indisponible
+   * (branchement fail-soft — l'entraînement n'est jamais bloqué).
+   */
+  runUce?: { id: string; scoreAvant: number; datasets: string[] };
+  /** PHASE 1 GTIS — clôture du run : score après mesuré + delta réel. */
+  runUceCloture?: {
+    scoreApres: number;
+    delta: number;
+    statut: "en_cours" | "termine" | "echec";
+    cause?: string;
+  };
   /** Date ISO de lancement. */
   demarreLe: string;
   /** Date ISO de fin (si terminé). */
@@ -150,7 +166,12 @@ export interface VerificationAvantApres {
  * ralentir le job ; les questions sont les MOTIFS DU CORPUS groupés par
  * thème — ce que l'utilisateur peut réellement demander au moteur.
  */
-function mesurerScoresParTheme(
+/**
+ * PHASE 1 GTIS — exportée : le branchement du run (et les scripts de
+ * validation) réutilisent la MÊME mesure que le rapport de vérification du
+ * job — une seule nomenclature de mesure, jamais deux.
+ */
+export function mesurerScoresParTheme(
   cortex: ReturnType<typeof getNeuralRuntime>["cortex"],
 ): Array<{ theme: string; score: number; questions: number }> {
   const parTheme = new Map<string, string[]>();
@@ -220,6 +241,157 @@ export interface LancerEntrainementOptions {
 
 /** Borne d'injection synthétique par job (coût mémoire + session EOD bornée). */
 const CAP_ONDES_MULTIMODALES = 50_000;
+
+/**
+ * PHASE 1 GTIS — fichiers d'entrée RÉELS du job (traçabilité du run UCE-013) :
+ * corpus d'amorçage public/llms*.txt (sources corpus/complet) + échantillons
+ * de domaines commis et externes training/gen3-domain-datasets/data/*
+ * (sources domaines/ondes/complet). Aucune invention : un fichier absent
+ * n'est pas listé.
+ */
+async function fichiersEntreeJob(
+  source: LancerEntrainementOptions["source"],
+  max = 20,
+): Promise<string[]> {
+  const fichiers: string[] = [];
+  if (source === "corpus" || source === "complet") {
+    try {
+      const entrees = await fs.readdir(path.resolve(process.cwd(), "public"));
+      for (const nom of entrees
+        .filter((n) => /^llms[^/\\]*\.txt$/.test(n))
+        .sort()
+        .slice(0, max)) {
+        fichiers.push(`public/${nom}`);
+      }
+    } catch {
+      // public/ absent (process atypique) : aucune entrée corpus listée.
+    }
+  }
+  if (source === "domaines" || source === "ondes" || source === "complet") {
+    for (const dir of [
+      "training/gen3-domain-datasets/data/echantillons",
+      "training/gen3-domain-datasets/data/echantillons_externes",
+    ]) {
+      if (fichiers.length >= max) break;
+      try {
+        const entrees = await fs.readdir(path.resolve(process.cwd(), dir));
+        for (const nom of entrees
+          .filter((n) => n.endsWith(".jsonl"))
+          .sort()
+          .slice(0, max - fichiers.length)) {
+          fichiers.push(`${dir}/${nom}`);
+        }
+      } catch {
+        // Répertoire absent : les fichiers réels restent la seule vérité.
+      }
+    }
+  }
+  return fichiers.slice(0, max);
+}
+
+/** Moyenne des scores par thème (run UCE-013 : scoreAvant / scoreApres). */
+function moyenneScoresParTheme(
+  scores: Array<{ score: number }>,
+): number {
+  if (scores.length === 0) return 0;
+  return Number(
+    (scores.reduce((somme, s) => somme + s.score, 0) / scores.length).toFixed(4),
+  );
+}
+
+/**
+ * PHASE 1 GTIS — déclare le run UCE-013 d'un job RÉEL et clôt les orphelins.
+ * Branchement FAIL-SOFT : tout échec du registre est loggué et le run est
+ * simplement absent — JAMAIS une raison d'arrêter l'entraînement.
+ */
+async function declarerRunJob(
+  job: NeuralTrainingJob,
+  scoreAvant: number,
+  source: LancerEntrainementOptions["source"],
+): Promise<string | null> {
+  try {
+    const gestionnaire = await import(
+      "../../capabilities/training/model-training-manager"
+    );
+    const fichiers = await fichiersEntreeJob(source);
+    const declaration = await gestionnaire.planifierRun({
+      domaine: "texte",
+      datasets: fichiers,
+      scoreAvant,
+      moteur: "neural-job-local",
+    });
+    if (!declaration.ok || !declaration.run) {
+      executionLogger({ requestId: "neural-training", userId: `job:${job.id}` }).warn(
+        `Run UCE-013 non déclaré : ${declaration.cause ?? "cause inconnue"} — entraînement poursuivi sans run.`,
+      );
+      return null;
+    }
+    const runId = declaration.run.id;
+    await gestionnaire.demarrerRun(runId, job.id);
+    // PHASE 1 GTIS — traçabilité visible côté job : les datasets listés sont
+    // ceux VÉRIFIÉS par le gestionnaire (planifierRun refuse tout chemin
+    // introuvable/hors racines — chaque entrée ici existe réellement).
+    job.runUce = {
+      id: runId,
+      scoreAvant,
+      datasets: declaration.run.datasets.map((d) => d.chemin),
+    };
+    const orphelins = await gestionnaire.cloreRunsOrphelins([job.id]);
+    if (orphelins.orphelinsClos.length > 0) {
+      executionLogger({ requestId: "neural-training", userId: `job:${job.id}` }).warn(
+        `Runs orphelins (process interrompu) clôturés honnêtement : ${orphelins.orphelinsClos.join(", ")}.`,
+      );
+    }
+    return runId;
+  } catch (erreur) {
+    executionLogger({ requestId: "neural-training", userId: `job:${job.id}` }).warn(
+      `Registre de runs UCE-013 indisponible — entraînement poursuivi sans run : ${
+        erreur instanceof Error ? erreur.message : "erreur inconnue"
+      }`,
+    );
+    return null;
+  }
+}
+
+/** PHASE 1 GTIS — clôture du run avec le score APRÈS mesuré (fail-soft). */
+async function cloreRunJob(
+  job: NeuralTrainingJob,
+  runId: string,
+  scoreApres: number,
+): Promise<void> {
+  try {
+    const gestionnaire = await import(
+      "../../capabilities/training/model-training-manager"
+    );
+    const cloture = await gestionnaire.cloreRun(runId, scoreApres);
+    if (cloture.run) {
+      job.runUceCloture = {
+        scoreApres,
+        delta: cloture.run.delta ?? 0,
+        statut: gestionnaire.statutJobVersRun(job.status),
+        cause: cloture.run.cause,
+      };
+    }
+  } catch (erreur) {
+    executionLogger({ requestId: "neural-training", userId: `job:${job.id}` }).warn(
+      `Clôture du run UCE-013 impossible (fail-soft) : ${
+        erreur instanceof Error ? erreur.message : "erreur inconnue"
+      }`,
+    );
+  }
+}
+
+/** PHASE 1 GTIS — marque le run echec après un job échoué (fail-soft). */
+async function echouerRunJob(job: NeuralTrainingJob, runId: string): Promise<void> {
+  try {
+    const gestionnaire = await import(
+      "../../capabilities/training/model-training-manager"
+    );
+    await gestionnaire.echouerRun(runId, `job ${job.id} échoué : ${job.erreur ?? "cause inconnue"}`);
+  } catch {
+    // Fail-soft : un échec de registre n'altère jamais la gestion du job.
+  }
+}
 
 /**
  * Construit les échantillons synthétiques de la mémoire ondes multimodales
@@ -318,6 +490,9 @@ export function lancerEntrainement(
 
   // Exécution asynchrone : la réponse API revient immédiatement.
   void (async () => {
+    // PHASE 1 GTIS — run UCE-013 lié à ce job (déclaré juste après la mesure
+    // avant, clôturé à la fin ou marqué echec). Fail-soft de bout en bout.
+    let runId: string | null = null;
     try {
       const runtime = getNeuralRuntime();
       const trainer = new NeuralTrainer(
@@ -326,6 +501,14 @@ export function lancerEntrainement(
         runtime.veille,
         runtime.noyau,
       );
+
+      // ── 0. RUN UCE-013 (GTIS Phase 1) — score AVANT mesuré avant toute
+      //    passe, fichiers d'entrée réels, liaison jobId, clôture des
+      //    runs orphelins d'un process précédent (reprise idempotente).
+      const scoreAvantRun = moyenneScoresParTheme(
+        mesurerScoresParTheme(runtime.cortex),
+      );
+      runId = await declarerRunJob(job, scoreAvantRun, source);
 
       // ── 1. INTENTIONS (sources « corpus » et « complet ») ────────────────
       if (source === "corpus" || source === "complet") {
@@ -490,6 +673,13 @@ export function lancerEntrainement(
         })),
       };
 
+      // ── 3-bis. CLÔTURE DU RUN UCE-013 (GTIS Phase 1) — score APRÈS réel
+      //    (moyenne des mêmes thèmes que le score avant), delta calculé par
+      //    le gestionnaire, anti-régression -0.02, leçon enregistrée.
+      if (runId) {
+        await cloreRunJob(job, runId, moyenneScoresParTheme(verificationApres));
+      }
+
       // ── 4. PERSISTANCE + historique ─────────────────────────────────────
       const sauvegarde = await sauvegarderCerveauRuntime();
       if (runtime.historiqueEntrainement.length > 20) {
@@ -522,6 +712,11 @@ export function lancerEntrainement(
       job.termineLe = new Date().toISOString();
       job.erreur =
         error instanceof Error ? error.message : "Erreur inconnue.";
+      // PHASE 1 GTIS — le run ne stagne JAMAIS en en_cours : échec du job
+      // = run marqué echec avec la cause réelle (fail-soft).
+      if (runId) {
+        await echouerRunJob(job, runId);
+      }
       executionLogger({
         requestId: "neural-training",
         userId: `job:${job.id}`,
