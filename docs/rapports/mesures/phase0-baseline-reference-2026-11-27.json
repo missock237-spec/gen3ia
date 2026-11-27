@@ -1,0 +1,62 @@
+{
+  "phase": "PHASE 0 — base de référence (plan directeur Gen3 v2, §9.1)",
+  "date": "2026-11-27T06:18:00Z",
+  "commit": "e0ba4a0c0a70257013441394001a5b295d860352",
+  "methode": "npm run benchmark:brain (tsx scripts/benchmark-gen3-brain.ts) — le benchmark CPU canonique du workflow CI (.github/workflows/ci.yml, étape « Gen3 Brain — benchmark CPU et garde-fous de rappel ») exécuté dans le sandbox de développement ; mesures réelles, zéro simulation",
+  "environment": {
+    "os": "linux 5.10.134 x64",
+    "node": "v22",
+    "ram_totale": "4 Go (sandbox 2 vCPU) — le sandbox n'est PAS l'environnement de production persistant : ces chiffres sont la RÉFÉRENCE RELATIVE, à re-mesurer à chaque palier"
+  },
+  "benchmark_cpu_reference": {
+    "nature": "prototype expérimental CPU Gen3 Brain — non représentatif d'un benchmark tiers (déclaration du script lui-même)",
+    "configuration": {
+      "tailleOndulatoire": 128,
+      "budgetActifParEtage": 8,
+      "seuilRappelLexical": 0.4,
+      "epoquesRPIAParAssociation": 12,
+      "exemplesEntrainement": 10
+    },
+    "apprentissage": {
+      "dureeMs": 9.8,
+      "associationsAvecErreurRPIAFinie": 10,
+      "associationsAvecBaisseErreurRPIA": 1,
+      "erreurRPIAMoyenneInitiale": 0.641444931128361,
+      "erreurRPIAMoyenneFinale": 0.643407262197037
+    },
+    "evaluation": {
+      "rappelsExacts": "10/10 (100%)",
+      "rappelsApproximatifs": "3/3 (100%)",
+      "inconnuesRejetees": "3/3 (100%)",
+      "exemples_variantes": [
+        { "entree": "Capitale du Cameroun", "obtenu": "Yaoundé.", "mode": "RAPPEL_ASSOCIATIF", "scoreCosinus": 0.7224838846223455, "correct": true },
+        { "entree": "Que veut dire HTTP", "obtenu": "Hypertext Transfer Protocol.", "mode": "RAPPEL_ASSOCIATIF", "scoreCosinus": 0.45878201995282625, "correct": true },
+        { "entree": "La météo demain à Tokyo", "rejete": true, "mode": "INCONNU", "scoreCosinus": 0 }
+      ]
+    },
+    "ressourcesObservees": {
+      "dureeTotaleMs": 14.93,
+      "heapInitialBytes": 9610232,
+      "heapObservedPeakBytes": 13484920,
+      "rssActuelBytes": 98164736,
+      "tailleCheckpointJsonBytes": 144674,
+      "associationsMemorisees": 10,
+      "capaciteMemoire": 64,
+      "tailleOndulatoire": 128,
+      "budgetActif": 8,
+      "synapsesApprises": 563,
+      "toursHippocampe": 10,
+      "pasRPIATotaux": 120
+    }
+  },
+  "etat_reel_du_cerveau_en_production_code": {
+    "preentrainement_million": "19/19 domaines, 19 177 594 échantillons (trace d'assimilation 12/19 — limite sparse-colonne déclarée)",
+    "source": "assets/neural-pretrained/preentrainement-eod-million-19-domaines.json",
+    "snapshot_multimodal": "public/neural/cortex-multimodal-it150.bin — 12 582 960 octets (gravure mesurée 0,7682 → 1,0000)",
+    "corpus_production_paires": 2405,
+    "datasets_v6": "datasets/INDEX_v6.json (couleurs 2 696 lignes Kaggle réelles + multimodal it.150 : 28 HF + 12 Kaggle)",
+    "seuils_paliers_plan_v2": "docs/architecture/plan-directeur-gen3-v2.md §8 (P0 → P5) — chaque palier re-mesure cette base"
+  },
+  "usage": "Toute évolution PHASE 1+ compare ses mesures à CETTE base (latence/onde, RAM/1 000 neurones, rappel). PHASE 1 = cœur événementiel avec tests d'équivalence vs boucle dense.",
+  "honnetete": "Les chiffres du benchmark décrivent le harnais de référence CPU commis dans le dépôt (exécuté en CI à chaque push), pas une promesse de performance du cerveau million ; le réseau à 1 M n'existe pas encore (paliers P1-P5 non commencés) — statuts honnêtes : PLAN validé, PHASE 0 mesurée, PHASE 1+ non commencée."
+}
