@@ -40,6 +40,14 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   // it.58 — file.modify RETIRÉ du catalogue : aucun exécuteur n'a jamais
   // existé (fantôme — le planner pouvait planifier un échec garanti).
   // La modification passe par file.create (écrasement) ou file.read + code.
+  // v2 (2026-11-27 — audit outils) — camera.capture et ads.publish RETIRÉS :
+  // annoncés au catalogue mais AUCUN exécuteur au registre (grep dépôt
+  // complet) — même classe de fantôme que file.modify ; le planificateur
+  // planifiait deux échecs garantis. Les portes de politique (allowCamera,
+  // ads.write, CRITICAL_TOOLS) restent en place pour le jour où un vrai
+  // pont matériel/Composio est construit — le test de cohérence
+  // (tests/unit/tool-registries-coherence.test.ts) imposera alors les trois
+  // couches (catalogue + sécurité + exécuteur) d'un coup.
   { name: "zip.analyze", description: "Analyze a ZIP archive safely.", risk: "read", permission: "file.read", sideEffect: false },
   { name: "zip.create", description: "Create and persist a ZIP artifact.", risk: "write", permission: "file.create", sideEffect: true },
   { name: "artifact.create", description: "Create a persistent document artifact.", risk: "write", permission: "file.create", sideEffect: true },
@@ -51,15 +59,14 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "file.delete", description: "Delete an authorized workspace file.", risk: "destructive", permission: "file.delete", sideEffect: true },
   { name: "memory.read", description: "Read the user memory available to the agent.", risk: "read", permission: "memory.read", sideEffect: false },
   { name: "memory.write", description: "Persist a non-secret memory for the user.", risk: "write", permission: "memory.write", sideEffect: true },
-  { name: "terminal.execute", description: "Run an authorized command in the isolated agent terminal.", risk: "destructive", permission: "terminal.execute", sideEffect: true },
   // Task 122 — terminal intégré FONCTIONNEL : version EXÉCUTABLE au registre
   // d'outils (le planificateur la voit, l'exécuteur existe). Outil INTERNE
   // (directive 10-10 : env nettoyé, workspace /tmp, deny-list durcie — aucun
   // secret utilisateur manipulé) → risque « write », pas de forçage HITL.
   { name: "terminal.run", description: "Run a REAL command in the Gen3ia agent terminal (cleaned environment, /tmp workspace, hardened deny-list, time/memory/output limits). Returns the honest execution mode (Docker sandbox, serverless in-process, or announced simulation).", risk: "write", permission: "tool.write", sideEffect: true },
-  { name: "camera.capture", description: "Request an authorized camera capture.", risk: "external", permission: "camera.capture", sideEffect: true },
+  { name: "terminal.execute", description: "Run an authorized command in the isolated agent terminal.", risk: "destructive", permission: "terminal.execute", sideEffect: true },
   { name: "ads.read", description: "Read data from an authorized advertising account.", risk: "read", permission: "ads.read", sideEffect: false },
-  { name: "ads.publish", description: "Publish an advertising action to an authorized account.", risk: "external", permission: "ads.write", sideEffect: true },
+  // v2 — ads.publish retiré (fantôme : aucun exécuteur — voir note it.58/v2 ci-dessus).
   { name: "github.create_repository", description: "Create a GitHub repository for a generated project.", risk: "external", permission: "tool.external", sideEffect: true },
   // it.58 — voice.list et phone.call RETIRÉS du catalogue : les exécuteurs
   // externes (Bland, ElevenLabs) ont été retirés de la plateforme (règle
@@ -67,7 +74,9 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   // La voix locale reste disponible via voice.speak ; le répondeur via
   // voicemail.respond.
   { name: "code.execute", description: "Execute code in the isolated sandbox.", risk: "external", permission: "code.execute", sideEffect: true },
-  { name: "code.simulate", description: "Simulate code execution without side effects (VM restreinte Node, analyse statique Python/shell) et retourne le mode réel utilisé.", risk: "read", permission: "code.execute", sideEffect: false },
+  // v2 — code.simulate : l'ancienne entrée courte est remplacée par la
+  // version détaillée en fin de catalogue (exécuteur réel branché sur
+  // lib/sandbox/simulation.ts — voir la note de synchronisation v2).
   { name: "knowledge.search", description: "Search the project knowledge base (indexed documents, tenant-scoped vector search).", risk: "read", permission: "file.read", sideEffect: false },
   { name: "composio.execute", description: "Execute an authorized external action.", risk: "external", permission: "tool.external", sideEffect: true },
   { name: "mcp.call", description: "Execute a tool exposed by one of the user's connected MCP servers (Google Drive, GitHub, databases, etc.) using { serverId, tool, args }.", risk: "external", permission: "tool.external", sideEffect: true },
@@ -150,4 +159,20 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "content.package", description: "Pipeline de contenu automatisé : d'une idée, produit le PACK COMPLET — angles éditoriaux, script vidéo scène par scène (directions visuelles incluses), pack SEO (titres, mots-clés, hashtags, miniature) — livrable persisté.", risk: "write", permission: "tool.write", sideEffect: true },
   { name: "knowledge.graph", description: "Construire le GRAPHE DE CONNAISSANCES d'une collection de documents : concepts pondérés, relations typées, clusters et visualisation SVG déterministe intégrée au livrable.", risk: "write", permission: "tool.write", sideEffect: true },
   { name: "decision.analyze", description: "Moteur de décision probabiliste : espérance, variance, simulation Monte-Carlo reproductible, VaR/CVaR, probabilité de perte, sensibilité et recommandation adaptée à la tolérance au risque — 100 % déterministe.", risk: "read", permission: "tool.read", sideEffect: false },
+  // v2 (2026-11-27) — SYNCHRONISATION CATALOGUE (audit outils) : 11
+  // exécuteurs RÉELS du registre (lib/tools/default-registry.ts) étaient
+  // absents du catalogue — le planificateur les jugeait « INDISPONIBLE » à
+  // tort (même défaut que schedule.* corrigé en it.58). Capacité réelle =
+  // capacité annoncée ; chaque entrée décrit le comportement réel.
+  { name: "artifact.convert", description: "Convertir un document d'un format vers un autre : extraction réelle de la source, reconstruction en blocs, génération et persistance d'un nouveau livrable.", risk: "write", permission: "file.create", sideEffect: true },
+  { name: "brain.train", description: "Entraîner le cerveau Gen3 depuis la conversation : apprendre des connaissances « X signifie Y » ou des abréviations dans le cortex langagier (paires réellement ajoutées, doublons ignorés — idempotent).", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "musique.creer", description: "Composer une musique algorithmique déterministe (styles, accords, mélodie, percussions) rendue WAV→MP3 via FFmpeg et persistée — l'utilisateur reçoit un vrai fichier audio de la durée demandée.", risk: "write", permission: "tool.write", sideEffect: true },
+  { name: "code.exec", description: "Exécuter du JavaScript dans une sandbox vm durcie (worker isolé, prototype nul, import() refusé, timeout strict, sortie plafonnée) — limitations honnêtes annoncées dans le résultat.", risk: "write", permission: "code.execute", sideEffect: true },
+  { name: "code.inspect", description: "Analyse statique de code : structure, dépendances, motifs risqués — sans exécution.", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "code.simulate", description: "Simuler du code SANS effet de bord (analyse statique Node/Python/shell : structure, opérations détectées, avertissements) — le mode réel renvoyé est toujours « simulation ». Pour exécuter réellement : terminal.run ou code.exec.", risk: "read", permission: "code.execute", sideEffect: false },
+  { name: "web.http", description: "Effectuer une requête HTTP GET SSRF-gardée vers une URL publique désignée et retourner la réponse réelle (statut, en-têtes, corps).", risk: "read", permission: "network.read", sideEffect: false },
+  { name: "web.dns", description: "Résoudre réellement un nom de domaine (registres A/AAAA/CNAME/MX/TXT) et retourner les enregistrements observés.", risk: "read", permission: "network.read", sideEffect: false },
+  { name: "dev.fmt", description: "Formater et transformer des données en mémoire : JSON, Base64, hash (SHA-256/MD5), encodage/décodage d'URL.", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "dev.regex", description: "Tester une expression régulière contre un texte : correspondances réelles, groupes capturés, validation — sans exécution de code.", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "artefacts.audit", description: "Auditer les créations de gen3 et les apports de l'utilisateur (toutes conversations) : lister, lire, modifier avec historique de versions.", risk: "write", permission: "tool.write", sideEffect: true },
 ];

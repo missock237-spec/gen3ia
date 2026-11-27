@@ -23,9 +23,11 @@ export const PROJECT_SERVICE_TOOLS: string[] = [
   "web.open",
   "file.read",
   "file.create",
-  "file.modify",
+  // v2 (2026-11-27) — purge des fantômes retirés du catalogue en it.58 :
+  // file.modify (aucun exécuteur — la modification passe par file.create)
+  // et artifact.download (ID réel : artifact.get). Les garder ici autorisait
+  // des plans voués à « Unknown tool security definition » à l'exécution.
   "artifact.create",
-  "artifact.download",
   "zip.analyze",
   "zip.create",
   "zip.extract",
@@ -69,9 +71,9 @@ export const PROJECT_SERVICES: ProjectServiceDescriptor[] = [
     usage: "Trouver des informations à jour, ouvrir une page et en extraire le contenu.",
   },
   {
-    tools: ["file.read", "file.create", "file.modify"],
+    tools: ["file.read", "file.create"],
     service: "Fichiers du workspace",
-    usage: "Lire, créer et modifier les fichiers du workspace autorisé de l'utilisateur.",
+    usage: "Lire et créer les fichiers du workspace autorisé de l'utilisateur (la modification passe par file.create en écrasement).",
   },
   {
     tools: ["artifact.create", "artifact.download"],

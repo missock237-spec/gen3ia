@@ -11,6 +11,7 @@ import {
 } from "../core/capability-registry";
 import { reinitialiserRepositoryUce } from "../storage/capability-repository";
 import { executerCapacite } from "../execution/universal-gateway";
+import { GEN3IA_TOOLS } from "@/lib/tools/registry";
 
 /**
  * TESTS REGISTRE CENTRAL (V1.1 Phase 2) — LE registre de référence unique :
@@ -43,7 +44,7 @@ describe("contrat obligatoire du registre central", () => {
 
   it("expose les 15 champs du contrat mission pour chaque capacité native", async () => {
     const entrees = await obtenirRegistreCentral({ dossier, forcerLocal: true }).lister();
-    expect(entrees.length).toBeGreaterThanOrEqual(78); // 78 outils annoncés
+    expect(entrees.length).toBeGreaterThanOrEqual(GEN3IA_TOOLS.length); // tout le catalogue natif
     for (const champ of CHAMPS_CONTRAT) {
       expect(entrees.every((e) => champ in e), `champ « ${String(champ)} » présent`).toBe(true);
     }
@@ -64,7 +65,12 @@ describe("contrat obligatoire du registre central", () => {
 
   it("rend l'écart annonce/réalité honnête (availability, pas de mensonge)", async () => {
     const sync = entreesNativesSynchrones();
-    expect(sync.length).toBe(78);
+    // v2 (2026-11-27 — audit outils) : le littéral 78 (taille de l'ANCIEN
+    // catalogue) faisait échouer le test dès qu'une capacité réelle était
+    // ajoutée (86 aujourd'hui) — même anti-pattern que le garde million
+    // (littéral périmé). La vérité de la taille = GEN3IA_TOOLS (source) ;
+    // le test porte sur la disponibilité EXPLICITE de chaque entrée.
+    expect(sync.length).toBe(GEN3IA_TOOLS.length);
     // Chaque entrée annoncée porte une disponibilité EXPLICITE, jamais inventée.
     for (const e of sync) {
       expect(["disponible", "non-enregistre", "indisponible"]).toContain(e.availability);

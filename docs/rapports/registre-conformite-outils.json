@@ -1,0 +1,1232 @@
+{
+  "date": "2026-11-27",
+  "garde": "tests/unit/tool-registries-coherence.test.ts (CI — synchronisation continue)",
+  "methodes": {
+    "registreToujours": "createDefaultToolRegistry() sans variables d'environnement",
+    "registreConditionnel": "createDefaultToolRegistry() avec clés API/connecteurs simulées"
+  },
+  "totaux": {
+    "catalogue": 86,
+    "securite": 86,
+    "registreToujours": 64,
+    "registreAvecEnv": 82,
+    "serviceProjet": 20,
+    "fonctionnel": 68,
+    "partiellementFonctionnel": 18,
+    "bloque": 0,
+    "manquant": 0
+  },
+  "outils": [
+    {
+      "outil": "ads.read",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "ads.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "artefacts.audit",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "artifact.convert",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write",
+        "file.read",
+        "file.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "artifact.create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.write",
+        "file.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "artifact.get",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "file.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "brain.train",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "browser.navigate",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "build.autofix",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "cloudflare.dns.create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "cloudflare.dns.list",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "cloudflare.zones.list",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "code.exec",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "code.execute"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "code.execute",
+      "catalogue": true,
+      "securite": true,
+      "risque": "destructive",
+      "permissions": [
+        "code.execute"
+      ],
+      "registre": "absent",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": "exécution par surface dédiée (hors registre par défaut) : lib/agents/runtime/secure-tool-executor.ts (exécution sandbox dédiée, validation runtime/limits lignes 46-50)"
+    },
+    {
+      "outil": "code.inspect",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "code.simulate",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "code.execute"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "composio.execute",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "content.package",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "custom_api.call",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "custom_api.write",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "decision.analyze",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "dev.fmt",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "dev.regex",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "email.send",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "file.create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.write",
+        "file.create",
+        "file.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "file.delete",
+      "catalogue": true,
+      "securite": true,
+      "risque": "destructive",
+      "permissions": [
+        "tool.destructive",
+        "file.delete"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "file.read",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "file.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "github.create_repository",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "handover.compose",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "image.generate",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.write",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "ivr.navigate",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "knowledge.graph",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "knowledge.search",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "file.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "mcp.call",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "media.analyze",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "memory.read",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "memory.read"
+      ],
+      "registre": "absent",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": "exécution par surface dédiée (hors registre par défaut) : lib/domain/conversations/engine-tools.ts (dispatch propre du moteur de conversation)"
+    },
+    {
+      "outil": "memory.write",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.write",
+        "memory.write"
+      ],
+      "registre": "absent",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": "exécution par surface dédiée (hors registre par défaut) : lib/domain/conversations/engine-tools.ts (dispatch propre du moteur de conversation)"
+    },
+    {
+      "outil": "messaging.send",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "musique.creer",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "network.list",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "network.mark_read",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "network.read_inbox",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "network.send_message",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "notion.create_page",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "notion.search",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "registry.find",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "schedule.create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "schedule.delete",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "schedule.list",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "schedule.update",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "schema.extract",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "servicenow_incident_create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "servicenow_incident_query",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "servicenow_incident_update",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "simulation.run",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "social.publish",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "terminal.execute",
+      "catalogue": true,
+      "securite": true,
+      "risque": "destructive",
+      "permissions": [
+        "terminal.execute"
+      ],
+      "registre": "absent",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": "exécution par surface dédiée (hors registre par défaut) : lib/agents/runtime/secure-tool-executor.ts (flux « commande autorisée » à validation explicite, ligne 115)"
+    },
+    {
+      "outil": "terminal.guide",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "terminal.run",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "terminal.shield",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "transcript.redact",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "video.create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "video.revise",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "video.status",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "voice.speak",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "voicemail.respond",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "watchdog.track",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "web.api",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "web.api.write",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "web.deep_research",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "web.dns",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "web.http",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "web.open",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "web.search",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "webhook.emit",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "webhook.heal",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "workflow.create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "workflow.delete",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": false,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "workflow.list",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "workflow.run",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.read",
+        "tool.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "zendesk_ticket_create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "zendesk_ticket_list",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "zendesk_ticket_search",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "network.read"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "zendesk_ticket_update",
+      "catalogue": true,
+      "securite": true,
+      "risque": "external",
+      "permissions": [
+        "tool.external",
+        "tool.write",
+        "network.write"
+      ],
+      "registre": "conditionnel",
+      "serviceProjet": false,
+      "statut": "partiellement fonctionnel",
+      "note": "exécuteur réel enregistré sous condition (clé API / connecteur configuré) — échec propre et honnête sinon"
+    },
+    {
+      "outil": "zip.analyze",
+      "catalogue": true,
+      "securite": true,
+      "risque": "read",
+      "permissions": [
+        "tool.read",
+        "file.read"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "zip.create",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.write",
+        "file.write"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    },
+    {
+      "outil": "zip.extract",
+      "catalogue": true,
+      "securite": true,
+      "risque": "write",
+      "permissions": [
+        "tool.write",
+        "file.write",
+        "file.create"
+      ],
+      "registre": "toujours",
+      "serviceProjet": true,
+      "statut": "fonctionnel",
+      "note": ""
+    }
+  ]
+}

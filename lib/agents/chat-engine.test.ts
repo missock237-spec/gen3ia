@@ -252,7 +252,12 @@ describe("planAgentTask", () => {
     // catalogue COMPLET — l'ancienne assertion (camera.capture masquée)
     // reflétait la whitelist réduite historique, obsolète avec le nouveau
     // contrat ; la réservation fine reste en aval (permissions + flags).
-    expect(presented.availableCapabilities).toContain("camera.capture");
+    // v2 (2026-11-27 — audit outils) : l'assertion porte désormais sur
+    // code.simulate — camera.capture a été RETIRÉ du catalogue (fantôme :
+    // aucun exécuteur au registre, doctrine it.58) ; code.simulate est au
+    // contraire une capacité devenue RÉELLE (exécuteur branché sur
+    // lib/sandbox/simulation.ts) et doit être présentée au planner.
+    expect(presented.availableCapabilities).toContain("code.simulate");
     expect(plan.steps[0].type).toBe("tool");
     expect(plan.steps[0].toolName).toBe("code.execute");
   });

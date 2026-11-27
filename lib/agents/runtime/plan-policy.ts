@@ -45,11 +45,21 @@ export function buildPlanExecutionPolicy(plan: RuntimePlan): ExecutionPolicy {
   let allowCamera = false;
   let allowExternalApps = false;
 
-  // Définitions de sécurité : UNIQUEMENT pour les outils du plan (les
-  // services de base ci-dessous n'ont pas tous une définition — ex.
-  // code.simulate — et suivent le comportement historique du chemin agent).
+  // Définitions de sécurité : UNIQUEMENT pour les outils du plan. v2
+  // (2026-11-27, audit outils) : une définition manquante ne fait PLUS
+  // planter la construction de la politique (la mission entière échouait sur
+  // une seule étape inconnue) — FAIL-CLOSED : l'outil sans définition est
+  // exclu de allowedTools et de ses permissions (authorizeTool le rejetterait
+  // de toute façon en aval) et l'omission est consignée.
+  const outilsInconnus = new Set<string>();
   for (const tool of planTools) {
-    const definition = getToolSecurityDefinition(tool);
+    let definition;
+    try {
+      definition = getToolSecurityDefinition(tool);
+    } catch {
+      outilsInconnus.add(tool);
+      continue;
+    }
     for (const permission of definition.requiredPermissions) permissions.add(permission);
     if (definition.network) allowNetwork = true;
     if (definition.filesystemWrite) allowFileWrite = true;
@@ -61,10 +71,21 @@ export function buildPlanExecutionPolicy(plan: RuntimePlan): ExecutionPolicy {
     if (tool === "camera.capture") allowCamera = true;
     if (definition.externalApp) allowExternalApps = true;
   }
+  if (outilsInconnus.size > 0) {
+    console.warn(
+      `[plan-policy] outils sans définition de sécurité EXCUS du plan (fail-closed) : ${[...outilsInconnus].join(", ")}`,
+    );
+  }
 
   return {
     ...DEFAULT_EXECUTION_POLICY,
-    allowedTools: [...new Set([...planTools, ...PROJECT_SERVICE_TOOLS])],
+    allowedTools: [
+      ...new Set([
+        // Fail-closed : seuls les outils à définition connue sont autorisés.
+        ...planTools.filter((tool) => !outilsInconnus.has(tool)),
+        ...PROJECT_SERVICE_TOOLS,
+      ]),
+    ],
     permissions: [...permissions],
     maxSteps: Math.max(50, plan.steps.length + 10),
     allowNetwork,

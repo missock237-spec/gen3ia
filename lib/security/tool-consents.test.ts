@@ -13,10 +13,17 @@ describe("consentCategoryForTool — cartographie des catégories", () => {
     expect(consentCategoryForTool("ext.abc123.send_message")).toBe("external_apps");
   });
 
-  it("code/terminal → code_execution ; caméra → camera", () => {
+  it("code/terminal → code_execution ; outil caméra retiré → null", () => {
     expect(consentCategoryForTool("code.execute")).toBe("code_execution");
     expect(consentCategoryForTool("terminal.execute")).toBe("code_execution");
-    expect(consentCategoryForTool("camera.capture")).toBe("camera");
+    // v2 (2026-11-27 — audit outils) : l'outil camera.capture est RETIRÉ
+    // (fantôme — aucun exécuteur au registre). Il ne mappe plus vers la
+    // catégorie « camera » : sans définition de sécurité, la cartographie
+    // retourne null (jamais de consentement pour un outil inexistant). La
+    // catégorie « camera » elle-même reste CONSENT_CATEGORIES : elle sert le
+    // consentement du flux UI de capture live (app/api/camera + components/
+    // live), indépendant des outils agent.
+    expect(consentCategoryForTool("camera.capture")).toBeNull();
   });
 
   it("les destructeurs hors code → destructive", () => {

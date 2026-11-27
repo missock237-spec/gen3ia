@@ -7,6 +7,20 @@
  *
  * Garanties mission précédente conservées : train/val/test séparés, mesure
  * avant/après obligatoire, rollback si régression, paramètres versionnés.
+ *
+ * v2 (2026-11-27 — audit entraînement, vérifié) : AUCUN consommateur de
+ * production à ce jour (grep dépôt — planifierRun/cloreRun ne sont appelés
+ * nulle part hors tests et multimodal-training-manager, lui-même sans
+ * appelant). L'orchestration RÉELLE des entraînements est :
+ *   — lib/neural/training/job.ts (statuts en_cours→termine/echec),
+ *     consommé par lib/mlops/pipeline.ts + app/api/neural/train|state|brain ;
+ *   — la boucle auto-apprentissage lib/entrainement-auto/boucle.ts
+ *     (évaluations mesurées accuracyTrain/Test, maîtrise par domaine).
+ * Ce module est une infrastructure PRÊTE mais DORMANTE — son branchement
+ * (chaque job réel déclare un run avec scoreAvant et le clôt avec scoreApres
+ * mesuré) est la PHASE 1 de la feuille de route GTIS
+ * (docs/architecture/feuille-de-route-gtis.md). Aucun run « planifie » ne
+ * peut donc stagner en production : aucun run n'est créé sans moteur.
  */
 
 import "server-only";

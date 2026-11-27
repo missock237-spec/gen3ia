@@ -61,6 +61,11 @@ import { outilWebHttp } from "@/lib/tools/code/http";
 import { outilWebDns } from "@/lib/tools/code/dns";
 import { outilDevFmt } from "@/lib/tools/code/fmt";
 import { outilDevRegex } from "@/lib/tools/code/regex";
+// code.simulate RÉEL (v2 — audit outils) : l'outil annoncé au catalogue
+// n'avait ni exécuteur ni définition de sécurité (échec garanti). Le moteur
+// de simulation statique existant (lib/sandbox/simulation.ts) est branché —
+// analyse honnête, zéro effet de bord, mode « simulation » annoncé.
+import { codeSimulateTool } from "@/lib/tools/code/simulate";
 // artefacts.audit — audit multi-conversations : lister ce que gen3 a créé
 // ou que l'utilisateur a donné, lire, modifier avec historique de versions.
 import { artefactsAuditTool } from "@/lib/tools/files/artefacts-audit";
@@ -221,6 +226,9 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(outilWebDns);
   registry.register(outilDevFmt);
   registry.register(outilDevRegex);
+  // code.simulate : simulation statique honnête (jamais une exécution réelle —
+  // le mode renvoyé l'annonce) ; toujours enregistré.
+  registry.register(codeSimulateTool);
   // artefacts.audit : audit des créations gen3 et des apports utilisateur
   // (toutes conversations) — lecture et modification avec versions.
   registry.register(artefactsAuditTool);

@@ -36,9 +36,13 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "terminal.run": { name: "terminal.run", risk: "write", requiredPermissions: ["tool.read", "tool.write"], filesystemWrite: true },
   "memory.read": { name: "memory.read", risk: "read", requiredPermissions: ["tool.read", "memory.read"] },
   "memory.write": { name: "memory.write", risk: "write", requiredPermissions: ["tool.write", "memory.write"] },
-  "camera.capture": { name: "camera.capture", risk: "external", requiredPermissions: ["tool.external", "camera.capture"], externalApp: true },
+  // v2 (2026-11-27 — audit outils) : camera.capture et ads.publish RETIRÉS
+  // (fantômes — aucun exécuteur au registre, grep dépôt complet ; le
+  // planificateur ne doit plus les annoncer). Les portes allowCamera /
+  // ads.write / CRITICAL_TOOLS restent en place (défense en profondeur) pour
+  // le jour où un vrai pont matériel/Composio est construit — le test de
+  // cohérence imposera les trois couches d'un coup.
   "ads.read": { name: "ads.read", risk: "read", requiredPermissions: ["tool.read", "ads.read", "network.read"], network: true, externalApp: true },
-  "ads.publish": { name: "ads.publish", risk: "external", requiredPermissions: ["tool.external", "tool.write", "ads.write", "network.write"], network: true, externalApp: true },
   "github.create_repository": { name: "github.create_repository", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
   // voice.speak : synthèse audio NEURONALE LOCALE (audit multimodal) —
   // plus aucun appel réseau (l'ancien moteur ElevenLabs a été supprimé).
@@ -158,6 +162,71 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   "knowledge.graph": { name: "knowledge.graph", risk: "write", requiredPermissions: ["tool.read", "tool.write"] },
   // Moteur de décision : calcul pur déterministe en mémoire.
   "decision.analyze": { name: "decision.analyze", risk: "read", requiredPermissions: ["tool.read"] },
+
+  // v2 (2026-11-27) — SYNCHRONISATION DES REGISTRES (audit outils) :
+  // 13 outils du catalogue GEN3IA_TOOLS n'avaient AUCUNE définition ici —
+  // annoncés au planificateur mais rejetés à l'exécution par authorizeTool()
+  // (getToolSecurityDefinition lève « Unknown tool security definition »),
+  // et plan-policy.ts levait la même exception à la construction de la
+  // politique du plan. Capacité annoncée = capacité exécutable : chaque
+  // définition suit la convention documentée du fichier (le profil décrit
+  // la CAPACITÉ ; le risque HITL — carte de validation — reste porté par
+  // lib/tools + lib/agents/approval-policy.ts + le régime « connecté = agir »
+  // des apps externes).
+  // Simulation de code SANS effet de bord (moteur statique lib/sandbox/
+  // simulation.ts — aucun spawn, aucune écriture) : lecture pure.
+  "code.simulate": { name: "code.simulate", risk: "read", requiredPermissions: ["tool.read", "code.execute"] },
+  // Base de connaissances du projet : recherche vectorielle tenant-scopée
+  // (interne Gen3ia) — lecture pure.
+  "knowledge.search": { name: "knowledge.search", risk: "read", requiredPermissions: ["tool.read", "file.read"] },
+  // Canaux de messagerie de la plateforme (WhatsApp/Telegram/Slack côté
+  // serveur) : même convention qu'email.send — réseau réel, aucune app
+  // UTILISATEUR ciblée → pas de flag externalApp ici.
+  "messaging.send": { name: "messaging.send", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true },
+  // Publication sociale via la connexion Composio de l'utilisateur
+  // (même garantie que composio.execute : connexion vérifiée obligatoire).
+  "social.publish": { name: "social.publish", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  // Webhook sortant : POST signé vers les endpoints déclarés du projet —
+  // même profil que webhook.heal (action externe réelle).
+  "webhook.emit": { name: "webhook.emit", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  // Connecteurs entreprise Zendesk/ServiceNow (hub Composio, Task 133) :
+  // les écritures sont externes ; les lectures interrogent le compte
+  // connecté de l'utilisateur → réseau + externalApp même en risque read.
+  "zendesk_ticket_create": { name: "zendesk_ticket_create", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "zendesk_ticket_update": { name: "zendesk_ticket_update", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "zendesk_ticket_list": { name: "zendesk_ticket_list", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true, externalApp: true },
+  "zendesk_ticket_search": { name: "zendesk_ticket_search", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true, externalApp: true },
+  "servicenow_incident_create": { name: "servicenow_incident_create", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "servicenow_incident_update": { name: "servicenow_incident_update", risk: "external", requiredPermissions: ["tool.external", "tool.write", "network.write"], network: true, externalApp: true },
+  "servicenow_incident_query": { name: "servicenow_incident_query", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true, externalApp: true },
+  // Analyse média LOCALE (sharp + ffprobe + ASR interne) : lecture des
+  // fichiers média du compte, aucune écriture, aucun réseau.
+  "media.analyze": { name: "media.analyze", risk: "read", requiredPermissions: ["tool.read"], filesystemRead: true },
+
+  // v2 (2026-11-27) — BOÎTE À OUTILS DÉV + MÉDIAS : 8 exécuteurs réels du
+  // registre (lib/tools/default-registry.ts) n'avaient NI définition ici NI
+  // entrée catalogue — invisibles au planificateur (doctrine it.58 : le
+  // planner les jugeait « INDISPONIBLE » à tort) et rejetés par authorizeTool
+  // si un plan les contenait. Définitions ajoutées + catalogue synchronisé.
+  // Exécution JS sandboxée (worker + vm durcie, prototype nul, timeout
+  // strict — aucun réseau, aucun fs) : capacité de code, comme code.execute.
+  "code.exec": { name: "code.exec", risk: "write", requiredPermissions: ["code.execute"] },
+  // Analyse statique de code : lecture pure, aucun effet de bord.
+  "code.inspect": { name: "code.inspect", risk: "read", requiredPermissions: ["tool.read"] },
+  // HTTP GET SSRF-gardé vers une URL publique : lecture réseau, comme web.api.
+  "web.http": { name: "web.http", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  // Résolution DNS réelle : lecture réseau ( jamais d'écriture).
+  "web.dns": { name: "web.dns", risk: "read", requiredPermissions: ["tool.read", "network.read"], network: true },
+  // Formatage JSON/Base64/hash/URL : transformation pure en mémoire.
+  "dev.fmt": { name: "dev.fmt", risk: "read", requiredPermissions: ["tool.read"] },
+  // Testeur d'expressions régulières : transformation pure en mémoire.
+  "dev.regex": { name: "dev.regex", risk: "read", requiredPermissions: ["tool.read"] },
+  // Composition musicale interne (moteur algorithmique local + FFmpeg) —
+  // même convention que voice.speak : écriture interne, pas de réseau.
+  "musique.creer": { name: "musique.creer", risk: "write", requiredPermissions: ["tool.write"] },
+  // Audit des artefacts multi-conversations : lecture + modification avec
+  // historique de versions — même convention qu'artifact.create.
+  "artefacts.audit": { name: "artefacts.audit", risk: "write", requiredPermissions: ["tool.read", "tool.write"], filesystemRead: true, filesystemWrite: true },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }
