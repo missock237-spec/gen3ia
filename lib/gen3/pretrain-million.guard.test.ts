@@ -213,7 +213,18 @@ describe("garde 32ᵉ — session million à données uniques lisible (it.64)", 
     reinitialiserCacheMillion();
     const resume = lireResumeMillion();
     expect(resume).not.toBeNull();
-    expect(resume!.totalEchantillons).toBe(19_182_944);
+    // v2 (2026-11-27) : le total épinglé en dur (19_182_944 — session
+    // antérieure) faisait échouer le garde dès qu'une NOUVELLE session
+    // million réécrivait l'artefact commis (19 177 594 — session
+    // « TERMINÉ 19/19 », commit 89a99f1) : un garde qui épingle une mesure
+    // changeante casse à chaque vraie session — CI rouges sur main. Le
+    // garde vérifie désormais la COHÉRENCE INTERNE du rapport (total = somme
+    // réelle des domaines lus) et le CRITÈRE PROPRIÉTAIRE (19 domaines ×
+    // ≥ 1 M) ; la vérité du chiffre reste celle du rapport commis, jamais un
+    // littéral de test (même doctrine que la page /vocation : zéro chiffre
+    // mesuré en dur).
+    expect(resume!.totalEchantillons).toBe(resume!.parDomaine.reduce((s, d) => s + d.echantillons, 0));
+    expect(resume!.totalEchantillons).toBeGreaterThanOrEqual(NB_DOMAINES_VOCATION * 1_000_000);
     expect(resume!.parDomaine).toHaveLength(NB_DOMAINES_VOCATION);
     expect(resume!.methode).toContain("EOD");
     expect(resume!.contexte.length).toBeGreaterThan(0);
