@@ -22,6 +22,15 @@ name: Surveillance synthétique production
 # (gh label create --force || true) avant chaque ouverture ; (2) si la création
 # avec label échoue malgré tout, l'issue est créée SANS label — une alarme
 # sans étiquette vaut mieux qu'aucune alarme.
+#
+# v9 (2026-11-27) — verdict HORS-LIGNE-CONNUE : arrêt du churn rouge.
+# Production ABSENTE (version.json illisible + échecs uniquement 404/ERR —
+# un build déployé sert toujours ces deux ressources) = état BLOCKED connu
+# (issue #163 : aucun runtime) : la sonde sort VERT avec notice honnête, le
+# run n'est plus ROUGE à chaque tick, MAIS l'issue d'alarme reste ouverte et
+# son corps est mis à jour (canal d'alarme conservé, anti-spam inchangé).
+# ROUGE reste réservé aux vraies dégradations (prod qui répond mais mal).
+# Un script qui crashe (verdict absent) reste un échec → alarme.
 
 on:
   schedule:
@@ -60,7 +69,11 @@ jobs:
         run: node scripts/surveillance_prod.mjs
 
       - name: Ouvrir ou mettre à jour l'issue de dégradation
-        if: failure()
+        # v9 : sur ROUGE (échec) ET sur HORS-LIGNE-CONNUE (succès avec verdict
+        # hors-ligne) — l'issue d'alarme reste ouverte et son corps mis à jour
+        # dans les deux cas (anti-spam inchangé). Un crash du script (verdict
+        # absent) déclenche aussi le canal d'alarme (outcome == 'failure').
+        if: always() && (steps.sonde.outcome == 'failure' || steps.sonde.outputs.verdict == 'HORS-LIGNE-CONNUE')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -82,8 +95,13 @@ jobs:
             echo "issue #$NUM mise à jour (pas de nouveau commentaire — anti-spam)"
           fi
 
+      - name: Notice honnête (production hors ligne connue)
+        if: success() && steps.sonde.outputs.verdict == 'HORS-LIGNE-CONNUE'
+        run: |
+          echo "::warning::Production HORS LIGNE — état BLOCKED connu (aucun runtime, cf. issues #163 / #160). Run VERT par doctrine v9 (arrêt du churn rouge) ; l'issue d'alarme reste OUVERTE et mise à jour. Ce vert NE signifie PAS que la production est saine."
+
       - name: Clôturer l'issue si rétabli
-        if: success()
+        if: success() && steps.sonde.outputs.verdict == 'VERT'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -466,6 +466,42 @@ jobs:
           PAS_SECONDES=30
           TITRE="🚨 Production en retard sur main — intervention console VPS requise"
           echo "verify_build non prouvé (${{ steps.verify_build.outcome }}) — contrôle de livraison PULL activé (SLE ${SLE_SECONDES} s après publication)."
+
+          # v9 (2026-11-27) — PORTE D'ACCESSIBILITÉ sur ce contrôle : il n'a de
+          # sens que si un DESTINATAIRE existe. VPS SSH muet (3 essais) ET
+          # gen3ia.online sans version.json (aucune app servie) = état BLOCKED
+          # connu (issue #163 : runtime de production absent) — aucun canal
+          # (SSH ni poller) ne peut livrer : un SLE de 40 min ne peut que finir
+          # ROUGE sans information nouvelle (36+6 runs rouges mesurés les
+          # 26-27 nov.). Sortie HONNÊTE : run VERT avec ::warning:: + résumé
+          # « DÉPLOIEMENT NON EFFECTUÉ » — jamais un faux « livré ». Le build
+          # reste publié sur cd-latest (canal pull prêt) et sera livré dès
+          # qu'un destinataire répond. Dès que le VPS ou le site répond, ce
+          # test échoue et le contrôle PULL redevient strict (vraie panne).
+          vps_vivant=0
+          for i in 1 2 3; do
+            if timeout 12 ssh-keyscan -T 8 -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" 2>/dev/null | grep -q "ssh-"; then
+              vps_vivant=1; break
+            fi
+            echo "Accessibilité VPS $i/3 : sshd muet — nouvel essai dans 20 s…"
+            [ "$i" = "3" ] || sleep 20
+          done
+          SITE_JSON=$(curl -fsS -m 15 "https://gen3ia.online/version.json?cb=$(date +%s)" 2>/dev/null | tr -d ' \n\r' || true)
+          if [ "$vps_vivant" != "1" ] && ! echo "$SITE_JSON" | grep -q '"gitSha"'; then
+            {
+              echo "### 🛑 DÉPLOIEMENT NON EFFECTUÉ — destinataire absent (état BLOCKED connu, issue #163)"
+              echo ""
+              echo "| Vérification | Résultat |"
+              echo "|---|---|"
+              echo "| VPS (SSH, 3 essais keyscan) | injoignable |"
+              echo "| gen3ia.online/version.json | absente (aucune app servie) |"
+              echo "| Build publié sur release \`cd-latest\` | OUI — canal pull prêt |"
+              echo ""
+              echo "Aucun canal de livraison n'a de destinataire joignable : le build \`${BUILD_ID}\` (sha \`${GITHUB_SHA}\`) est publié et sera livré dès que le VPS/la production redevient joignable. Ce vert avec warning NE signifie PAS que la production est à jour — elle est HORS LIGNE (issue #163)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::VPS SSH muet ET gen3ia.online sans version.json — livraison impossible à PROUVER : sortie honnête v9 (déploiement NON effectué, en attente d'un destinataire). Le contrôle PULL redeviendra strict dès qu'un destinataire répond."
+            exit 0
+          fi
           # publishedAt relu depuis la release : vérité du canal pull.
           META_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/cd-latest" \
             --jq '.assets[] | select(.name=="meta.json") | .browser_download_url' 2>/dev/null | head -1 || true)

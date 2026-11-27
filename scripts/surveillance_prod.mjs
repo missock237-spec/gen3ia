@@ -230,7 +230,23 @@ if (!version) echecs.push("version.json illisible ou injoignable");
 if (livraisonBloquee) echecs.push(`livraison bloquée : prod=${prodSha?.slice(0, 8)} ≠ main=${shaM?.slice(0, 8)} avec build vieux de ${ageBuildHeures.toFixed(1)} h (> ${LIVRAISON_BLOQUEE_HEURES} h)`);
 if (!echecsFinaux.length && version && Number.isFinite(ageBuildHeures) === false) echecs.push("buildDate absent de version.json");
 
-const verdict = echecs.length === 0 ? "VERT" : "ROUGE";
+/* v9 (2026-11-27) — verdict HORS-LIGNE-CONNUE : arrêt du churn rouge, alarme conservée.
+ * Signatures de « production ABSENTE » (aucun runtime — pas une dégradation) :
+ * version.json illisible ET tous les endpoints en échec le sont avec 404/ERR
+ * uniquement. Un build déployé sert TOUJOURS /version.json + /api/health — leur
+ * absence totale signifie « aucune app servie », état documenté BLOCKED
+ * (issue #163 : runtime de production absent). Dans cet état, ROUGE à chaque
+ * tick n'apporte aucune information nouvelle : l'issue d'alarme (label
+ * surveillance-prod) reste OUVERTE et mise à jour, mais le run sort VERT avec
+ * une notice honnête — sans JAMAIS prétendre que la production est saine.
+ * ROUGE reste réservé aux vraies dégradations (prod qui RÉPOND mais mal :
+ * 5xx persistant, TTFB, auth cassée, version lisible + routes manquantes,
+ * livraison bloquée). Dès que la production redevient joignable avec un
+ * runtime, ce verdict disparaît et le cycle normal (VERT→clôture #160 /
+ * ROUGE→escalade) reprend. */
+const echecsAbsence = echecsFinaux.length > 0 && echecsFinaux.every((r) => r.statut === "ERR" || r.statut === 404);
+const prodAbsente = !version && echecsAbsence;
+const verdict = prodAbsente ? "HORS-LIGNE-CONNUE" : echecs.length === 0 ? "VERT" : "ROUGE";
 const horodatage = new Date().toISOString();
 
 console.log(`=== SURVEILLANCE SYNTHÉTIQUE PROD — ${horodatage} — verdict ${verdict} ===`);
@@ -244,6 +260,9 @@ const lignes = resultats.map((r) => `| ${r.ok ? "✅" : "❌"} | \`${r.chemin}\`
 const md = [
   `## Surveillance production — ${horodatage} — **${verdict}**`,
   "",
+  prodAbsente
+    ? `**🛑 Production HORS LIGNE — état BLOCKED connu (aucun runtime ne sert l'app, cf. issue #163).** L'issue d'alarme reste ouverte et ce corps est mis à jour à chaque tick (anti-spam) ; le run est VERT avec notice pour arrêter le churn rouge — cela ne signifie JAMAIS que la production est saine. ROUGE ne reprendra qu'en cas de vraie dégradation d'une prod qui répond.`
+    : "",
   retestEffectue
     ? `_Tolérance post-swap (it.32) : re-test unique après ${RETEST_DELAY_MS / 1000} s — ${retestAbsorbe ? "transitoire absorbé, verdict VERT" : "défaillance PERSISTANTE, verdict ROUGE"}._`
     : "",
@@ -260,7 +279,13 @@ const md = [
 ].join("\n");
 await import("node:fs").then((fs) => fs.writeFileSync("results.md", md, "utf8"));
 
-if (verdict === "ROUGE") {
+/* Sortie machine du verdict pour le workflow (conditions d'étapes). */
+const sortie = process.env.GITHUB_OUTPUT;
+if (sortie) await import("node:fs").then((fs) => fs.appendFileSync(sortie, `verdict=${verdict}\n`, "utf8"));
+
+if (verdict === "HORS-LIGNE-CONNUE") {
+  console.warn("PRODUCTION ABSENTE (version.json illisible + tous les échecs en 404/ERR) — état BLOCKED connu (issue #163) : run VERT avec notice, issue d'alarme maintenue ouverte. NE signifie PAS que la production est saine.");
+} else if (verdict === "ROUGE") {
   console.error("ÉCHECS:\n" + echecs.map((e) => " - " + e).join("\n"));
   process.exit(1);
 }
