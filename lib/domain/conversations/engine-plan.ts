@@ -9,7 +9,7 @@ import { safeEmitter } from "./stream-events";
 import { detectExplicitToolIntent, type TurnIntent } from "./engine-intent";
 import type { ToolCatalogEntry } from "./engine-tools";
 import type { ConversationApproval, ConversationArtifact, ConversationRun, RunStep } from "./types";
-import { INTERNAL_ACTION_TOOLS } from "@/lib/agents/approval-policy";
+import { INTERNAL_ACTION_TOOLS, OUTILS_INTERNES_NIVEAU_ELEVE } from "@/lib/agents/approval-policy";
 import { recordRunOutcome } from "@/lib/ai/auto-improvement";
 import { preferFreeForVisibleAnswers } from "@/lib/ai/response-quality";
 import { generate, generateStream } from "@/lib/ai/router";
@@ -597,14 +597,19 @@ export async function runPlanTurn(ctx: TurnContext): Promise<ConversationTurnRes
 
     let toolName = planned.toolName ?? undefined;
     const risk = toolEntry?.risk ?? "low";
-    // OUTILS INTERNES (directive 10-10) : la génération d'image/vidéo/audio,
-    // les fichiers, mémoires et automatisations Gen3ia ne demandent JAMAIS
-    // d'approbation — même si le planificateur ou un risque résiduel les
-    // marque sensibles. La validation ne concerne que les apps externes non
-    // connectées et les actions manipulant des secrets utilisateur.
+    // OUTILS INTERNES (directive 10-10 amendée v2.1) : la génération
+    // d'image/vidéo/audio, les fichiers, mémoires et automatisations Gen3ia
+    // ne demandent PAS d'approbation — même si le planificateur ou un risque
+    // résiduel les marque sensibles. EXCEPTION (audit P1, niveau ÉLEVÉ) :
+    // file.delete / schedule.delete / workflow.delete / email.send /
+    // terminal.run restent internes mais exigent une confirmation humaine
+    // explicite (irréversible, effet externe réel ou commande arbitraire).
     const internalTool = toolName ? INTERNAL_ACTION_TOOLS.has(toolName) : false;
+    const interneNiveauEleve = toolName
+      ? OUTILS_INTERNES_NIVEAU_ELEVE.has(toolName)
+      : false;
     let sensitive = internalTool
-      ? false
+      ? interneNiveauEleve
       : planned.sensitive === true || (toolName ? stepRequiresApproval(risk) : false);
 
     // APPROBATION CONDITIONNELLE (demande utilisateur) : quand l'app externe

@@ -109,6 +109,15 @@ export interface DatasetOptions {
 export interface TrainingSample {
   text: string;
   label: string;
+  /**
+   * GROUPE DE PROVENANCE (vague post-audit v2.1) : identifiant de la source
+   * sous-jacente (bilingual_pair_id, dedup_hash, texte canonique du dataset).
+   * Les échantillons d'un même groupe sont répartis ENSEMBLE en train OU en
+   * test par le trainer — jamais un reformulé en train et son original en
+   * test (fuite qui surestimerait la généralisation). Absent : l'échantillon
+   * est son propre groupe (comportement historique, même permutation).
+   */
+  source?: string;
 }
 
 /** Jeu de données équilibré + statistiques par label. */
@@ -219,7 +228,9 @@ export function buildDatasetFromCorpus(
     const deja = compteur[label] ?? 0;
     if (deja >= maxParLabel) continue;
     compteur[label] = deja + 1;
-    samples.push({ text: phrase, label });
+    // Groupe de provenance = la phrase elle-même : les doublons exacts du
+    // corpus ne peuvent jamais chevaucher train et test.
+    samples.push({ text: phrase, label, source: `corpus:${phrase}` });
   }
 
   if (opts.inclureSeed) {
@@ -228,7 +239,7 @@ export function buildDatasetFromCorpus(
       const deja = compteur[exemple.label] ?? 0;
       if (deja >= maxParLabel) continue;
       compteur[exemple.label] = deja + 1;
-      samples.push({ ...exemple });
+      samples.push({ ...exemple, source: "seed" });
     }
   }
 

@@ -1,0 +1,479 @@
+{
+  "dateA": "2026-11-27T18:07:19.352Z",
+  "jeu": {
+    "pairesApprentissage": 17,
+    "epreuves": 30
+  },
+  "parametres": {
+    "seuilAppariement": 0.34,
+    "seuilTrigrammes": 0.45,
+    "poidsFlou": 0.65
+  },
+  "avant": {
+    "tauxGlobal": 0.9,
+    "parFamille": [
+      {
+        "famille": "rappel-exact",
+        "reussis": 8,
+        "total": 8,
+        "taux": 1,
+        "scoreMoyen": 18.9519
+      },
+      {
+        "famille": "reformulation",
+        "reussis": 3,
+        "total": 6,
+        "taux": 0.5,
+        "scoreMoyen": 3.1313
+      },
+      {
+        "famille": "memoire-interference",
+        "reussis": 4,
+        "total": 4,
+        "taux": 1,
+        "scoreMoyen": 18.871
+      },
+      {
+        "famille": "rejet-calibre",
+        "reussis": 8,
+        "total": 8,
+        "taux": 1,
+        "scoreMoyen": 0
+      },
+      {
+        "famille": "langue-garde",
+        "reussis": 4,
+        "total": 4,
+        "taux": 1,
+        "scoreMoyen": 0
+      }
+    ],
+    "epreuves": [
+      {
+        "id": "r1",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 18.0764
+      },
+      {
+        "id": "r2",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 19.1142
+      },
+      {
+        "id": "r3",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 18.7951
+      },
+      {
+        "id": "r4",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 19.0738
+      },
+      {
+        "id": "r5",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 20.2326
+      },
+      {
+        "id": "r6",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 18.5076
+      },
+      {
+        "id": "r7",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 18.3282
+      },
+      {
+        "id": "r8",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 19.487
+      },
+      {
+        "id": "f1",
+        "famille": "reformulation",
+        "reussi": false,
+        "score": 0,
+        "echec": "aucune réponse du cortex (attendu : rappel)"
+      },
+      {
+        "id": "f2",
+        "famille": "reformulation",
+        "reussi": false,
+        "score": 0,
+        "echec": "aucune réponse du cortex (attendu : rappel)"
+      },
+      {
+        "id": "f3",
+        "famille": "reformulation",
+        "reussi": false,
+        "score": 0,
+        "echec": "aucune réponse du cortex (attendu : rappel)"
+      },
+      {
+        "id": "f4",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 2.7986
+      },
+      {
+        "id": "f5",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 3.3099
+      },
+      {
+        "id": "f6",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 3.2854
+      },
+      {
+        "id": "m1",
+        "famille": "memoire-interference",
+        "reussi": true,
+        "score": 17.915
+      },
+      {
+        "id": "m2",
+        "famille": "memoire-interference",
+        "reussi": true,
+        "score": 18.842
+      },
+      {
+        "id": "m3",
+        "famille": "memoire-interference",
+        "reussi": true,
+        "score": 18.4944
+      },
+      {
+        "id": "m4",
+        "famille": "memoire-interference",
+        "reussi": true,
+        "score": 20.2326
+      },
+      {
+        "id": "x1",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x2",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x3",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x4",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x5",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x6",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x7",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x8",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "l1",
+        "famille": "langue-garde",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "l2",
+        "famille": "langue-garde",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "l3",
+        "famille": "langue-garde",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "l4",
+        "famille": "langue-garde",
+        "reussi": true,
+        "score": 0
+      }
+    ]
+  },
+  "apres": {
+    "tauxGlobal": 1,
+    "parFamille": [
+      {
+        "famille": "rappel-exact",
+        "reussis": 8,
+        "total": 8,
+        "taux": 1,
+        "scoreMoyen": 18.9519
+      },
+      {
+        "famille": "reformulation",
+        "reussis": 6,
+        "total": 6,
+        "taux": 1,
+        "scoreMoyen": 2.4992
+      },
+      {
+        "famille": "memoire-interference",
+        "reussis": 4,
+        "total": 4,
+        "taux": 1,
+        "scoreMoyen": 18.871
+      },
+      {
+        "famille": "rejet-calibre",
+        "reussis": 8,
+        "total": 8,
+        "taux": 1,
+        "scoreMoyen": 0
+      },
+      {
+        "famille": "langue-garde",
+        "reussis": 4,
+        "total": 4,
+        "taux": 1,
+        "scoreMoyen": 0
+      }
+    ],
+    "epreuves": [
+      {
+        "id": "r1",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 18.0764
+      },
+      {
+        "id": "r2",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 19.1142
+      },
+      {
+        "id": "r3",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 18.7951
+      },
+      {
+        "id": "r4",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 19.0738
+      },
+      {
+        "id": "r5",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 20.2326
+      },
+      {
+        "id": "r6",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 18.5076
+      },
+      {
+        "id": "r7",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 18.3282
+      },
+      {
+        "id": "r8",
+        "famille": "rappel-exact",
+        "reussi": true,
+        "score": 19.487
+      },
+      {
+        "id": "f1",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 1.7055
+      },
+      {
+        "id": "f2",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 1.7055
+      },
+      {
+        "id": "f3",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 1.9175
+      },
+      {
+        "id": "f4",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 2.9488
+      },
+      {
+        "id": "f5",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 3.4325
+      },
+      {
+        "id": "f6",
+        "famille": "reformulation",
+        "reussi": true,
+        "score": 3.2854
+      },
+      {
+        "id": "m1",
+        "famille": "memoire-interference",
+        "reussi": true,
+        "score": 17.915
+      },
+      {
+        "id": "m2",
+        "famille": "memoire-interference",
+        "reussi": true,
+        "score": 18.842
+      },
+      {
+        "id": "m3",
+        "famille": "memoire-interference",
+        "reussi": true,
+        "score": 18.4944
+      },
+      {
+        "id": "m4",
+        "famille": "memoire-interference",
+        "reussi": true,
+        "score": 20.2326
+      },
+      {
+        "id": "x1",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x2",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x3",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x4",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x5",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x6",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x7",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "x8",
+        "famille": "rejet-calibre",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "l1",
+        "famille": "langue-garde",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "l2",
+        "famille": "langue-garde",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "l3",
+        "famille": "langue-garde",
+        "reussi": true,
+        "score": 0
+      },
+      {
+        "id": "l4",
+        "famille": "langue-garde",
+        "reussi": true,
+        "score": 0
+      }
+    ]
+  },
+  "deltaEpreuves": [
+    {
+      "id": "f1",
+      "famille": "reformulation",
+      "avant": false,
+      "apres": true
+    },
+    {
+      "id": "f2",
+      "famille": "reformulation",
+      "avant": false,
+      "apres": true
+    },
+    {
+      "id": "f3",
+      "famille": "reformulation",
+      "avant": false,
+      "apres": true
+    }
+  ]
+}

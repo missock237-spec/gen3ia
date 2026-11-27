@@ -38,6 +38,9 @@ const TOOL_LABELS: Record<string, string> = {
   "dev.fmt": "Formatage et encodages",
   "dev.regex": "Testeur d'expressions régulières",
   "artefacts.audit": "Audit des artefacts",
+  "database.query": "Requête base de données (lecture)",
+  "task.monitor": "Surveillance des tâches du cerveau",
+  "agent.evaluate": "Évaluation des capacités d'un agent",
   // it.58 : voice.list / phone.call retirés (fantômes — exécuteurs externes
   // retirés de la plateforme).
   "code.execute": "Exécution de code",

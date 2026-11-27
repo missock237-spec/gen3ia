@@ -119,6 +119,11 @@ import { terminalGuideTool } from "@/lib/tools/agent-suite/terminal-guide";
 import { contentPackageTool } from "@/lib/tools/agent-suite/content-package";
 import { knowledgeGraphTool } from "@/lib/tools/agent-suite/knowledge-graph";
 import { decisionAnalyzeTool } from "@/lib/tools/agent-suite/decision-analyze";
+// Vague post-audit v2.1 — nouveaux outils prioritaires de l'audit outils §3
+// (réels, bout en bout : exécuteur + sécurité + catalogue + libellé FR).
+import { databaseQueryTool } from "@/lib/tools/database/query";
+import { taskMonitorTool } from "@/lib/tools/monitoring/task-monitor";
+import { agentEvaluateTool } from "@/lib/tools/agent-suite/agent-evaluate";
 
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -268,5 +273,12 @@ export function createDefaultToolRegistry(): ToolRegistry {
   // de la plateforme (comme github.create_repository) ; sans token, l'outil
   // n'est ni enregistré ni annoncé au planner.
   if (process.env.GITHUB_TOKEN) registry.register(buildAutofixTool);
+  // Vague post-audit v2.1 — TOUJOURS enregistrés (aucune dépendance externe
+  // requise) : database.query lit une base SQLite locale en lecture seule
+  // (échec honnête si node:sqlite manque), task.monitor lit l'état réel des
+  // tâches d'entraînement, agent.evaluate audite les trois registres.
+  registry.register(databaseQueryTool);
+  registry.register(taskMonitorTool);
+  registry.register(agentEvaluateTool);
   return registry;
 }

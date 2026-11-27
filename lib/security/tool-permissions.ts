@@ -227,6 +227,19 @@ const TOOL_SECURITY: Record<string, ToolSecurityDefinition> = {
   // Audit des artefacts multi-conversations : lecture + modification avec
   // historique de versions — même convention qu'artifact.create.
   "artefacts.audit": { name: "artefacts.audit", risk: "write", requiredPermissions: ["tool.read", "tool.write"], filesystemRead: true, filesystemWrite: true },
+
+  // v2.1 (2026-11-27) — VAGUE POST-AUDIT : nouveaux outils prioritaires
+  // (audit outils §3). Lecture pure pour les trois — aucun réseau, aucune
+  // écriture ; database.query lit un fichier SQLite local (filesystemRead).
+  // Requête SQLite LOCALE en lecture seule (node:sqlite, SELECT/WITH
+  // uniquement, LIMIT plafonné) : lecture de fichier + tool.read.
+  "database.query": { name: "database.query", risk: "read", requiredPermissions: ["tool.read", "file.read"], filesystemRead: true },
+  // Surveillance de l'état réel des tâches d'entraînement (job neuronal +
+  // boucle d'auto-apprentissage) : lecture pure en mémoire/état persisté.
+  "task.monitor": { name: "task.monitor", risk: "read", requiredPermissions: ["tool.read"] },
+  // Évaluation de conformité d'une liste d'outils contre les trois registres
+  // canoniques : lecture pure, aucun effet de bord.
+  "agent.evaluate": { name: "agent.evaluate", risk: "read", requiredPermissions: ["tool.read"] },
 };
 
 export function getToolSecurityDefinition(toolName: string): ToolSecurityDefinition { const definition = TOOL_SECURITY[toolName]; if (!definition) throw new Error(`Unknown tool security definition: ${toolName}`); return definition; }

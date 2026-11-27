@@ -175,4 +175,9 @@ export const GEN3IA_TOOLS: Gen3iaToolDefinition[] = [
   { name: "dev.fmt", description: "Formater et transformer des données en mémoire : JSON, Base64, hash (SHA-256/MD5), encodage/décodage d'URL.", risk: "read", permission: "tool.read", sideEffect: false },
   { name: "dev.regex", description: "Tester une expression régulière contre un texte : correspondances réelles, groupes capturés, validation — sans exécution de code.", risk: "read", permission: "tool.read", sideEffect: false },
   { name: "artefacts.audit", description: "Auditer les créations de gen3 et les apports de l'utilisateur (toutes conversations) : lister, lire, modifier avec historique de versions.", risk: "write", permission: "tool.write", sideEffect: true },
+  // Vague post-audit v2.1 — nouveaux outils prioritaires (audit outils §3),
+  // réels et câblés bout en bout (exécuteur + sécurité + libellé FR).
+  { name: "database.query", description: "Exécuter une requête SELECT/WITH réelle sur une base SQLite locale (lecture seule : LIMIT plafonné, paramètres liés, lignes réelles renvoyées).", risk: "read", permission: "file.read", sideEffect: false },
+  { name: "task.monitor", description: "Consulter l'état réel des tâches de longue durée du cerveau : job d'entraînement neuronal (statut, progression, accuracy) et boucle d'auto-apprentissage (régime, cycles, domaines maîtrisés).", risk: "read", permission: "tool.read", sideEffect: false },
+  { name: "agent.evaluate", description: "Évaluer une liste d'outils contre les trois registres réels (exécution, catalogue planificateur, sécurité) : statut par outil, score de couverture et recommandations de correction.", risk: "read", permission: "tool.read", sideEffect: false },
 ];

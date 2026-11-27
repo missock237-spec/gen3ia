@@ -5,7 +5,7 @@ vi.mock("@/lib/integrations/composio/connections", () => ({
 }));
 
 import { listHubConnections } from "@/lib/integrations/composio/connections";
-import { selectApprovalRequiredSteps, stepRequiresHumanApproval } from "./approval-policy";
+import { niveauRisqueOutil, selectApprovalRequiredSteps, stepRequiresHumanApproval } from "./approval-policy";
 import { resetConnectedAppsCache } from "@/lib/security/connected-apps";
 
 const listHubConnectionsMock = vi.mocked(listHubConnections);
@@ -82,11 +82,45 @@ describe("selectApprovalRequiredSteps — règle utilisateur (app connectée = a
       { ...baseStep, toolName: "video.revise", input: { projectId: "p1" } },
       { ...baseStep, toolName: "voice.speak", input: { text: "bonjour" } },
       { ...baseStep, toolName: "media.analyze", input: {} },
-      { ...baseStep, toolName: "file.delete", input: {} },
-      { ...baseStep, toolName: "email.send", input: {} },
     ];
     const approvalSteps = await selectApprovalRequiredSteps("user-1", steps);
     expect(approvalSteps).toHaveLength(0);
+  });
+
+  it("AMENDEMENT v2.1 (niveau ÉLEVÉ) : suppression, envoi émis et commande arbitraire exigent la confirmation", async () => {
+    // Audit externe P1 : file.delete / schedule.delete / workflow.delete
+    // (irréversibles), email.send (effet externe réel), terminal.run
+    // (commande arbitraire) — confirmation humaine même « outil interne ».
+    const steps = [
+      { ...baseStep, toolName: "file.delete", input: {} },
+      { ...baseStep, toolName: "schedule.delete", input: {} },
+      { ...baseStep, toolName: "workflow.delete", input: {} },
+      { ...baseStep, toolName: "email.send", input: {} },
+      { ...baseStep, toolName: "terminal.run", input: {} },
+    ];
+    const approvalSteps = await selectApprovalRequiredSteps("user-1", steps);
+    expect(approvalSteps.map((step) => step.toolName).sort()).toEqual([
+      "email.send",
+      "file.delete",
+      "schedule.delete",
+      "terminal.run",
+      "workflow.delete",
+    ]);
+    for (const name of ["file.delete", "schedule.delete", "workflow.delete", "email.send", "terminal.run"]) {
+      await expect(stepRequiresHumanApproval("user-1", name, {})).resolves.toBe(true);
+    }
+  });
+
+  it("AMENDEMENT v2.1 : les créations internes restent directes (niveau MOYEN)", async () => {
+    const steps = [
+      { ...baseStep, toolName: "file.create", input: {} },
+      { ...baseStep, toolName: "schedule.create", input: {} },
+    ];
+    const approvalSteps = await selectApprovalRequiredSteps("user-1", steps);
+    expect(approvalSteps).toHaveLength(0);
+    expect(niveauRisqueOutil("file.create")).toBe("moyen");
+    expect(niveauRisqueOutil("file.delete")).toBe("eleve");
+    expect(niveauRisqueOutil("web.search")).toBe("faible");
   });
 
   it("ignore les étapes sans effet de bord", async () => {

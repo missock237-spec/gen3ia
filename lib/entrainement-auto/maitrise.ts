@@ -536,6 +536,9 @@ export interface ResultatEntrainementDomaine {
     epoques?: number;
     accuracyTrain?: number;
     accuracyTest?: number;
+    /** Précision sur la réserve de validation tenue à l'écart (vague
+     * post-audit : mesure de maîtrise sans aucune donnée entraînée). */
+    accuracyReserve?: number;
     dureeMs?: number;
   };
   cerveauSauvegarde: boolean;
@@ -549,9 +552,14 @@ export const UNITES_VALIDATION_MIN = 12;
  *  - langage   : rétention du cortex sur la réserve de validation (12..60
  *                paires tenues à l'écart) ;
  *  - intention : entraînement SNN supervisé (plasticité réelle) dont la
- *                précision de TEST est mesurée sur un jeu jamais vu par le
- *                trainer (testRatio 0.2) ; la réserve externe est fusionnée
- *                au lot pour donner au trainer assez de matière.
+ *                MAÎTRISE est mesurée sur la réserve de validation tenue à
+ *                l'ÉCART (vague post-audit v2.1) — la réserve n'est plus
+ *                refusionnée au lot d'entraînement : elle ne participe à
+ *                aucune passe de plasticité, la précision de maîtrise est
+ *                donc une précision de GÉNÉRALISATION réelle, pas un
+ *                rappel de données partiellement entraînées. La précision
+ *                interne du trainer (accuracyTest du split du lot) reste
+ *                consignée dans `detail.accuracyTest` à titre de comparaison.
  * Le cerveau est sauvegardé (persistance synapses + cortex + état v2).
  */
 export async function entrainerEtEvaluerDomaine(
@@ -630,7 +638,13 @@ export async function entrainerEtEvaluerDomaine(
       minValide: UNITES_VALIDATION_MIN,
       maxValide: 120,
     });
-    const lot = [...entrainement, ...validation].slice(0, maxEchantillonsParCycle);
+    // MAÎTRISE SUR LA RÉSERVE TENUE À L'ÉCART (vague post-audit v2.1) :
+    // l'ancien code refusionnait la réserve au lot d'entraînement — une
+    // partie de la « validation » était donc entraînée, et l'accuracy de
+    // maîtrise surestimait la généralisation. Désormais le lot = matière
+    // d'entraînement SEULE ; la réserve n'est JAMAIS entraînée et sert de
+    // mesure de maîtrise explicite.
+    const lot = entrainement.slice(0, maxEchantillonsParCycle);
     resultat.unitesValidation = validation.length;
     if (lot.length > 0) {
       const entraineur = new NeuralTrainer(rt.reseau, rt.espace, rt.veille, rt.noyau);
@@ -640,12 +654,23 @@ export async function entrainerEtEvaluerDomaine(
       resultat.detail.accuracyTrain = rapport.accuracyTrain;
       resultat.detail.accuracyTest = rapport.accuracyTest;
       resultat.detail.dureeMs = rapport.dureeMs;
-      // Précision réelle mesurée par le trainer sur son jeu de test (jamais
-      // entraîné). La validité exige en plus assez d'unités de validation.
-      const valide = validation.length >= UNITES_VALIDATION_MIN;
+      // Précision de maîtrise : mesurée sur la réserve (jamais entraînée),
+      // avec le même protocole que le trainer (aucune plasticité).
+      const precisionReserve =
+        validation.length > 0
+          ? entraineur.evaluerEchantillons(validation, 4)
+          : null;
+      if (precisionReserve !== null) {
+        resultat.detail.accuracyReserve = precisionReserve;
+      }
+      // La validité exige assez d'unités de validation ET une mesure réelle
+      // de réserve (sinon l'accuracy interne du trainer est consignée en
+      // comparison, non comme maîtrise).
+      const valide =
+        validation.length >= UNITES_VALIDATION_MIN && precisionReserve !== null;
       resultat.evaluation = {
         dateA: maintenant(),
-        accuracy: rapport.accuracyTest,
+        accuracy: precisionReserve ?? rapport.accuracyTest,
         unites: validation.length,
         valide,
       };

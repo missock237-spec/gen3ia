@@ -4799,3 +4799,27 @@ sous requireUser — test complet nécessitant le compte app du propriétaire) ;
   limites, thèmes), /status 200 (encart SLA), /chat 200 (punaise SSR
   complète), /faq 200 (+2 questions), sitemap /capacites, version.json =
   e256e55. Rapport : docs/rapports/rapport-job-478451-2026-11-02-0050.md.
+
+## 2026-11-27 18:20 (+00:00) — v2.1 : vague d'amélioration post-audits (cortex flou mesuré, anti-fuite train/test, maîtrise sur réserve, HITL 3 niveaux, 3 outils réels, labo indépendant)
+
+- CONSTAT VÉRIFIÉ (audits externes statiques → vérifiés ligne à ligne avant application) :
+  cortex langagier en égalité exacte de token (aucune généralisation morphologique hors racineLegere) ;
+  trainer:202-217/287-301 split individuel graine 2024 (paires bilingues/doublons pouvaient chevaucher train/test) ;
+  maitrise.ts:633 réserve de validation REFUSIONNÉE au lot d'entraînement (maîtrise surestimée) ;
+  INTERNAL_ACTION_TOOLS auto-approuvait file.delete/schedule.delete/workflow.delete/email.send/terminal.run (audit P1) ;
+  aucun des 15 outils candidats de l'audit outils n'existait ; aucun labo A/B mesuré.
+- LIVRÉ : (1) généralisation morphologique par trigrammes (Dice ≥ 0,45, poids 0,65) + garde it.v21-f
+  (évidence floue seule ⇒ couvre ≥ ½ tokens de la paire — faux positif frequence~consequence capturé par la suite et corrigé)
+  + definirModeFlou pour mesure A/B ; (2) separerParGroupes (source = bilingual_pair_id/dedup_hash/texte ; sans source,
+  permutation identique à l'ancien) + tag provenance dans chargerEchantillonsDomaines/buildDatasetFromCorpus ;
+  maîtrise mesurée sur la réserve jamais entraînée (detail.accuracyReserve) ; (3) OUTILS_INTERNES_NIVEAU_ELEVE
+  (5 outils → confirmation humaine) + niveauRisqueOutil 3 niveaux ; (4) database.query (node:sqlite lecture seule,
+  LIMIT plafonné, échec honnête), task.monitor (état réel), agent.evaluate (conformité 3 registres) — 11 touches
+  de câblage chacune (exécuteur+sécurité+catalogue+labels+console+garde+tests) ; (5) labo indépendant
+  (jeu-evaluation.ts : 17 paires à la main, 30 épreuves, 5 familles) + scripts/eval-labo.ts + rapport commis
+  assets/evaluation/rapport-labo-v2.1.json : AVANT 90,0 % → APRÈS 100 % (reformulation 50→100 %, rejet et langue 100 % dans les deux modes) ;
+  (6) ondes : signatureSemantique (centroïde trigrammes, non activée par défaut) + attribuerCanauxSansCollision
+  (18 domaines Gen3 → canaux tous distincts, testé).
+- COORDINATION : session autonome concurrente (Job 478451, PHASE 1 GTIS) active sur job.ts/model-training-manager.ts
+  — axes orchestration LUI LAISSÉS (arbre intact), banc LOT 7 + racineLegere réutilisés sans duplication.
+- Gates : tsc 0, eslint 0, suite 7 937 verts / 0 échec (14 skippés), labo A/B 90→100 %, garde CI (7 invariants + section v2.1) verte.

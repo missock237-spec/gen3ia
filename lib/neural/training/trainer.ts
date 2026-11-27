@@ -113,6 +113,9 @@ export interface RapportDomaines {
   parDomaine: Record<string, number>;
   dureeMs: number;
   startedAt: string;
+  /** Groupes de provenance découverts / affectés au test (anti-fuite). */
+  groupesTotal?: number;
+  groupesTest?: number;
 }
 
 /** Rapport d'entraînement (données 100 % réelles). */
@@ -131,6 +134,10 @@ export interface TrainingReport {
   dureeMs: number;
   /** Date ISO de début. */
   startedAt: string;
+  /** Groupes de provenance découverts / affectés au test (anti-fuite,
+   * vague post-audit : un groupe entier va en train OU en test). */
+  groupesTotal?: number;
+  groupesTest?: number;
 }
 
 /** Options d'entraînement. */
@@ -148,6 +155,61 @@ export interface TrainingOptions {
   testRatio?: number;
   /** Callback de progression (par époque). */
   onProgress?: (rapport: { epoch: number; accuracy: number }) => void;
+}
+
+/**
+ * SÉPARATION TRAIN/TEST PAR GROUPE DE PROVENANCE (vague post-audit v2.1).
+ *
+ * L'ancien découpage mélangeait les échantillons INDIVIDUELLEMENT puis
+ * tronquait : deux reformulations d'une même source (paire bilingue FR/EN,
+ * doublon de contenu, variantes d'une même instruction) pouvaient finir
+ * l'une en train et l'autre en test — l'accuracy de test mesurait alors de
+ * la MÉMOIRE, pas de la généralisation. Désormais les GROUPES
+ * (échantillon.source ; sans source : l'échantillon seul) sont mélangés
+ * avec la même graine 2024 puis découpés : un groupe entier va en train OU
+ * en test, jamais les deux. Sans aucune `source` fournie, la permutation
+ * est IDENTIQUE à l'ancien comportement (même graine, même Fisher-Yates).
+ */
+export function separerParGroupes(
+  samples: TrainingSample[],
+  testRatio: number,
+): {
+  train: TrainingSample[];
+  test: TrainingSample[];
+  groupesTotal: number;
+  groupesTest: number;
+} {
+  const groupes = new Map<string, TrainingSample[]>();
+  let anonymes = 0;
+  for (const echantillon of samples) {
+    const cle = echantillon.source ?? `__sans:${anonymes++}`;
+    const liste = groupes.get(cle);
+    if (liste) liste.push(echantillon);
+    else groupes.set(cle, [echantillon]);
+  }
+  const cles = [...groupes.keys()];
+  const rng = createRng(2024);
+  for (let i = cles.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = cles[i];
+    cles[i] = cles[j];
+    cles[j] = tmp;
+  }
+  const nbGroupesTest = Math.max(
+    cles.length >= 10 ? 1 : 0,
+    Math.floor(cles.length * testRatio),
+  );
+  const clesTest = new Set(
+    cles.slice(cles.length - Math.min(nbGroupesTest, cles.length)),
+  );
+  const train: TrainingSample[] = [];
+  const test: TrainingSample[] = [];
+  for (const cle of cles) {
+    const groupe = groupes.get(cle)!;
+    if (clesTest.has(cle)) test.push(...groupe);
+    else train.push(...groupe);
+  }
+  return { train, test, groupesTotal: cles.length, groupesTest: clesTest.size };
 }
 
 /**
@@ -199,22 +261,13 @@ export class NeuralTrainer {
     const startedAt = new Date().toISOString();
     const debut = Date.now();
 
-    // Shuffle seedé (adaptation (a)) : découpe train/test reproductible.
-    const melange = [...samples];
-    const rng = createRng(2024);
-    for (let i = melange.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const tmp = melange[i];
-      melange[i] = melange[j];
-      melange[j] = tmp;
-    }
-
-    const nbTest = Math.max(
-      samples.length >= 10 ? 1 : 0,
-      Math.floor(samples.length * testRatio),
+    // Découpe train/test PAR GROUPE DE PROVENANCE (anti-fuite, vague
+    // post-audit) : reproductible (graine 2024) — un groupe entier (paire
+    // bilingue, doublon, même source) va en train OU en test, jamais les deux.
+    const { train, test, groupesTotal, groupesTest } = separerParGroupes(
+      samples,
+      testRatio,
     );
-    const train = melange.slice(0, melange.length - nbTest);
-    const test = melange.slice(melange.length - nbTest);
 
     const history: Array<{ epoch: number; accuracy: number }> = [];
     let accuracyTrain = 0;
@@ -262,6 +315,8 @@ export class NeuralTrainer {
       history,
       dureeMs: Date.now() - debut,
       startedAt,
+      groupesTotal,
+      groupesTest,
     };
   }
 
@@ -283,22 +338,12 @@ export class NeuralTrainer {
     const startedAt = new Date().toISOString();
     const debut = Date.now();
 
-    // Shuffle seedé — même graine que train() : reproductible.
-    const melange = [...samples];
-    const rng = createRng(2024);
-    for (let i = melange.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      const tmp = melange[i];
-      melange[i] = melange[j];
-      melange[j] = tmp;
-    }
-
-    const nbTest = Math.max(
-      samples.length >= 10 ? 1 : 0,
-      Math.floor(samples.length * testRatio),
+    // Découpe PAR GROUPE DE PROVENANCE — même graine que train() :
+    // reproductible, un groupe entier va en train OU en test (anti-fuite).
+    const { train, test, groupesTotal, groupesTest } = separerParGroupes(
+      samples,
+      testRatio,
     );
-    const train = melange.slice(0, melange.length - nbTest);
-    const test = melange.slice(melange.length - nbTest);
 
     // Répartition honnête par domaine (ids de dataset dérivés des labels).
     const parDomaine: Record<string, number> = {};
@@ -348,6 +393,8 @@ export class NeuralTrainer {
       parDomaine,
       dureeMs: Date.now() - debut,
       startedAt,
+      groupesTotal,
+      groupesTest,
     };
   }
 

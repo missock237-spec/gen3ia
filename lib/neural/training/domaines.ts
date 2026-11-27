@@ -496,7 +496,11 @@ export async function chargerEchantillonsDomaines(
     // des échantillons (comme les phrases d'amorçage SEED_EXAMPLES des
     // actions) — garantie que chaque pool a au moins son vocabulaire noyau.
     for (const motCle of domaine.motsCles) {
-      samples.push({ text: motCle, label });
+      samples.push({
+        text: motCle,
+        label,
+        source: `amorce:${domaine.id}:${motCle}`,
+      });
       parDomaine[domaine.id] = (parDomaine[domaine.id] ?? 0) + 1;
     }
     let pris = 0;
@@ -507,7 +511,16 @@ export async function chargerEchantillonsDomaines(
         signaturesDomaine,
       );
       if (texte.length < 3) continue;
-      samples.push({ text: texte, label });
+      // GROUPE DE PROVENANCE (anti-fuite, vague post-audit) : la paire
+      // bilingue FR/EN du même item (bilingual_pair_id) et les doublons de
+      // contenu (dedup_hash) partagent un groupe — ils iront ENSEMBLE en
+      // train ou en test, jamais séparés entre les deux jeux.
+      const sourceGroupe = `${echantillon.domain}:${
+        echantillon.metadata.bilingual_pair_id ||
+        echantillon.metadata.dedup_hash ||
+        texte
+      }`;
+      samples.push({ text: texte, label, source: sourceGroupe });
       pris += 1;
       parDomaine[domaine.id] = (parDomaine[domaine.id] ?? 0) + 1;
       parLangue[echantillon.language] = (parLangue[echantillon.language] ?? 0) + 1;

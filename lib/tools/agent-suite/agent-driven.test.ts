@@ -560,3 +560,68 @@ describe("Task 140 — console d'exécution manuelle (garde structurelle)", () =
     expect(source).toContain("allowAgentTerminal: true");
   });
 });
+
+/* ────────────────────────────────────────────────────────────────────────
+ * 10. VAGUE POST-AUDIT v2.1 — les 3 nouveaux outils prioritaires
+ *     (database.query, task.monitor, agent.evaluate) respectent les
+ *     MÊMES invariants que la suite Task 140 : aucun outil n'est ajouté
+ *     sans exécuteur + sécurité + catalogue + libellé FR.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+const VAGUE_V21_TOOLS = ["database.query", "task.monitor", "agent.evaluate"] as const;
+
+describe("Vague post-audit v2.1 — invariants des 3 nouveaux outils", () => {
+  it("enregistre les 3 outils au registre exécutable", () => {
+    const registry = createDefaultToolRegistry();
+    for (const name of VAGUE_V21_TOOLS) {
+      expect(registry.get(name), `exécuteur attendu : ${name}`).toBeDefined();
+    }
+  });
+
+  it("déclare les 3 outils au catalogue du planificateur avec une description substantielle", () => {
+    for (const name of VAGUE_V21_TOOLS) {
+      const entree = GEN3IA_TOOLS.find((t) => t.name === name);
+      expect(entree, `catalogue attendu : ${name}`).toBeDefined();
+      expect(entree!.description.length).toBeGreaterThan(20);
+      expect(["read", "write", "external", "destructive"]).toContain(entree!.risk);
+    }
+  });
+
+  it("possède une définition de sécurité réelle pour les 3 outils (authorizeTool ne lève pas)", () => {
+    const politique = { ...DEFAULT_EXECUTION_POLICY, allowedTools: ["*"], permissions: ["tool.read", "file.read"] };
+    for (const name of VAGUE_V21_TOOLS) {
+      expect(KNOWN_TOOL_SECURITY_NAMES.has(name), `sécurité attendue : ${name}`).toBe(true);
+      expect(() => getToolSecurityDefinition(name)).not.toThrow();
+      expect(() => authorizeTool(politique, name)).not.toThrow();
+    }
+  });
+
+  it("possède un libellé FR (jamais le slug brut)", () => {
+    for (const name of VAGUE_V21_TOOLS) {
+      const label = toolLabel(name);
+      expect(label.length).toBeGreaterThan(0);
+      expect(label).not.toBe(name);
+    }
+  });
+
+  it("les 3 outils sont en lecture pure : jamais INTERNAL_ACTION_TOOLS, pas de carte quand le planner les marque non sensibles (risque read)", async () => {
+    for (const name of VAGUE_V21_TOOLS) {
+      expect(INTERNAL_ACTION_TOOLS.has(name)).toBe(false);
+      // Même sémantique que les autres outils read non internes (web.search…) :
+      // le planner ne les marque pas sensibles → pas de carte de validation.
+      await expect(stepRequiresHumanApproval("user-1", name, {}, { sensitive: false })).resolves.toBe(false);
+      // Mais un plan qui les marquerait sensibles les enverrait en validation
+      // (régime « app inconnue » — ils ne sont pas des apps connectées).
+      await expect(stepRequiresHumanApproval("user-1", name, {}, { sensitive: true })).resolves.toBe(true);
+    }
+  });
+
+  it("la console d'exécution manuelle expose les 3 outils", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const source = readFileSync(join(import.meta.dirname, "../../../app/api/tools/execute/route.ts"), "utf8");
+    for (const name of VAGUE_V21_TOOLS) {
+      expect(source, `console attendue pour : ${name}`).toContain(`"${name}"`);
+    }
+  });
+});

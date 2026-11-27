@@ -224,6 +224,51 @@ export function racineLegere(token: string): string {
   return token;
 }
 
+/* ------------------------------------------------------------------ */
+/* GÉNÉRALISATION MORPHOLOGIQUE PAR TRIGRAMMES (vague post-audit v2.1)  */
+/* ------------------------------------------------------------------ */
+/**
+ * La racinisation légère (racineLegere) aligne les pluriels et verbes
+ * réguliers, mais elle ne couvre ni les FAUTES DE FRAPPE (« bonjor » vs
+ * « bonjour »), ni les morphologies irrégulières où requête et paire
+ * dérivent vers des racines différentes (« château » → chateau vs
+ * « chateaux » → chatel). Audit externe (novembre 2026) : « la
+ * représentation lexicale basée sur le hachage donne une faible
+ * généralisation sémantique » — chaque token de requête INCONNU (absent
+ * du vocabulaire indexé) est désormais rapproché de son meilleur voisin
+ * morphologique du vocabulaire (coefficient de Dice sur les trigrammes
+ * de caractères, seuil strict) et contribue au score avec un poids
+ * réduit. Déterministe : à Dice égal, le voisin lexicographiquement
+ * premier gagne. Désactivable (definirModeFlou) pour la mesure A/B du
+ * laboratoire d'évaluation — le gain est mesuré, pas supposé.
+ */
+
+/** Seuil Dice minimal pour rapprocher un token inconnu du vocabulaire. */
+export const SEUIL_TRIGRAMMES = 0.45;
+
+/** Poids de contribution d'un token rapproché par trigrammes (vs 1.0 exact). */
+export const POIDS_FLOU = 0.65;
+
+/** Trigrammes de caractères d'un token (token ≤ 2 caractères : lui-même). */
+export function trigrammesDe(token: string): Set<string> {
+  if (token.length <= 2) return new Set([token]);
+  const tri = new Set<string>();
+  for (let i = 0; i + 3 <= token.length; i++) tri.add(token.slice(i, i + 3));
+  if (tri.size === 0) tri.add(token);
+  return tri;
+}
+
+/** Coefficient de Dice entre les trigrammes de deux tokens (0..1). */
+export function similariteTrigrammes(a: string, b: string): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const ta = trigrammesDe(a);
+  const tb = trigrammesDe(b);
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let communs = 0;
+  for (const g of ta) if (tb.has(g)) communs += 1;
+  return (2 * communs) / (ta.size + tb.size);
+}
+
 /** Paire interne indexée. */
 interface PaireIndexee {
   motif: string;
@@ -323,6 +368,12 @@ export class CortexLangagierGen3 {
   private readonly clesConnues = new Set<string>();
   /** Clé de motif → poids d'usage (persistance). */
   private readonly poidsParCle = new Map<string, number>();
+  /** Index de trigrammes : trigramme → tokens (racinisés) qui le contiennent.
+   *  Alimenté à l'apprentissage ; sert au rapprochement morphologique des
+   *  tokens de requête inconnus (généralisation post-audit). */
+  private readonly indexTrigrammes = new Map<string, Set<string>>();
+  /** Rapprochement morphologique activé (désactivable pour la mesure A/B). */
+  private modeFlou = true;
 
   /**
    * Apprend des paires conversationnelles. Idempotent (les doublons de motif
@@ -406,6 +457,16 @@ export class CortexLangagierGen3 {
           this.indexTokens.set(token, liste);
         }
         liste.push(indice);
+        // Index de trigrammes (généralisation morphologique) : chaque token
+        // racinisé est cherchable par ses trigrammes de caractères.
+        for (const g of trigrammesDe(token)) {
+          let ensemble = this.indexTrigrammes.get(g);
+          if (!ensemble) {
+            ensemble = new Set();
+            this.indexTrigrammes.set(g, ensemble);
+          }
+          ensemble.add(token);
+        }
       }
       ajoutees += 1;
     }
@@ -416,6 +477,40 @@ export class CortexLangagierGen3 {
       vocabulaire: this.indexTokens.size,
       totalPaires: this.paires.length,
     };
+  }
+
+  /**
+   * Active/désactive le rapprochement morphologique (mesure A/B du
+   * laboratoire d'évaluation : gain mesuré flou actif vs inactif).
+   */
+  definirModeFlou(actif: boolean): void {
+    this.modeFlou = actif;
+  }
+
+  /**
+   * Meilleur voisin morphologique d'un token inconnu parmi le vocabulaire
+   * indexé : Dice maximal sur les trigrammes ; à Dice égal, le voisin
+   * lexicographiquement premier gagne (déterminisme). Retourne null si
+   * aucun voisin n'atteint SEUIL_TRIGRAMMES.
+   */
+  private voisinMorphologique(token: string): string | null {
+    const candidats = new Set<string>();
+    for (const g of trigrammesDe(token)) {
+      const ensemble = this.indexTrigrammes.get(g);
+      if (!ensemble) continue;
+      for (const c of ensemble) candidats.add(c);
+    }
+    let meilleur: string | null = null;
+    let meilleureSim = 0;
+    for (const cand of candidats) {
+      if (cand === token) continue;
+      const sim = similariteTrigrammes(token, cand);
+      if (sim > meilleureSim || (sim === meilleureSim && meilleur !== null && cand < meilleur)) {
+        meilleureSim = sim;
+        meilleur = cand;
+      }
+    }
+    return meilleur !== null && meilleureSim >= SEUIL_TRIGRAMMES ? meilleur : null;
   }
 
   /**
@@ -480,8 +575,16 @@ export class CortexLangagierGen3 {
     // Accumulateur paire → score brut.
     const scores = new Map<number, number>();
     const cumulLongueur = new Map<number, { req: number; ctx: number }>();
+    /** Paires touchées par un rapprochement flou → nb de tokens flous
+     *  (compte distinct des tokens exacts pour la garde de couverture). */
+    const flouParPaire = new Map<number, number>();
 
-    const accumuler = (token: string, poids: number, contexteTour: boolean): void => {
+    const accumuler = (
+      token: string,
+      poids: number,
+      contexteTour: boolean,
+      flou = false,
+    ): void => {
       const candidats = this.indexTokens.get(token);
       if (!candidats) return;
       const idf = Math.log(1 + totalPaires / candidats.length);
@@ -491,6 +594,7 @@ export class CortexLangagierGen3 {
         if (contexteTour) cumul.ctx += 1;
         else cumul.req += 1;
         cumulLongueur.set(indice, cumul);
+        if (flou) flouParPaire.set(indice, (flouParPaire.get(indice) ?? 0) + 1);
       }
     };
 
@@ -499,6 +603,19 @@ export class CortexLangagierGen3 {
     // Contexte étendu (tours N-2, N-3…) : poids décroissant, compté comme contexte.
     for (const [token, poids] of poidsHistorique) {
       accumuler(token, poids, true);
+    }
+
+    // GÉNÉRALISATION MORPHOLOGIQUE — tokens de requête INCONNUS du
+    // vocabulaire indexé : rapprochement par trigrammes (fautes de frappe,
+    // formes irrégulières), poids réduit, jamais un nombre, jamais un token
+    // court (< 4 caractères : trop ambigu). Déterministe.
+    if (this.modeFlou) {
+      for (const token of tokensRequete) {
+        if (this.indexTokens.has(token)) continue;
+        if (token.length < 4 || /^\d+([.,]\d+)?$/.test(token)) continue;
+        const voisin = this.voisinMorphologique(token);
+        if (voisin !== null) accumuler(voisin, POIDS_FLOU, false, true);
+      }
     }
 
     if (scores.size === 0) return null;
@@ -542,6 +659,14 @@ export class CortexLangagierGen3 {
       const partagés = [...paire.tokens].filter(
         (t) => tokensActifs.has(t) && nonNumérique(t),
       ).length;
+      // Couverture EFFECTIVE = tokens exacts + tokens rapprochés par
+      // trigrammes (généralisation morphologique). Les ratios stricts de
+      // couverture (couverturePaire / couvertureRequete) restent mesurés
+      // sur les tokens EXACTS seuls — un voisin flou ne peut pas faire
+      // passer une paire que la garde it.85-r jugerait hors-sujet.
+      const flouPaire = flouParPaire.get(indice) ?? 0;
+      const partagésEffectifs =
+        partagés + flouPaire;
       const requêteCourte = tokensRequete.length <= 3;
       const actifsNonNumériques = [...tokensActifs].filter(nonNumérique).length;
       // Requête « riche » = ≥ 4 tokens actifs hors nombres (calibrage 2e
@@ -587,11 +712,23 @@ export class CortexLangagierGen3 {
         (sousEnsemble &&
           (tokensPaireNonNumériques.length >= 3 ||
             (requêteCourte && tokensPaireNonNumériques.length >= 1))) ||
-        (partagés >= 2 &&
+        (partagésEffectifs >= 2 &&
           (!requêteRiche ||
             (couverturePaire >= COUVERTURE_PAIRE_MIN &&
               couvertureRequete >= COUVERTURE_REQUETE_MIN))) ||
-        (requêteCourte && partagés >= 1);
+        // it.v21-f — un rapprochement FLOU ne crée JAMAIS un match seul sur
+        // une paire qui dépasse la moitié de ses tokens. Sans AUCUN token
+        // exact, l'évidence floue doit couvrir au moins la MOITIÉ des tokens
+        // informatifs DE LA PAIRE (la connaissance rappelée) : une sonde
+        // courte « bonjor, tu es là ? » invoque légitimement la paire courte
+        // « bonjour » (1 flou / 1 token), tandis qu'une paire « cause à
+        // effet » de 6 tokens ne peut pas être réveillée par le seul voisin
+        // flou frequence~consequence (Dice 0,57 — parenté morphologique SANS
+        // lien sémantique ; cas réel mesuré : 1 flou / 6 tokens → rejeté,
+        // la voie mémorisée reprend la main).
+        (requêteCourte &&
+          (partagés >= 1 ||
+            (flouPaire >= 1 && flouPaire * 2 >= tokensPaireNonNumériques.length)));
       if (!couvertureOK) continue;
       // GARDE DE LANGUE — une paire d'une autre langue que la requête ne
       // répond QUE si son motif est posé intégralement (sous-ensemble exact) :

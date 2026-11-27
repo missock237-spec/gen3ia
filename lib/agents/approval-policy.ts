@@ -2,25 +2,55 @@ import { isExternalAppConnected, NEVER_BYPASSED_TOOLS } from "@/lib/security/con
 import type { RuntimeStep } from "@/lib/agents/runtime/types";
 
 /**
- * Politique d'approbation (directive utilisateur 10-10) :
+ * Politique d'approbation (directive utilisateur 10-10, amendée v2.1 —
+ * vague post-audit) :
  *
  *   « aucune approbation n'est demandée pour une utilisation d'un outil
  *    interne ; une validation n'est demandée que pour des actions qui
  *    manipulent des secrets utilisateurs. »
  *
- * Traduction opérationnelle :
- *   1. OUTILS INTERNES (tout ce qui opère sur l'infrastructure et les
- *      données Gen3ia de l'utilisateur — génération image/vidéo/audio,
- *      fichiers, artefacts, mémoires, automatisations, équipes d'agents,
- *      lectures web) → JAMAIS d'approbation, quel que soit le mode.
- *   2. APPS EXTERNES → régime « connecté = agir » : validation uniquement
- *      si l'app ciblée n'est PAS connectée (une app connectée a déjà été
- *      autorisée par l'utilisateur — redemander serait de la friction).
- *   3. PLANCHER INVARIANT : ads.publish, phone.call (actions externes
- *      irréversibles et payantes — pas des outils internes) et custom_api.write
- *      (écrit avec les identifiants/secrets API de l'utilisateur) passent
- *      TOUJOURS par l'humain.
+ * AMENDEMENT v2.1 (audit externe P1 : « la politique de validation humaine
+ * est trop permissive pour certaines opérations ») — classification à
+ * TROIS NIVEAUX :
+ *   - FAIBLE (lecture, recherche, analyse)             → exécution directe ;
+ *   - MOYEN  (création interne, génération média)       → exécution directe
+ *             (directive 10-10 : outils internes scopés propriétaire) ;
+ *   - ÉLEVÉ  (suppression, envoi émis, commande arbitraire) → confirmation
+ *             humaine explicite MÊME quand l'outil est « interne » : un
+ *             email envoyé depuis l'infrastructure reste reçu par une
+ *             personne extérieure ; une suppression est irréversible ; une
+ *             commande arbitraire peut tout affecter.
+ * Les planchers invariants (ads.publish, phone.call, custom_api.write)
+ * restent inchangés. Dans les missions d'agents, le lancement explicite de
+ * la mission par l'utilisateur vaut autorisation spécifique (le runtime
+ * missions garde son propre contrôle d'autonomie — autonomy-guard).
  */
+
+/** Outils INTERNES promus au niveau ÉLEVÉ par l'amendement v2.1
+ *  (confirmation humaine requise). Audit P1 : file.delete /
+ *  schedule.delete / workflow.delete (irréversibles), email.send (effet
+ *  externe réel — le message atteint une personne hors plateforme),
+ *  terminal.run (commande arbitraire sur l'infrastructure). */
+export const OUTILS_INTERNES_NIVEAU_ELEVE = new Set([
+  "file.delete",
+  "schedule.delete",
+  "workflow.delete",
+  "email.send",
+  "terminal.run",
+]);
+
+/** Classification à trois niveaux d'un outil (audit externe P1, v2.1).
+ *  - "eleve"  : destructif / effet externe / commande arbitraire →
+ *               confirmation humaine explicite (même outil interne) ;
+ *  - "moyen"  : création interne avec effet de bord scopé propriétaire ;
+ *  - "faible" : lecture, recherche, analyse → exécution directe.
+ *  Les mutations externes (composio.execute, ads.publish…) restent gérées
+ *  par autonomy-guard en plus de cette classification. */
+export function niveauRisqueOutil(toolName: string): "faible" | "moyen" | "eleve" {
+  if (OUTILS_INTERNES_NIVEAU_ELEVE.has(toolName)) return "eleve";
+  if (INTERNAL_ACTION_TOOLS.has(toolName)) return "moyen";
+  return "faible";
+}
 
 /** Outils agissant uniquement sur les données Gen3ia de l'utilisateur. */
 export const INTERNAL_ACTION_TOOLS = new Set([
@@ -94,6 +124,9 @@ export async function selectApprovalRequiredSteps(
       if (step.type !== "tool" || !(step.requiresApproval || step.sideEffect)) return null;
       const toolName = step.toolName ?? "";
       if (!toolName) return null;
+      // AMENDEMENT v2.1 : les outils internes de niveau ÉLEVÉ (suppression,
+      // envoi émis, commande arbitraire) exigent la confirmation humaine.
+      if (OUTILS_INTERNES_NIVEAU_ELEVE.has(toolName)) return step;
       if (INTERNAL_ACTION_TOOLS.has(toolName)) return null;
       if (NEVER_BYPASSED_TOOLS.has(toolName)) return step;
       const connected = await isExternalAppConnected(userId, toolName, (step.input ?? {}) as Record<string, unknown>);
@@ -110,6 +143,8 @@ export async function stepRequiresHumanApproval(
   input: Record<string, unknown>,
   options?: { sensitive?: boolean; risk?: string },
 ): Promise<boolean> {
+  // AMENDEMENT v2.1 : niveau ÉLEVÉ interne → confirmation explicite.
+  if (OUTILS_INTERNES_NIVEAU_ELEVE.has(toolName)) return true;
   if (INTERNAL_ACTION_TOOLS.has(toolName)) return false;
   if (options?.risk === "critical") return true;
   if (NEVER_BYPASSED_TOOLS.has(toolName)) return true;

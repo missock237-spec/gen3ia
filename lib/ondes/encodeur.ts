@@ -76,6 +76,108 @@ export function amplitudeMot(mot: string): number {
   return Math.min(6, 2.4 + mot.length * 0.35);
 }
 
+/* ------------------------------------------------------------------ */
+/* VAGUE POST-AUDIT v2.1 — SIGNATURE SÉMANTIQUE + CANAUX DE DOMAINE     */
+/* ------------------------------------------------------------------ */
+/**
+ * Audit externe (novembre 2026) : « la représentation des mots repose sur
+ * le hachage — deux mots sémantiquement proches n'ont pas des
+ * représentations proches » et « les domaines partagent un petit nombre de
+ * bandes porteuses → risques de collisions ». Deux réponses ADDITIVES :
+ *
+ *  1. `signatureSemantique` : la POSITION d'un mot dans le champ devient un
+ *     mélange 50/50 entre sa position de hachage (identité exacte) et le
+ *     CENTROÏDE des positions de ses trigrammes de caractères — les mots
+ *     de même famille morphologique (voiture/voitures, travail/travaux)
+ *     tombent dans des cellules voisines, sans détruire l'identité du mot
+ *     (fréquence/phase restent hashées : la carte inverse fonctionne à
+ *     l'identique). Activable via option `semantique` — NON activé par
+ *     défaut en v2.1 : l'arène visuelle reste sur la signature de hachage
+ *     (comportement inchangé, aucune régression).
+ *
+ *  2. `canalDomaine` / `attribuerCanauxSansCollision` : chaque domaine
+ *     reçoit un canal (bande × sous-canal) parmi 32 (8 bandes × 4
+ *     sous-canaux) — l'attribution sans collision garantit l'unicité
+ *     jusqu'à 32 domaines (les 18 domaines Gen3 tiennent largement).
+ */
+
+/** Trigrammes de caractères d'un mot (mot ≤ 2 caractères : lui-même). */
+function trigrammesOndes(mot: string): string[] {
+  if (mot.length <= 2) return [mot];
+  const tri: string[] = [];
+  for (let i = 0; i + 3 <= mot.length; i++) tri.push(mot.slice(i, i + 3));
+  return tri.length > 0 ? tri : [mot];
+}
+
+/**
+ * Signature d'onde SÉMANTIQUE d'un mot pour une grille `dim`×`dim` :
+ * position = mélange 50/50 (arrondi déterministe) entre la position de
+ * hachage et le centroïde des positions de ses trigrammes. Fréquence et
+ * phase : identiques à `signatureMot` (hashées — identité du mot préservée
+ * pour la carte inverse). Mêmes gardes que `signatureMot`.
+ */
+export function signatureSemantique(mot: string, dim: number): SignatureOnde {
+  const base = signatureMot(mot, dim);
+  const tri = trigrammesOndes(mot);
+  let sommeX = 0;
+  let sommeY = 0;
+  for (const g of tri) {
+    sommeX += fnv1a(g) % dim;
+    sommeY += fnv1a(`tri·${g}`) % dim;
+  }
+  const centroideX = Math.round(sommeX / tri.length);
+  const centroideY = Math.round(sommeY / tri.length);
+  const x = Math.min(dim - 1, Math.max(0, Math.round((base.x + centroideX) / 2)));
+  const y = Math.min(dim - 1, Math.max(0, Math.round((base.y + centroideY) / 2)));
+  return { x, y, frequence: base.frequence, phase: base.phase };
+}
+
+/** Nombre de bandes porteuses (bande = tranche de fréquence du champ). */
+export const NB_BANDES = 8;
+/** Nombre de sous-canaux par bande (décalage fin à l'intérieur de la bande). */
+export const SOUS_CANAUX_PAR_BANDE = 4;
+
+/**
+ * Canal brut d'un domaine : (bande, sous-canal) dérivés du hachage du nom.
+ * Déterministe ; deux domaines peuvent tomber sur le même canal brut —
+ * utiliser `attribuerCanauxSansCollision` pour l'unicité garantie.
+ */
+export function canalDomaine(domaine: string): { bande: number; sousCanal: number } {
+  const h = fnv1a(`canal·${domaine}`);
+  return { bande: h % NB_BANDES, sousCanal: Math.floor(h / NB_BANDES) % SOUS_CANAUX_PAR_BANDE };
+}
+
+/**
+ * Attribue à chaque domaine un canal UNIQUE (bande, sous-canal), de façon
+ * déterministe : les domaines sont traités en ordre lexicographique, chacun
+ * reçoit son canal brut s'il est libre, sinon le premier canal libre dans
+ * l'ordre des 32 (bande-major). Jusqu'à 32 domaines → zéro collision.
+ */
+export function attribuerCanauxSansCollision(
+  domaines: readonly string[],
+): Record<string, { bande: number; sousCanal: number }> {
+  const occupes = new Set<string>();
+  const resultat: Record<string, { bande: number; sousCanal: number }> = {};
+  for (const domaine of [...domaines].sort()) {
+    const brut = canalDomaine(domaine);
+    let canal = brut;
+    if (occupes.has(`${canal.bande}:${canal.sousCanal}`)) {
+      let trouve = false;
+      for (let bande = 0; bande < NB_BANDES && !trouve; bande++) {
+        for (let sous = 0; sous < SOUS_CANAUX_PAR_BANDE && !trouve; sous++) {
+          if (!occupes.has(`${bande}:${sous}`)) {
+            canal = { bande, sousCanal: sous };
+            trouve = true;
+          }
+        }
+      }
+    }
+    occupes.add(`${canal.bande}:${canal.sousCanal}`);
+    resultat[domaine] = canal;
+  }
+  return resultat;
+}
+
 /**
  * Encode un texte complet en impulsions d'ondes. Chaque mot unique
  * génère UNE impulsion (les répétitions renforcent l'amplitude au lieu

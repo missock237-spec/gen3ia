@@ -77,6 +77,11 @@ const CONSOLE_AGENT_SUITE_TOOLS = [
   "content.package",
   "knowledge.graph",
   "decision.analyze",
+  // Vague post-audit v2.1 — outils prioritaires en lecture pure (exécution
+  // manuelle console : l'auth + rate-limit + gardes aval restent appliqués).
+  "database.query",
+  "task.monitor",
+  "agent.evaluate",
   ...(process.env.GITHUB_TOKEN ? (["build.autofix"] as const) : []),
 ] as const;
 
