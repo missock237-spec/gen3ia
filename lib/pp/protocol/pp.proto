@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+// PP v1 — contrat binaire entre applications (remplacement des routes API
+// classiques). Voir lib/pp/protocol/codec.ts pour l'encodage strict.
+package pp.v1;
+
+message PpMessage {
+  enum Kind {
+    REQUEST = 0;
+    RESPONSE = 1;
+    EVENT = 2;
+    PING = 3;
+    PONG = 4;
+    ERROR = 5;
+  }
+  Kind kind = 1;
+  // Identifiant de corrélation RPC (uuid v4 côté émetteur).
+  string id = 2;
+  // Commande demandée (ex. BRAIN_CHAT, EXECUTE_TOOL, DEPLOY_WORKFLOW).
+  string command = 3;
+  // Paramètres / résultat — JSON UTF-8, extensible sans recompilation.
+  bytes payload = 4;
+  // Horodatage d'émission (ms depuis epoch) — rejet hors fenêtre.
+  uint64 timestamp_ms = 5;
+  // Erreur structurée (kind = ERROR).
+  string error_code = 6;
+  string error_message = 7;
+  // HITL : outil à risque élevé — exécution suspendue en attente de confirmation.
+  bool confirmation_required = 8;
+}

@@ -120,6 +120,26 @@ export async function register(): Promise<void> {
         erreur instanceof Error ? erreur.message : String(erreur),
       );
     }
+
+    // INFRASTRUCTURE PP (plan PP — remplacement de l'API classique par un
+    // tunnel P2P chiffré Noise + identité liée au matériel) : le nœud
+    // système PP est armé ICI, au boot RÉEL du serveur Gen3 — même
+    // processus que le cerveau (appels en processus, zéro réseau interne).
+    // Désactivable par PP_SYSTEM_NODE_ENABLED (≠1 : non démarré, message
+    // documenté) ; aucun échec ici ne peut empêcher le démarrage (fail-soft,
+    // même contrat que l'auto-apprentissage ci-dessus).
+    try {
+      const { demarrerNoeudSystemePp } = await import("./lib/pp/server/boot");
+      const armementPp = await demarrerNoeudSystemePp();
+      if (armementPp.started) {
+        console.log(`[INSTRUMENTATION] Nœud système PP actif — peerId ${armementPp.peerId?.slice(0, 16)}… port ${armementPp.port}`);
+      }
+    } catch (erreur) {
+      console.warn(
+        "[INSTRUMENTATION] Nœud système PP non armé (non fatal) :",
+        erreur instanceof Error ? erreur.message : String(erreur),
+      );
+    }
   }
 
   if (process.env.NEXT_RUNTIME === "edge") {

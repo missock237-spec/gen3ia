@@ -1,0 +1,28 @@
+# PP — configuration Coturn de production (STUN/TURN, plan PP Phase 1)
+# Installation : apt install coturn && cp turnserver.conf.example /etc/turnserver.conf
+# Le relais TURN ne voit que du chiffré de bout en bout (Noise) — plan §4.
+
+listening-port=3478
+tls-listening-port=5349
+
+# Auth à durée limitée (REST API /longterm) — JAMAIS de credentials statiques
+use-auth-secret
+static-auth-secret=REMPLACER_PAR_SECRET_OPENDISK_32OCTETS
+
+# Domaine de signalisation (certificat du serveur Gen3)
+realm=gen3ia.online
+server-name=gen3ia.online
+
+# Certificats TLS (wss du domaine)
+cert=/etc/letsencrypt/live/gen3ia.online/fullchain.pem
+pkey=/etc/letsencrypt/live/gen3ia.online/privkey.pem
+
+# Bande passante et anti-abus
+total-quota=1200
+bps-capacity=0
+no-multicast-peers
+no-cli
+# Le trafic métier reste E2E chiffré : le relais n'a besoin d'aucune lecture
+fingerprint
+stale-nonce=600
+user-quota=12

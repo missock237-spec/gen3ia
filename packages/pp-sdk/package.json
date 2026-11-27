@@ -1,0 +1,13 @@
+{
+  "name": "@infrastructure/pp-sdk",
+  "version": "1.0.0",
+  "description": "SDK PP — tunnel P2P chiffré (Noise) lié au matériel pour Gen3ia. Aucun secret dans le code client : identité matérielle non extractable.",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "../lib/pp/sdk/pp-node.ts",
+  "types": "../lib/pp/sdk/pp-node.ts",
+  "files": ["../lib/pp"],
+  "scripts": {
+    "pack:note": "publication : exporter via tsup/tsdx après décision propriétaire — le SDK vit dans le dépôt Gen3ia (lib/pp/sdk) tant que la publication npm n'est pas autorisée"
+  }
+}

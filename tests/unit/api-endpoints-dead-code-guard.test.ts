@@ -324,6 +324,24 @@ const BASELINE_ORPHELINS: Record<string, string[]> = {
   /** Consommés par des clients hors dépôt app : SDK public, extension
    *  navigateur, bridge d'entraînement, scripts d'exploitation souverains. */
   "api-publique-sdk": [
+    /* 2026-11-27 — INFRASTRUCTURE PP (plan PP du propriétaire : remplacement
+     * de l'API classique par un tunnel P2P chiffré Noise + identité liée au
+     * matériel — docs/architecture/pp-infrastructure.md). Portes de
+     * SIGNALISATION consommées par le SDK PP des applications externes
+     * (@infrastructure/pp-sdk — lib/pp/sdk/pp-node.ts) et par
+     * l'exploitation, AUCUNE UI navigateur prévue par design (canal P2P) :
+     *  - /pp/enroll : enrôlement d'un pair via jeton d'invitation à USAGE
+     *    UNIQUE (appelé par le SDK au premier lancement légitime) ;
+     *  - /pp/registry : GET liste + POST approve/revoke/create_invitation
+     *    derrière requireAdmin — le consommateur naturel est le tableau de
+     *    bord d'exploitation / l'API d'exploitation, pas une page du dépôt ;
+     *  - /pp/signal : résolution d'adresses SIGNÉE par la clé matérielle
+     *    d'un pair ACTIF (anti-reconnaissance, plan §3) — appelée par le
+     *    SDK à chaque connexion ; la clé statique publique du serveur
+     *    accompagne la réponse (anti-MITM côté client). */
+    "/pp/enroll",
+    "/pp/registry",
+    "/pp/signal",
     /* Job 478451 — surface REST publique genAPI v2 (PHASES 2-6, commit
      * 8f26af3) : chat, jobs asynchrones 5 états (gen3_job_*), statut,
      * annulation propriétaire. Clients : SDK/programmables authentifiés
