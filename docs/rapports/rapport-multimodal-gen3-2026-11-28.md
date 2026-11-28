@@ -46,7 +46,7 @@ Fichiers réels produits par les backends réels via le pipeline de plans de sc�
 
 | Fichier | Contenu | Taille |
 |---|---|---|
-| `gen3-demo-multimodal/image-photorealiste-gen3.png` | Pêcheuse à l'aube sur le fleuve Congo, heure dorée, brume — photoréaliste (diffusion) | ~147 Ko |
+| `gen3-demo-multimodal/image-photorealiste-gen3.jpg` | Pêcheuse à l'aube sur le fleuve Congo, heure dorée, brume — photoréaliste (diffusion ; JFIF vérifié) | 147 Ko |
 | `gen3-demo-multimodal/voix-gen3.wav` | Présentation de Gen3 par voix TTS neuronale naturelle (français) | ~1,3 Mo |
 | `gen3-demo-multimodal/video-photorealiste-gen3.mp4` | Scène cinématique animée 1920×1080·30 fps avec audio IA (mp4 ftyp vérifié) | 7,5 Mo |
 
