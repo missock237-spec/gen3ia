@@ -70,6 +70,7 @@ import { capturerSnapshot } from "./generation/snapshot";
 import { genererVisuelNeural, visuelVersDataUri } from "./generation/visual-engine";
 import { genererAudioNeural, audioVersDataUri } from "./generation/audio-engine";
 import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine";
+import { GestionnaireOndesUnifie } from "./fusion/gestionnaire-ondes";
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import { piloterPlateforme } from "./pilotage/gen3ia";
@@ -551,9 +552,20 @@ export function getNeuralRuntime(): NeuralRuntime {
     }
   };
 
+  // SNOU — SYSTÈME NEURO-ONDES UNIFIÉ (recommandation du propriétaire) :
+  // câblage PAR DÉFAUT dans le runtime réel — neurones + mémoire = un seul
+  // système à ondes. Échec silencieux : la fusion ne doit jamais empêcher
+  // le cerveau de démarrer.
+  let gestionnaireOndes: GestionnaireOndesUnifie | undefined;
+  try {
+    gestionnaireOndes = new GestionnaireOndesUnifie();
+  } catch (erreur) {
+    console.warn("[SNOU] gestionnaire d'ondes non armé (non fatal) :", erreur instanceof Error ? erreur.message : String(erreur));
+  }
+
   const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
     void sauvegarderCerveauRuntime().catch(() => undefined);
-  }, piloterPlateforme, coucheRPIA, compartiments, consulterMemoireUtilisateur, rechercheWebAuto);
+  }, piloterPlateforme, coucheRPIA, compartiments, consulterMemoireUtilisateur, rechercheWebAuto, gestionnaireOndes);
 
   const runtime: NeuralRuntime = {
     reseau,

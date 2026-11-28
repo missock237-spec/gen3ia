@@ -327,6 +327,13 @@ export interface ContexteLangage {
    * contexte LLM (buildContextWindow), ici on n'alimente que le score lexical.
    */
   historique?: { message: string; reponse?: string }[];
+  /**
+   * SNOU — FUSION NEURONES+MÉMOIRE : le souvenir d'ondes qui a résonné le
+   * plus fort avec la requête courante (attention spike-driven sur le champ
+   * du compte). Le cortex reçoit la preuve de résonance — le « motif » est
+   * l'extrait du souvenir ; le score ∈ [0, 1].
+   */
+  ondesFusionnees?: { motif: string; score: number };
 }
 
 /** Statistiques d'apprentissage retournées par apprendre(). */

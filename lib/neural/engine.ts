@@ -22,6 +22,8 @@ import type { CortexLangagierGen3, ContexteLangage } from "./generation/language
 import { creerCacheReponses } from "./generation/cache-reponses";
 import { reponseInstantiee } from "../gen3/reponses-instantiees";
 import { HippocampusMemory } from "./memory/hippocampus";
+import { GestionnaireOndesUnifie } from "./fusion/gestionnaire-ondes";
+import type { ResonanceMemoire } from "./fusion/noeud-ondes-unifie";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
@@ -349,6 +351,15 @@ export class NeuralEngine {
     private readonly rechercheWebAuto?: (
       requete: string,
     ) => Promise<ResultatRechercheWeb[] | null>,
+    /**
+     * SYSTÈME NEURO-ONDES UNIFIÉ (SNOU — recommandation du propriétaire) :
+     * neurones + mémoire = UN SEUL système. À chaque échange, les données
+     * utilisateur sont mémorisées comme ONDES dans un champ par compte ;
+     * chaque requête résonne avec les souvenirs commis (lecture mémoire =
+     * calcul neuronal). Absent (tests existants) → chaîne historique
+     * inchangée bit à bit ; câblé par le runtime (câblage par défaut ON).
+     */
+    private readonly gestionnaireOndes?: GestionnaireOndesUnifie,
   ) {}
 
   /**
@@ -528,6 +539,24 @@ export class NeuralEngine {
    * personnalisées (enseignées) d'un utilisateur ne doivent JAMAIS servir de
    * réponse en cache à un autre.
    */
+  /**
+   * SNOU — LECTURE DE MÉMOIRE = CALCUL NEURONAL : la requête résonne avec
+   * les souvenirs d'ondes commis du compte (fusion neurones+mémoire).
+   * Échec silencieux : la fusion ne doit jamais casser la conversation.
+   */
+  private async resonanceOndes(
+    prompt: string,
+    cleMemoire: string,
+  ): Promise<ResonanceMemoire | null> {
+    if (!this.gestionnaireOndes) return null;
+    try {
+      const comprehension = await this.gestionnaireOndes.noeudPour(cleMemoire).comprendre(prompt);
+      return comprehension.souvenirDominant;
+    } catch {
+      return null;
+    }
+  }
+
   private cleMemoirePour(options: AIRequest): string {
     const meta = options.metadata ?? {};
     const userId = typeof meta.userId === "string" ? meta.userId : "";
@@ -618,6 +647,11 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
+    // SNOU — FUSION NEURONES+MÉMOIRE (recommandation du propriétaire) : la
+    // requête résonne avec les ondes commises du compte ; le souvenir
+    // dominant enrichit le contexte du cortex (lecture = calcul neuronal).
+    const cleOndes = this.cleMemoirePour(options);
+    const resonanceMemoire = await this.resonanceOndes(messageUtilisateur, cleOndes);
     // PONT VOCATION (it.66) : une question qui tombe dans le cadre
     // d'apprentissage (19 domaines de la charte) reçoit une réponse
     // ancrée dans ce cadre — AVANT le repli cortex/décodeur.
@@ -644,10 +678,10 @@ export class NeuralEngine {
       // pont vocation (voir compositionMemoireDevWeb).
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
-      this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined);
     // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
     const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
-    this.memoriser(messageUtilisateur, composition.texte, memoire);
+    this.memoriser(messageUtilisateur, composition.texte, memoire, cleOndes);
     this.evoluer(messageUtilisateur, composition);
 
     return this.construireReponse(
@@ -759,6 +793,9 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
+    // SNOU — même lecture de fusion que generate() (chemin réel du chat).
+    const cleOndes = this.cleMemoirePour(options);
+    const resonanceMemoire = await this.resonanceOndes(messageUtilisateur, cleOndes);
     // PONT VOCATION (it.66) : même chaîne que generate() — le chemin réel
     // du chat répond depuis le cadre d'apprentissage quand la question y tombe.
     const compositionBrute =
@@ -773,7 +810,7 @@ export class NeuralEngine {
       // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel borné (voir compositionMemoireDevWeb).
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
-      this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined);
 
     // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
     const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
@@ -788,7 +825,7 @@ export class NeuralEngine {
       await new Promise<void>((resoudre) => setImmediate(resoudre));
     }
 
-    this.memoriser(messageUtilisateur, composition.texte, memoire);
+    this.memoriser(messageUtilisateur, composition.texte, memoire, cleOndes);
     this.evoluer(messageUtilisateur, composition);
     return this.construireReponse(
       prompt,
@@ -856,6 +893,9 @@ export class NeuralEngine {
     const memoire = this.memoirePour(options);
     // COUCHE DES 18 DOMAINES : détection lexicale du tour utilisateur.
     const domaine = detecterDomaine(messageUtilisateur);
+    // SNOU — même lecture de fusion (variante générateur).
+    const cleOndes = this.cleMemoirePour(options);
+    const resonanceMemoire = await this.resonanceOndes(messageUtilisateur, cleOndes);
     // PONT VOCATION (it.66) : variante générateur — même ancrage vocation
     // que les deux chemins principaux (génération et flux).
     const compositionBrute =
@@ -869,7 +909,7 @@ export class NeuralEngine {
       // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel borné (voir compositionMemoireDevWeb).
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
-      this.composer(messageUtilisateur, decode, memoire, this.cleMemoirePour(options), domaine);
+      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined);
 
     // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
     const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
@@ -878,7 +918,7 @@ export class NeuralEngine {
       yield segment;
     }
 
-    this.memoriser(messageUtilisateur, composition.texte, memoire);
+    this.memoriser(messageUtilisateur, composition.texte, memoire, cleOndes);
     this.evoluer(messageUtilisateur, composition);
     return this.construireReponse(
       prompt,
@@ -1057,6 +1097,7 @@ export class NeuralEngine {
     memoire?: HippocampusMemory,
     cleMemoire: string = "sans-compte|hors-conversation",
     domaine?: { label: string; nom: string; nomEn: string | null; score: number; source: string } | null,
+    resonanceOndes?: ResonanceMemoire,
   ): CompositionReponse {
     // SOLVEURS EXACTS v5 (couleurs, calcul) : toute question computable
     // reçoit une réponse CALCULÉE (déterministe, vérifiable) avant le repli
@@ -1071,6 +1112,19 @@ export class NeuralEngine {
     }
     if (this.cortex) {
       const contexte: ContexteLangage = {};
+      // SNOU — FUSION NEURONES+MÉMOIRE : le souvenir qui résonne le plus
+      // fort enrichit RÉELLEMENT le contexte lexical du cortex (il entre
+      // dans l'historique scoré — compréhension des intentions et du monde
+      // par résonance avec les échanges vécus, pas par une table externe).
+      if (resonanceOndes) {
+        contexte.ondesFusionnees = { motif: resonanceOndes.extrait, score: resonanceOndes.poids };
+        const sansHippocampe = !memoire;
+        if (sansHippocampe || (contexte.historique ?? []).length === 0) {
+          contexte.historique = [{ message: resonanceOndes.extrait }];
+        } else {
+          contexte.historique = [{ message: resonanceOndes.extrait }, ...contexte.historique!];
+        }
+      }
       if (memoire) {
         const historique = memoire.getHistory();
         const dernierTour = historique[historique.length - 1];
@@ -1180,12 +1234,23 @@ export class NeuralEngine {
     prompt: string,
     reponse: string,
     memoire?: HippocampusMemory,
+    cleMemoire?: string,
   ): void {
-    if (!memoire) return;
-    try {
-      memoire.remember(prompt, reponse);
-    } catch {
-      // Télémétrie perdue, pas la conversation.
+    if (memoire) {
+      try {
+        memoire.remember(prompt, reponse);
+      } catch {
+        // Télémétrie perdue, pas la conversation.
+      }
+    }
+    // SNOU — ÉCRITURE DE MÉMOIRE : l'échange est commis comme ONDES dans le
+    // champ du compte (fusion neurones+mémoire — recommandation propriétaire).
+    if (cleMemoire && this.gestionnaireOndes) {
+      try {
+        this.gestionnaireOndes.noeudPour(cleMemoire).memoriserEchange(prompt, reponse);
+      } catch {
+        // La gravure d'ondes ne doit jamais casser la conversation.
+      }
     }
   }
 
@@ -1422,7 +1487,7 @@ export class NeuralEngine {
     // it.74 — compteur d'énergie du processus : cette fenêtre n'a PAS
     // tourné (somme mesurée, exposée par /api/energie).
     enregistrerFenetreEvitee(EPOQUES_RPIA_CHAT, NEURAL_CYCLES_PAR_GENERATION);
-    this.memoriser(messageUtilisateur, composition.texte, memoire);
+    this.memoriser(messageUtilisateur, composition.texte, memoire, this.cleMemoirePour(options));
     this.evoluer(messageUtilisateur, composition);
     return reponse;
   }
