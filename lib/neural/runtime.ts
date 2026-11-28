@@ -71,6 +71,7 @@ import { genererVisuelNeural, visuelVersDataUri } from "./generation/visual-engi
 import { genererAudioNeural, audioVersDataUri } from "./generation/audio-engine";
 import { genererVideoNeural, videoVersDataUri } from "./generation/video-engine";
 import { GestionnaireOndesUnifie } from "./fusion/gestionnaire-ondes";
+import { MemoirePermanente } from "./fusion/memoire-permanente";
 import { CentralSupervisor, HippocampusMemory } from "./memory/hippocampus";
 import { MoteurEvolutionGen3 } from "./evolution";
 import { piloterPlateforme } from "./pilotage/gen3ia";
@@ -562,10 +563,18 @@ export function getNeuralRuntime(): NeuralRuntime {
   } catch (erreur) {
     console.warn("[SNOU] gestionnaire d'ondes non armé (non fatal) :", erreur instanceof Error ? erreur.message : String(erreur));
   }
+  // MÉMOIRE PERMANENTE (mission « aucune conversation perdue ») : journal
+  // durable sur disque, par compte — câblé PAR DÉFAUT, échec non fatal.
+  let memoirePermanente: MemoirePermanente | undefined;
+  try {
+    memoirePermanente = new MemoirePermanente(join(process.cwd(), "var", "neural", "memoire-permanente"));
+  } catch (erreur) {
+    console.warn("[memoire-permanente] journal non armé (non fatal) :", erreur instanceof Error ? erreur.message : String(erreur));
+  }
 
   const engine = new NeuralEngine(noyau, espace, cortex, hippocampe, evolution, () => {
     void sauvegarderCerveauRuntime().catch(() => undefined);
-  }, piloterPlateforme, coucheRPIA, compartiments, consulterMemoireUtilisateur, rechercheWebAuto, gestionnaireOndes);
+  }, piloterPlateforme, coucheRPIA, compartiments, consulterMemoireUtilisateur, rechercheWebAuto, gestionnaireOndes, memoirePermanente);
 
   const runtime: NeuralRuntime = {
     reseau,

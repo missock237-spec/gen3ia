@@ -24,6 +24,7 @@ import { reponseInstantiee } from "../gen3/reponses-instantiees";
 import { HippocampusMemory } from "./memory/hippocampus";
 import { GestionnaireOndesUnifie } from "./fusion/gestionnaire-ondes";
 import type { ResonanceMemoire } from "./fusion/noeud-ondes-unifie";
+import type { ConsultationMemoirePermanente, SouvenirPermanent } from "./fusion/memoire-permanente";
 import { MoteurEvolutionGen3 } from "./evolution";
 import type { ResultatConsolidation } from "./evolution";
 import { composerDepuisConnaissances } from "./connaissances-pont";
@@ -360,6 +361,14 @@ export class NeuralEngine {
      * inchangée bit à bit ; câblé par le runtime (câblage par défaut ON).
      */
     private readonly gestionnaireOndes?: GestionnaireOndesUnifie,
+    /**
+     * MÉMOIRE PERMANENTE (mission « aucune conversation perdue ») : service
+     * de journalisation durable INJECTÉ (le moteur reste pur — aucune I/O).
+     * Chaque échange est journalisé sur disque par compte ; chaque requête
+     * rappelle les échanges antérieurs pertinents (toutes sessions) dans le
+     * contexte du cortex. Absent (tests existants) → chaîne inchangée.
+     */
+    private readonly memoirePermanente?: ConsultationMemoirePermanente,
   ) {}
 
   /**
@@ -557,6 +566,23 @@ export class NeuralEngine {
     }
   }
 
+  /**
+   * MÉMOIRE PERMANENTE — RAPPEL : les échanges antérieurs du compte
+   * pertinents pour la requête courante (journal durable, toutes sessions).
+   * Échec silencieux : le rappel ne doit jamais casser la conversation.
+   */
+  private async souvenirsPermanents(
+    prompt: string,
+    cleMemoire: string,
+  ): Promise<SouvenirPermanent[]> {
+    if (!this.memoirePermanente) return [];
+    try {
+      return await this.memoirePermanente.rappeler(cleMemoire, prompt, 3);
+    } catch {
+      return [];
+    }
+  }
+
   private cleMemoirePour(options: AIRequest): string {
     const meta = options.metadata ?? {};
     const userId = typeof meta.userId === "string" ? meta.userId : "";
@@ -652,6 +678,7 @@ export class NeuralEngine {
     // dominant enrichit le contexte du cortex (lecture = calcul neuronal).
     const cleOndes = this.cleMemoirePour(options);
     const resonanceMemoire = await this.resonanceOndes(messageUtilisateur, cleOndes);
+    const permanents = await this.souvenirsPermanents(messageUtilisateur, cleOndes);
     // PONT VOCATION (it.66) : une question qui tombe dans le cadre
     // d'apprentissage (19 domaines de la charte) reçoit une réponse
     // ancrée dans ce cadre — AVANT le repli cortex/décodeur.
@@ -678,7 +705,7 @@ export class NeuralEngine {
       // pont vocation (voir compositionMemoireDevWeb).
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
-      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined);
+      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined, permanents);
     // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
     const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
     this.memoriser(messageUtilisateur, composition.texte, memoire, cleOndes);
@@ -796,6 +823,7 @@ export class NeuralEngine {
     // SNOU — même lecture de fusion que generate() (chemin réel du chat).
     const cleOndes = this.cleMemoirePour(options);
     const resonanceMemoire = await this.resonanceOndes(messageUtilisateur, cleOndes);
+    const permanents = await this.souvenirsPermanents(messageUtilisateur, cleOndes);
     // PONT VOCATION (it.66) : même chaîne que generate() — le chemin réel
     // du chat répond depuis le cadre d'apprentissage quand la question y tombe.
     const compositionBrute =
@@ -810,7 +838,7 @@ export class NeuralEngine {
       // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel borné (voir compositionMemoireDevWeb).
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
-      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined);
+      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined, permanents);
 
     // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
     const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
@@ -896,6 +924,7 @@ export class NeuralEngine {
     // SNOU — même lecture de fusion (variante générateur).
     const cleOndes = this.cleMemoirePour(options);
     const resonanceMemoire = await this.resonanceOndes(messageUtilisateur, cleOndes);
+    const permanents = await this.souvenirsPermanents(messageUtilisateur, cleOndes);
     // PONT VOCATION (it.66) : variante générateur — même ancrage vocation
     // que les deux chemins principaux (génération et flux).
     const compositionBrute =
@@ -909,7 +938,7 @@ export class NeuralEngine {
       // DÉV WEB/DNS — MÉMOIRE COMMISE : rappel borné (voir compositionMemoireDevWeb).
       this.compositionMemoireDevWeb(messageUtilisateur) ??
       composerDepuisVocation(messageUtilisateur) ??
-      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined);
+      this.composer(messageUtilisateur, decode, memoire, cleOndes, domaine, resonanceMemoire ?? undefined, permanents);
 
     // GARANTIE DE RÉPONSE : savoir insuffisant → recherche web auto / repli honnête.
     const composition = await this.garantirReponse(messageUtilisateur, compositionBrute);
@@ -1098,6 +1127,7 @@ export class NeuralEngine {
     cleMemoire: string = "sans-compte|hors-conversation",
     domaine?: { label: string; nom: string; nomEn: string | null; score: number; source: string } | null,
     resonanceOndes?: ResonanceMemoire,
+    souvenirsPermanents?: SouvenirPermanent[],
   ): CompositionReponse {
     // SOLVEURS EXACTS v5 (couleurs, calcul) : toute question computable
     // reçoit une réponse CALCULÉE (déterministe, vérifiable) avant le repli
@@ -1124,6 +1154,14 @@ export class NeuralEngine {
         } else {
           contexte.historique = [{ message: resonanceOndes.extrait }, ...contexte.historique!];
         }
+      }
+      // MÉMOIRE PERMANENTE : les échanges antérieurs du compte (toutes
+      // sessions) entrent dans l'historique scoré du cortex — aucune
+      // conversation n'est perdue, même après un redémarrage du cerveau.
+      if (souvenirsPermanents && souvenirsPermanents.length > 0) {
+        contexte.souvenirsPermanents = souvenirsPermanents.slice(0, 3).map((souvenir) => ({ texte: souvenir.texte, score: souvenir.score }));
+        const ajout = souvenirsPermanents.slice(0, 2).map((souvenir) => ({ message: souvenir.texte.slice(0, 160) }));
+        contexte.historique = [...ajout, ...(contexte.historique ?? [])].slice(0, 8);
       }
       if (memoire) {
         const historique = memoire.getHistory();
@@ -1250,6 +1288,15 @@ export class NeuralEngine {
         this.gestionnaireOndes.noeudPour(cleMemoire).memoriserEchange(prompt, reponse);
       } catch {
         // La gravure d'ondes ne doit jamais casser la conversation.
+      }
+    }
+    // MÉMOIRE PERMANENTE : l'échange est journalisé sur disque (durable,
+    // toutes sessions — mission « garder chaque conversation en mémoire »).
+    if (cleMemoire && this.memoirePermanente) {
+      try {
+        this.memoirePermanente.enregistrer(cleMemoire, prompt, reponse);
+      } catch {
+        // La journalisation ne doit jamais casser la conversation.
       }
     }
   }

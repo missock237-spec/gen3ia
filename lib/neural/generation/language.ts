@@ -334,6 +334,12 @@ export interface ContexteLangage {
    * l'extrait du souvenir ; le score ∈ [0, 1].
    */
   ondesFusionnees?: { motif: string; score: number };
+  /**
+   * MÉMOIRE PERMANENTE — les échanges antérieurs du compte rappelés du
+   * journal durable (aucune conversation perdue : rappel par lexique +
+   * récence, toutes sessions confondues).
+   */
+  souvenirsPermanents?: { texte: string; score: number }[];
 }
 
 /** Statistiques d'apprentissage retournées par apprendre(). */
