@@ -48,7 +48,7 @@ Fichiers réels produits par les backends réels via le pipeline de plans de sc�
 |---|---|---|
 | `gen3-demo-multimodal/image-photorealiste-gen3.png` | Pêcheuse à l'aube sur le fleuve Congo, heure dorée, brume — photoréaliste (diffusion) | ~147 Ko |
 | `gen3-demo-multimodal/voix-gen3.wav` | Présentation de Gen3 par voix TTS neuronale naturelle (français) | ~1,3 Mo |
-| `gen3-demo-multimodal/video-photorealiste-gen3.mp4` | Scène cinématique complète animée (génération vidéo avec audio IA) | cf. job |
+| `gen3-demo-multimodal/video-photorealiste-gen3.mp4` | Scène cinématique animée 1920×1080·30 fps avec audio IA (mp4 ftyp vérifié) | 7,5 Mo |
 
 Ces livrables sont étiquetés `photoréaliste-réseau` dans la doctrine ci-dessus : le même `planifierScene()`/`planifierVideo()` alimente soit les générateurs structurels locaux (déterministes, hors ligne), soit ces moteurs réels (réalisme réseau). Brancher le back-end de production de Gen3 sur ces interfaces est un choix d'infrastructure — les contrats sont testés des deux côtés.
 
